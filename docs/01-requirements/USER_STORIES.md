@@ -3,19 +3,20 @@
 | 项 | 值 |
 |---|---|
 | 文件 | `docs/01-requirements/USER_STORIES.md` |
-| 版本 | v1.0（M0 产出） |
+| 版本 | **v2.1（对齐 GLOSSARY v2.1 口径）** |
 | 日期 | 2026-09-21 |
 | 状态 | **Frozen（已冻结）** |
 | 上游依据 | `docs/MASTER-PLAN.md` §3.5、§7 M0 |
-| 下游消费 | `PRD.md`（升维）、`GLOSSARY.md`（命名）、`tasks.md`（拆解）、JUnit 测试用例 |
+| 下游消费 | `PRD.md`（升维）、`GLOSSARY.md`（命名）、`API_SPECIFICATION.md`（接口）、JUnit 测试用例 |
 
 > **编号规则**：故事 `US-01`~`US-08`；验收标准 `AC-xx.y`。每条 AC 均为 **Given-When-Then**，可直接翻译成测试方法名。
+> **v2.1 变更**：字段名对齐 GLOSSARY v2.1（`created_by`/`updated_at`/`status`/`roles`）；角色关系由"用户表上的 role_code 列"改为中间表 `sys_user_role`。
 
 ---
 
-## 0. 角色定义（与 `sys_user.role_code` 一致）
+## 0. 角色定义（对应 `sys_role.code`，用户与角色通过 `sys_user_role` 关联）
 
-| 角色 | role_code | 定位 | 数据权限边界 |
+| 角色 | 角色码 `code` | 定位 | 数据权限边界 |
 |---|---|---|---|
 | 游客 | —（未登录） | 未认证访问者 | 仅可访问登录接口；其余一律 401 |
 | 普通员工 | `STAFF` | 平台主要使用者 | 自己的文档可增删改查；可见范围内可检索与阅读 |
@@ -30,7 +31,7 @@
 
 | 阶段 | 触点 | 用户动作 | 痛点 | 系统响应 |
 |---|---|---|---|---|
-| 进入 | 登录页 | 输入工号 + 密码 | 忘记密码；账号被停用 | 校验凭据 → 返回 token + 权限码；停用则提示联系管理员 |
+| 进入 | 登录页 | 输入工号 + 密码 | 忘记密码；账号被停用 | 校验凭据 → 返回 token + 角色码与权限码；非 ACTIVE 状态提示联系管理员 |
 | 找资料 | 文档检索页 | 关键词 / 分类 / 标签筛选 | 找不到；结果过多 | 分页返回命中列表（仅本人可见范围）+ 排序 |
 | 读文档 | 文档详情页 | 打开、收藏 | 排版乱、加载慢 | Markdown 渲染、阅读量 +1、收藏切换 |
 | 写文档 | 编辑器 | 新建，或**基于已有文档派生** | 重复劳动 | 派生预填正文并记录血缘 `derived_from_id` |
@@ -53,10 +54,11 @@
 | 阶段 | 触点 | 用户动作 | 痛点 | 系统响应 |
 |---|---|---|---|---|
 | 进入 | 登录页 | 管理员登录 | — | 返回最高权限集合 |
-| 用户 | 用户管理 | 新增 / 编辑 / 停用 / 重置密码 | 批量入职 | 一人只属一个部门；停用后立即无法登录 |
-| 角色 | 角色管理 | 增删改角色 | 角色越建越多 | 角色编码唯一，删除前校验是否被引用 |
-| 权限 | 权限树 | 3 层勾选配置 | 授权粒度不清晰 | 树形展示（目录→菜单→按钮），保存后缓存失效 |
+| 用户 | 用户管理 | 新增 / 编辑 / 变更状态 / 重置密码 | 批量入职 | 一人只属一个部门（`dept_id`）；状态改为非 ACTIVE 后立即无法登录 |
+| 角色 | 角色管理 | 增删改角色 | 角色越建越多 | 角色 `code` 唯一且不可改，删除前校验是否被引用 |
+| 权限 | 权限树 | 三层勾选配置 | 授权粒度不清晰 | 树形展示（目录→菜单→按钮），保存后缓存失效 |
 | 部门 | 部门管理 | 维护部门树、给部门绑定角色 | 组织调整频繁 | 树形维护；部门绑定角色后，员工自动继承 |
+| 补权 | 用户授权 | 给个别用户额外授权 | 例外情况多 | `sys_user_permission` 直授，合并进权限集合 |
 
 ---
 
@@ -66,15 +68,15 @@
 
 **As a** 单位员工，**I want to** 用工号与密码登录平台，**So that** 我能访问与权限相符的功能。
 
-- **AC-01.1（正常流）** **Given** 系统中存在启用状态用户 `u1001`（密码 `Staff@123`），**When** 提交正确的用户名与密码，**Then** 返回 200 + token + 用户信息 VO（含 `roleCode`、`permissions` 数组），且响应体中**不含** `passwordHash` 字段。
+- **AC-01.1（正常流）** **Given** 系统中存在状态为 `ACTIVE` 的用户 `u1001`（密码 `Staff@123`），**When** 提交正确的用户名与密码，**Then** 返回 200 + token + 用户信息 VO（含 `roles` 角色码数组、`permissions` 权限码数组、`deptName`），且响应体中**不含** `passwordHash` 字段。
 - **AC-01.2（异常流）** **Given** 用户 `u1001` 存在，**When** 提交错误密码，**Then** 返回 401 与错误码 `UNAUTHORIZED`，且提示文案不区分"用户不存在/密码错误"（防用户名枚举）。
-- **AC-01.3（异常流）** **Given** 用户 `u1002` 的 `is_enabled = 0`，**When** 提交正确密码，**Then** 返回 403 与错误码 `USER_DISABLED`。
+- **AC-01.3（异常流）** **Given** 用户 `u1002` 的 `status = 'DISABLED'`，**When** 提交正确密码，**Then** 返回 403 与错误码 `USER_DISABLED`。
 
 ### US-02 创建并保存文档草稿
 
 **As a** 普通员工，**I want to** 新建 Markdown 文档并保存草稿，**So that** 我能分次完成长文档。
 
-- **AC-02.1（正常流）** **Given** 已登录且拥有 `doc:create` 权限，**When** 提交标题、摘要、正文、分类，**Then** 创建成功，状态为 `DRAFT`、`version_num = 1`、`create_by = 当前用户ID`、`price_cents = 0`。
+- **AC-02.1（正常流）** **Given** 已登录且拥有 `doc:create` 权限，**When** 提交标题、摘要、正文、分类，**Then** 创建成功，状态为 `DRAFT`、`versionNum = 1`、`createdBy = 当前用户ID`（作者即创建人）、`priceCents = 0`。
 - **AC-02.2（异常流）** **Given** 已登录，**When** 标题为空或长度超过 128 字符，**Then** 返回 400 与中文提示「文档标题不能为空且不超过128字」，且数据库中无新增记录。
 - **AC-02.3（异常流）** **Given** 请求未携带有效 token，**When** 调用创建接口，**Then** 返回 401，不产生任何数据。
 
@@ -82,7 +84,7 @@
 
 **As a** 普通员工，**I want to** 把草稿提交发布，**So that** 同事可以检索到它。
 
-- **AC-03.1（正常流）** **Given** 文档处于 `DRAFT` 且当前用户是属主，**When** 提交发布，**Then** 状态变为 `PUBLISHED`，`version_num` 自增（1→2），`doc_version` 新增一条版本记录，`update_at` 刷新。
+- **AC-03.1（正常流）** **Given** 文档处于 `DRAFT` 且当前用户是属主，**When** 提交发布，**Then** 状态变为 `PUBLISHED`，`versionNum` 自增（1→2），`doc_version` 新增一条版本记录，`updatedAt` 刷新。
 - **AC-03.2（异常流）** **Given** 文档已经是 `PUBLISHED`，**When** 再次提交发布，**Then** 返回 409 与错误码 `CONFLICT_STATUS`（不允许重复发布）。
 - **AC-03.3（异常流）** **Given** 文档处于 `TRASH`，**When** 提交发布，**Then** 返回 409，提示「回收站文档需先恢复为草稿」。
 
@@ -90,7 +92,7 @@
 
 **As a** 普通员工，**I want to** 按关键词、分类、标签检索文档，**So that** 我能快速找到需要的资料。
 
-- **AC-04.1（正常流）** **Given** 库中存在标题含「接口规范」的已发布文档，**When** 以关键词「接口」检索第 1 页（`pageSize=10`），**Then** 返回 200 + 分页数据（`title`/`summary`/`authorName`/`updateAt`），`total` 正确，默认按 `update_at` 倒序。
+- **AC-04.1（正常流）** **Given** 库中存在标题含「接口规范」的已发布文档，**When** 以关键词「接口」检索第 1 页（`pageSize=10`），**Then** 返回 200 + 分页数据（`title`/`summary`/`authorName`/`updatedAt`），`total` 正确，默认按 `updated_at` 倒序。
 - **AC-04.2（异常流）** **Given** 关键词为无匹配字符串（如 `zzz-not-exist`），**When** 检索，**Then** 返回 200 + 空列表 + `total = 0`（**不得**返回 404 或 500）。
 - **AC-04.3（异常流）** **Given** 系统中存在他人的 `DRAFT` 文档，**When** 该用户检索，**Then** 结果中**不包含**该文档（数据权限过滤在 Service 层完成）。
 
@@ -98,7 +100,7 @@
 
 **As a** 普通员工，**I want to** 基于已有文档派生一份新文档，**So that** 我不必从零编写相似内容。
 
-- **AC-05.1（正常流）** **Given** 我对文档 D（`PUBLISHED`）有查看权限，**When** 调用派生，**Then** 生成新文档：状态 `DRAFT`、`derived_from_id = D.id`、正文预填 D 的 `content_md`、标题为「D原标题（副本）」、`version_num = 1`；**源文档 D 不被修改**。
+- **AC-05.1（正常流）** **Given** 我对文档 D（`PUBLISHED`）有查看权限，**When** 调用派生，**Then** 生成新文档：状态 `DRAFT`、`derivedFromId = D.id`、正文预填 D 的 `contentMd`、标题为「D原标题（副本）」、`versionNum = 1`；**源文档 D 不被修改**。
 - **AC-05.2（异常流）** **Given** 文档 D 属于他人且处于 `DRAFT`（当前用户不可见），**When** 调用派生，**Then** 返回 403 与错误码 `NO_PERMISSION`。
 - **AC-05.3（异常流）** **Given** 文档 D 处于 `TRASH`，**When** 调用派生，**Then** 返回 409 与错误码 `CONFLICT_STATUS`。
 
@@ -106,7 +108,7 @@
 
 **As a** 普通员工，**I want to** 修改我自己的文档，**So that** 内容保持准确。
 
-- **AC-06.1（正常流）** **Given** 文档属主是当前用户且状态为 `DRAFT`，**When** 提交修改，**Then** 保存成功，`version_num` 自增（2→3），`update_by`/`update_at` 刷新，`doc_version` 新增版本记录。
+- **AC-06.1（正常流）** **Given** 文档属主是当前用户且状态为 `DRAFT`，**When** 提交修改，**Then** 保存成功，`versionNum` 自增（2→3），`updatedBy`/`updatedAt` 刷新，`doc_version` 新增版本记录。
 - **AC-06.2（异常流）** **Given** 文档属主是他人，**When** 当前用户提交修改，**Then** 返回 403 与 `NO_PERMISSION`，且数据库中该文档内容**完全不变**（防平行越权 IDOR）。
 - **AC-06.3（异常流）** **Given** 文档状态为 `ARCHIVED`，**When** 提交修改，**Then** 返回 409，提示「归档文档为只读」。
 
@@ -114,7 +116,7 @@
 
 **As a** 文档管理员，**I want to** 审核与治理文档，**So that** 平台内容保持合规有序。
 
-- **AC-07.1（正常流）** **Given** 我是 `DOC_ADMIN` 且拥有 `doc:review`，**When** 对 `PUBLISHED` 文档执行归档并填写意见，**Then** 状态变为 `ARCHIVED`，审核意见与操作人写入记录，属主可在详情页看到意见。
+- **AC-07.1（正常流）** **Given** 我是 `DOC_ADMIN` 且拥有 `doc:review`，**When** 对 `PUBLISHED` 文档执行归档并填写意见，**Then** 状态变为 `ARCHIVED`，审核意见与操作人写入 `doc_version`（`changeType = ARCHIVE`），属主可在详情页看到意见。
 - **AC-07.2（异常流）** **Given** 当前用户仅有 `STAFF` 权限，**When** 调用审核接口，**Then** 返回 403 与 `NO_PERMISSION`（由 `@RequiresPermission("doc:review")` 拦截）。
 - **AC-07.3（异常流）** **Given** 驳回操作未填写理由，**When** 提交驳回，**Then** 返回 400 与提示「驳回理由不能为空」。
 
@@ -122,7 +124,7 @@
 
 **As a** 系统管理员，**I want to** 给角色配置权限并把角色授予部门，**So that** 新员工能自动继承所需权限。
 
-- **AC-08.1（正常流）** **Given** 角色 `DOC_ADMIN` 与权限 `doc:review` 均存在，**When** 为该角色勾选 `doc:review` 并保存，**Then** 保存成功，且该角色下所有用户的权限缓存立即失效，后续鉴权按新权限生效。
+- **AC-08.1（正常流）** **Given** 角色 `DOC_ADMIN` 与权限 `doc:review` 均存在，**When** 为该角色勾选 `doc:review` 并保存，**Then** 保存成功，且该角色下所有用户的权限缓存（`perm:user:{userId}`）立即失效，后续鉴权按新权限生效。
 - **AC-08.2（异常流）** **Given** 当前用户不是 `SYS_ADMIN`，**When** 调用授权接口，**Then** 返回 403 与 `NO_PERMISSION`。
 - **AC-08.3（异常流）** **Given** 尝试把权限节点移动到它自己的子孙节点下（形成环），**When** 保存，**Then** 返回 400 与提示「不能将节点移动到其子节点下」。
 
@@ -139,20 +141,20 @@
 | US-05 | `doc:derive` | `POST /api/documents/{id}/derive` |
 | US-06 | `doc:edit` | `PUT /api/documents/{id}` |
 | US-07 | `doc:review` | `POST /api/documents/{id}/archive`、`/reject` |
-| US-08 | `sys:role:grant` | `POST /api/roles/{id}/permissions` |
+| US-08 | `sys:role:grant` | `PUT /api/roles/{id}/permissions` |
 
 ---
 
-## 4. 冻结自检（M0-T0.6）
+## 4. 冻结自检（M0-T0.6 / M1-T1.5 复检）
 
 | 自查项 | 结论 | 证据 |
 |---|---|---|
-| INVEST 完备性 | ✅ | 8 个故事均为单一闭环动作，无史诗级大故事；单故事 30 分钟~半天可测完 |
+| INVEST 完备性 | ✅ | 8 个故事均为单一闭环动作，无史诗级大故事 |
 | BDD 边界覆盖率 | ✅ | 8 故事 × 3 条 = **24 条** Given-When-Then（每故事 1 正常流 + 2 异常流） |
 | 异常流覆盖面 | ✅ | 含 401/403（越权）/409（状态冲突）/400（参数非法）/空结果 五类 |
 | 状态机闭环 | ✅ | 见 `PRD.md` §4；`TRASH` 可恢复，无死胡同 |
 | 显式非目标 | ✅ | 见 `PRD.md` §8 |
-| 命名单源 | ✅ | 见 `GLOSSARY.md` §6 禁用别名清单 |
+| 命名单源 | ✅ | 字段名逐条对齐 `GLOSSARY.md` v2.1 §3；无 §6 禁用别名 |
 
 ---
 

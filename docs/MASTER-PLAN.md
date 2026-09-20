@@ -55,7 +55,7 @@
 | R1 | 字段不得脑补：Entity / DTO / VO / TS Interface / DB 列名 五处必须与 `GLOSSARY.md` + `schema.sql` 完全一致 | 交叉 grep 比对 |
 | R2 | 金额禁止浮点：全链路 `priceCents` / `price_cents`（整数分），前端仅展示时 `/100` | `grep -ri "double\|float" **/Price*` 应为空 |
 | R3 | Controller 入参必须 `@Valid` + Jakarta Validation 注解 + **中文错误提示** | 检查每个 `@RequestBody` |
-| R4 | **禁止越权（IDOR）**：更新/下架/删除/派生必须在 Service 层校验属主（`createBy == currentUserId` 或有管理权限） | 越权用例必须返回 403 |
+| R4 | **禁止越权（IDOR）**：更新/下架/删除/派生必须在 Service 层校验属主（`createdBy == currentUserId` 或有管理权限） | 越权用例必须返回 403 |
 | R5 | **禁止 Entity 穿透前端**：Controller 出参必须是 VO（脱敏），实体不出 Service | 检查返回类型 |
 | R6 | 前端禁止内联 `style="..."`（用 Tailwind 原子类）；TypeScript **禁止 `any`** | `pnpm run lint` + `grep -rn "any" src/types` |
 
@@ -106,15 +106,21 @@ campusswap/                        ← 交付根目录（只有三个文件夹�
 │   ├── sql/schema.sql             #  物理 DDL（从 sql/ 复制而来，满足三文件夹约束）
 │   ├── uploads/                   #  运行期图片目录（.gitkeep 占位，不入 Git）
 │   └── src/main/java/com/campusswap/
-│       ├── common/                #  Result<T> · PageResult<T> · ErrorCode · GlobalExceptionHandler · BusinessException
-│       ├── config/                #  SnowflakeConfig · JpaAuditConfig · RedisConfig · WebMvcConfig · PermissionAspect
-│       ├── controller/            #  AuthController · UserController · RoleController · PermissionController · DeptController · DocumentController · CategoryController · TagController
-│       ├── service/ + service/impl/
-│       ├── repository/            #  14 个 JPA 接口
-│       ├── entity/                #  BaseEntity + 14 个实体
-│       ├── dto/                   #  入参（@Valid）
-│       ├── vo/                    #  出参（脱敏）
-│       └── util/                  #  工具类（md 处理、文件存储等）
+│       ├── common/                #  api/{ResponseResult,PageVo,ErrorCode} · exception/ · security/{@RequiresPermission,PermissionAspect,SecurityContext,LoginInterceptor} · util/
+│       ├── config/                #  JpaAuditConfig · WebMvcConfig · RedisConfig · CorsConfig
+│       ├── entity/                #  BaseEntity + 14 个实体 + enums/（顶层集中，与课件《1.2》一致）
+│       ├── system/                #  模块一：系统与权限
+│       │   ├── controller/        #    AuthController · UserController · RoleController · PermissionController · DeptController
+│       │   ├── service/ + service/impl/
+│       │   ├── repository/
+│       │   ├── dto/               #    LoginDtoReq · UserCreateDtoReq · RoleDtoReq · PermissionDtoReq · DeptDtoReq …
+│       │   └── vo/                #    LoginVo · UserInfoVo · UserVo · RoleVo · PermissionVo · DeptVo
+│       └── document/              #  模块二：文档业务
+│           ├── controller/        #    DocumentController · ReviewController · CategoryController · TagController · FileController · StatController
+│           ├── service/ + service/impl/
+│           ├── repository/
+│           ├── dto/               #    DocumentCreateDtoReq · DocumentQueryDtoReq · ReviewDtoReq …
+│           └── vo/                #    DocumentVo · DocumentDetailVo · DocumentVersionVo · CategoryVo · TagVo · StatVo
 └── frontend/                      💻 Vue 3 + TS 工程
     ├── .gitignore                 #  已就绪：忽略 node_modules/ dist/ 等
     ├── src/{api,types,components,views,stores,router,utils}
@@ -138,42 +144,45 @@ campusswap/                        ← 交付根目录（只有三个文件夹�
 
 ### 4.1 公共字段（所有业务表都有）
 
-| 列名 | 类型 | 约束 | 注释 |
+| 列名 | 类型 | 约束（逐字对齐老师 MySQL 示例） | 注释 |
 |---|---|---|---|
-| `id` | `BIGINT` | PK，**无 AUTO_INCREMENT**（雪花） | 主键ID |
-| `create_by` | `BIGINT` | NOT NULL DEFAULT 0 | 创建人ID |
-| `create_at` | `DATETIME(6)` | NOT NULL，实体侧 `updatable=false` | 创建时间 |
-| `update_by` | `BIGINT` | NOT NULL DEFAULT 0 | 最后更新人ID |
-| `update_at` | `DATETIME(6)` | NOT NULL | 最后更新时间 |
-| `is_deleted` | `TINYINT` | NOT NULL DEFAULT 0 | 逻辑删除：0正常 1已删除 |
+| `id` | `BIGINT` | `NOT NULL AUTO_INCREMENT`，`PRIMARY KEY` | 唯一自增主键 |
+| `created_at` | `DATETIME` | `NOT NULL DEFAULT CURRENT_TIMESTAMP` | 记录创建时间 |
+| `created_by` | `BIGINT` | `NOT NULL DEFAULT 0`（0=系统初始化） | 创建人用户ID |
+| `updated_at` | `DATETIME` | `NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP` | 最后更新时间 |
+| `updated_by` | `BIGINT` | `NOT NULL DEFAULT 0` | 最后修改人用户ID |
+| `deleted` | `TINYINT` | `NOT NULL DEFAULT 0` | 软删除标记：0 正常 / 1 已删除 |
+
+> **例外（纯关联中间表）**：`sys_user_role`、`sys_user_permission`、`sys_role_permission`、`sys_dept_role`、`doc_document_tag_rel`、`doc_favorite` **没有 `id` 列**，采用复合主键，仅保留 `created_at`，不继承 `BaseEntity`。
+> **实体侧**：`BaseEntity` + `@EntityListeners(AuditingEntityListener.class)`；每个实体加 `@SQLDelete(sql = "UPDATE 表名 SET deleted = 1 WHERE id = ?")` + `@SQLRestriction("deleted = 0")`，业务查询**永不手写** `deleted = 0`。
 
 ### 4.2 系统域（8 张表）
 
 | 表名 | 关键列（除公共字段外） | 索引 |
 |---|---|---|
-| `sys_user` | `username` VARCHAR(64) 唯一、`real_name` VARCHAR(64)、`password_hash` VARCHAR(255)、`avatar_url` VARCHAR(255)、`department_id` BIGINT、`role_code` VARCHAR(32)、`is_enabled` TINYINT | `uk_user_username`、`idx_user_dept`、`idx_user_role` |
-| `sys_role` | `role_code` VARCHAR(32) 唯一（STAFF/DOC_ADMIN/SYS_ADMIN）、`role_name` VARCHAR(64)、`status` TINYINT、`remark` VARCHAR(255) | `uk_role_code` |
-| `sys_permission` | `parent_id` BIGINT DEFAULT 0、`ancestors` VARCHAR(500)、`perm_code` VARCHAR(64) 唯一（如 `doc:publish`）、`perm_name` VARCHAR(64)、`perm_type` TINYINT（1目录 2菜单 3按钮）、`path` VARCHAR(255)、`order_num` INT | `uk_perm_code`、`idx_perm_parent` |
-| `sys_user_role` | `user_id`、`role_id` | `uk_user_role(user_id,role_id)`、`idx_ur_role` |
-| `sys_user_permission` | `user_id`、`permission_id` | `uk_user_perm(user_id,permission_id)` |
-| `sys_role_permission` | `role_id`、`permission_id` | `uk_role_perm(role_id,permission_id)` |
-| `sys_dept` | `parent_id` DEFAULT 0、`ancestors` VARCHAR(500)、`dept_name` VARCHAR(50)、`order_num` INT、`leader_user_id` BIGINT、`status` TINYINT | `idx_dept_parent`、`uk_dept_name(parent_id,dept_name)` |
-| `sys_dept_role` | `dept_id`、`role_id` | `uk_dept_role(dept_id,role_id)` |
+| `sys_dept` | `name` VARCHAR(64)、`parent_id` BIGINT DEFAULT 0、`ancestors` VARCHAR(500)、`sort_order` INT DEFAULT 0 | `idx_sys_dept_parent(parent_id, deleted)` |
+| `sys_user` | `username` VARCHAR(64)、`password_hash` VARCHAR(128)、`real_name` VARCHAR(64)、`email` VARCHAR(128)、`phone` VARCHAR(20)、`avatar_url` VARCHAR(255)、`dept_id` BIGINT、`status` VARCHAR(32) DEFAULT 'ACTIVE'（ACTIVE/LOCKED/DISABLED）、`last_login_at` DATETIME | `uk_sys_user_username(username)`、`idx_sys_user_dept(dept_id, deleted)` |
+| `sys_role` | `name` VARCHAR(64)、`code` VARCHAR(64)（STAFF/DOC_ADMIN/SYS_ADMIN 或自定义）、`description` VARCHAR(255)、`is_builtin` TINYINT DEFAULT 0、`sort_order` INT | `uk_sys_role_code(code)` |
+| `sys_permission` | `name` VARCHAR(64)、`code` VARCHAR(64)（如 `doc:publish`）、`type` VARCHAR(32)（DIR/MENU/BUTTON）、`parent_id` BIGINT DEFAULT 0、`ancestors` VARCHAR(500)、`path` VARCHAR(255)、`icon` VARCHAR(64)、`sort_order` INT | `uk_sys_permission_code(code)`、`idx_sys_perm_parent(parent_id, deleted)` |
+| `sys_user_role` | `user_id`、`role_id`（**复合主键**） | `idx_user_role_role(role_id)` |
+| `sys_user_permission` | `user_id`、`permission_id`（**复合主键**） | `idx_user_perm_perm(permission_id)` |
+| `sys_role_permission` | `role_id`、`permission_id`（**复合主键**） | `idx_role_perm_perm(permission_id)` |
+| `sys_dept_role` | `dept_id`、`role_id`（**复合主键**） | `idx_dept_role_role(role_id)` |
 
 **权限 3 层落库示例**（`parent_id` + `ancestors`）：
 
 ```sql
--- ① 目录/模块层
-(1, 0, '0',        '文档中心',  'doc:center', 1),
-(2, 0, '0',        '系统管理',  'sys:center', 1),
--- ② 菜单/页面层（父=1 或 2）
-(10, 1, '0,1',     '我的文档',  'doc:mine',   2),
-(11, 1, '0,1',     '文档检索',  'doc:search', 2),
-(20, 2, '0,2',     '用户管理',  'sys:user',   2),
--- ③ 按钮/操作点层（父=10 等）
-(100, 10, '0,1,10', '新建文档', 'doc:create', 3),
-(101, 10, '0,1,10', '发布文档', 'doc:publish',3),
-(102, 10, '0,1,10', '删除文档', 'doc:delete', 3);
+-- ① 目录/模块层（type = DIR）
+(1, 0, '0',        '文档中心',  'doc:center', 'DIR'),
+(2, 0, '0',        '系统管理',  'sys:center', 'DIR'),
+-- ② 菜单/页面层（type = MENU，父=1 或 2）
+(10, 1, '0,1',     '我的文档',  'doc:mine',   'MENU'),
+(11, 1, '0,1',     '文档检索',  'doc:search', 'MENU'),
+(20, 2, '0,2',     '用户管理',  'sys:user',   'MENU'),
+-- ③ 按钮/操作点层（type = BUTTON，父=10 等）
+(100, 10, '0,1,10', '新建文档', 'doc:create', 'BUTTON'),
+(101, 10, '0,1,10', '发布文档', 'doc:publish','BUTTON'),
+(102, 10, '0,1,10', '删除文档', 'doc:delete', 'BUTTON');
 ```
 > 查"文档中心下全部权限"：`WHERE ancestors LIKE '0,1%'`（0 递归）；再加第 4 层无需改表。
 
@@ -181,21 +190,21 @@ campusswap/                        ← 交付根目录（只有三个文件夹�
 
 | 表名 | 关键列 | 索引 |
 |---|---|---|
-| `doc_document` | `title` VARCHAR(128)、`summary` VARCHAR(255)、`content_md` MEDIUMTEXT、`category_id` BIGINT、`derived_from_id` BIGINT NULL、`price_cents` INT UNSIGNED DEFAULT 0、`status` VARCHAR(20)（DRAFT/PUBLISHED/ARCHIVED/TRASH）、`version_num` INT DEFAULT 1、`view_count` INT DEFAULT 0 | `idx_doc_category`、`idx_doc_status`、`idx_doc_created_by`、`FULLTEXT(title,summary)`（可选） |
-| `doc_category` | `parent_id` DEFAULT 0、`ancestors`、`name` VARCHAR(50)、`order_num`、`status` | `idx_cat_parent` |
-| `doc_tag` | `tag_name` VARCHAR(32) 唯一、`use_count` INT DEFAULT 0 | `uk_tag_name` |
-| `doc_document_tag` | `document_id`、`tag_id` | `uk_doc_tag(document_id,tag_id)`、`idx_dt_tag` |
-| `doc_version` | `document_id`、`version_num` INT、`content_md` MEDIUMTEXT、`change_log` VARCHAR(255) | `uk_doc_version(document_id,version_num)` |
-| `doc_favorite` | `user_id`、`document_id` | `uk_fav(user_id,document_id)`、`idx_fav_doc` |
+| `doc_document` | `title` VARCHAR(128)、`summary` VARCHAR(255)、`content_md` MEDIUMTEXT、`category_id` BIGINT DEFAULT 0、`status` VARCHAR(32) DEFAULT 'DRAFT'（DRAFT/PUBLISHED/ARCHIVED/TRASH）、`version_num` INT DEFAULT 1、`price_cents` INT UNSIGNED DEFAULT 0、`view_count` INT DEFAULT 0、`favorite_count` INT DEFAULT 0、`derived_from_id` BIGINT NULL、`reject_reason` VARCHAR(255)、`publish_at` DATETIME NULL（**作者 = `created_by`**） | `idx_doc_cat_status_updated(category_id, status, updated_at, deleted)`、`idx_doc_created_by(created_by, deleted)` |
+| `doc_category` | `name` VARCHAR(64)、`parent_id` BIGINT DEFAULT 0、`ancestors` VARCHAR(500)、`sort_order` INT DEFAULT 0 | `idx_doc_category_parent(parent_id, deleted)` |
+| `doc_tag` | `name` VARCHAR(64) 唯一、`use_count` INT DEFAULT 0 | `uk_doc_tag_name(name)` |
+| `doc_document_tag_rel` | `document_id`、`tag_id`（**复合主键**） | `idx_rel_tag_doc(tag_id, document_id)` |
+| `doc_version` | `document_id`、`version_num` INT、`title` VARCHAR(128)、`content_md` MEDIUMTEXT、`change_type` VARCHAR(32)、`change_remark` VARCHAR(255)、`created_by`（= 操作人） | `uk_doc_version(document_id, version_num)` |
+| `doc_favorite` | `user_id`、`document_id`（**复合主键**） | `idx_fav_doc(document_id)` |
 
 ### 4.4 权限合并算法（Service 层实现，结果缓存进 Redis）
 
 ```text
 effectivePermissions(userId):
-  roles     = sys_user_role(userId) ∪ sys_role(所属部门 via sys_dept_role)
-  fromRoles = ⋃ sys_role_permission(roles)
-  direct    = sys_user_permission(userId)
-  return dedupe(fromRoles ∪ direct)          // Set<String> perm_code
+  roles     = sys_user_role(user_id = userId) ∪ sys_dept_role(dept_id = 所属部门)
+  fromRoles = ⋃ sys_role_permission(role_id ∈ roles)
+  direct    = sys_user_permission(user_id = userId)
+  return dedupe(fromRoles ∪ direct)          // Set<String> sys_permission.code
 ```
 - 缓存键：`perm:user:{userId}`，TTL 30 分钟；
 - **失效时机**：给用户/角色/部门增删授权、改动角色权限、停用用户时主动 `DEL`；
@@ -239,8 +248,8 @@ stateDiagram-v2
        indexes = { @Index(name="idx_doc_status", columnList="status"),
                    @Index(name="idx_doc_category", columnList="category_id") },
        comment = "文档主表")
-@SQLDelete(sql = "UPDATE doc_document SET is_deleted = 1 WHERE id = ?")
-@SQLRestriction("is_deleted = 0")
+@SQLDelete(sql = "UPDATE doc_document SET deleted = 1 WHERE id = ?")
+@SQLRestriction("deleted = 0")
 public class Document extends BaseEntity { … }
 ```
 - 大文本：`@Lob @Column(name="content_md", columnDefinition="MEDIUMTEXT COMMENT 'Markdown 正文'")`
@@ -251,22 +260,22 @@ public class Document extends BaseEntity { … }
 ### 5.2 统一响应与错误码
 
 ```java
-// common/Result.java
-public record Result<T>(int code, String message, T data, long timestamp) { … }
-// common/PageResult.java
-public record PageResult<T>(List<T> list, long total, int pageNum, int pageSize) { … }
+// common/api/ResponseResult.java —— 全平台唯一响应体
+public record ResponseResult<T>(int code, String message, T data) { … }
+// common/api/PageVo.java
+public record PageVo<T>(List<T> list, long total, int pageNum, int pageSize) { … }
 ```
-错误码枚举：`SUCCESS(200)`、`PARAM_INVALID(400)`、`UNAUTHORIZED(401)`、`FORBIDDEN(403)`、`NOT_FOUND(404)`、`CONFLICT_STATUS(409)`、`USER_DISABLED(1001)`、`NO_PERMISSION(1002)`。
+错误码枚举（`code` 与 HTTP 状态码保持一致，见 GLOSSARY §4.2）：`SUCCESS(200)`、`BAD_REQUEST(400)`、`UNAUTHORIZED(401)`、`NO_PERMISSION(403)`、`USER_DISABLED(403)`、`NOT_FOUND(404)`、`CONFLICT_STATUS(409)`、`SERVER_ERROR(500)`。
 
 ### 5.3 DTO / VO 规则
 
 | 用途 | 类名示例 | 规则 |
 |---|---|---|
 | 登录入参 | `LoginDtoReq` | 独立类，不复用 User 实体 |
-| 登录出参 | `LoginDtoResp`（token）+ `LoginVo`（用户信息 + 权限码组合） | 组合数据用 VO |
-| 新增用户入参 | `UserDTO` | 含 `@NotBlank` 等校验与中文提示 |
-| 文档出参 | `DocumentVo` / `DocumentDetailVo` / `DocumentListVo` | 脱敏；列表用轻量 VO |
-| 分页包装 | `PageResult<DocumentListVo>` | 统一结构 |
+| 登录出参 | `LoginVo`（token + 用户信息 + `roles[]` + `permissions[]`） | 组合数据用 VO |
+| 新增用户入参 | `UserCreateDtoReq` | 含 `@NotBlank` 等校验与中文提示 |
+| 文档出参 | `DocumentVo`（列表通用）/ `DocumentDetailVo`（含正文、标签、权限标记） | 脱敏；Entity 不出 Service |
+| 分页包装 | `PageVo<DocumentVo>` | 统一结构 |
 
 ### 5.4 注释模板（每个 public 方法都要）
 
@@ -303,7 +312,7 @@ public class PermissionAspect {
 ```
 **属主校验**（业务级，必须有）：
 ```java
-if (!doc.getCreateBy().equals(operatorId) && !hasPerm(operatorId, "doc:manage")) {
+if (!doc.getCreatedBy().equals(operatorId) && !hasPerm(operatorId, "doc:manage")) {
     throw new BusinessException(ErrorCode.NO_PERMISSION);
 }
 ```
@@ -342,7 +351,7 @@ if (!doc.getCreateBy().equals(operatorId) && !hasPerm(operatorId, "doc:manage"))
 > 用法：按顺序执行；每个任务都是可勾选项。**任务完成的标准 = 里程碑 DoD 通过 + 在 `docs/03-qa-review/tasks.md` 打勾并写 3 句以内变动说明。**
 
 ### 起步（今天就做这三件）
-1. 在 GitHub 新建**空**仓库（Private）：`https://github.com/<账号>/campusswap-doc-platform.git`
+1. 在 GitHub 新建**空**仓库 —— 本作业仓库**已建好**：`https://github.com/RizzyZyaire/campusswap-doc-platform.git`（**Public**，分支 `main`）
 2. 建立目录骨架：`campusswap/{docs/{01-requirements,02-design,03-qa-review,04-prompts},backend,frontend}`
 3. 把本文件复制到 `docs/MASTER-PLAN.md`，开始 **M0-T0.1**
 
@@ -383,14 +392,22 @@ powershell -NoProfile -ExecutionPolicy Bypass -File docs/03-qa-review/verify-m0.
 
 **目标**：把需求翻译成架构、接口契约、UI 规范。**前置**：M0 冻结通过。
 
-- [ ] **T1.1** 用 **P6-1** 生成 `docs/02-design/ARCHITECTURE.md`：分层架构图、请求流转、RBAC 权限合并算法（§4.4）、Redis 键设计与失效时机、事务边界、统一响应与全局异常、鉴权拦截链路
-- [ ] **T1.2** 用 **P6-2** 生成 `docs/02-design/API_SPECIFICATION.md`：逐接口表（模块｜方法｜路径｜入参 DTO｜出参 VO｜权限点｜错误码｜示例 JSON），覆盖全部 8 个用户故事
-- [ ] **T1.3** 用 **P6-3** 生成 `docs/02-design/UI_UX_SPECIFICATION.md`：路由表（§6.1）、每页组件树、四态设计、Tailwind 令牌、表单校验规则与中文文案
-- [ ] **T1.4** 在 APIFOX 建项目并录入接口（或基于 OpenAPI 导入），确保每条都能直接发送
-- [ ] **T1.5** 交叉检查：接口出参字段 ⊂ GLOSSARY 术语，无新增字段
+- [x] **T1.1** 用 **P6-1** 生成 `docs/02-design/ARCHITECTURE.md`：分层架构图、请求流转、RBAC 权限合并算法（§4.4）、Redis 键设计与失效时机、事务边界、统一响应与全局异常、鉴权拦截链路（+ §16 功能价值说明、§17 ADR）
+- [x] **T1.2** 用 **P6-2** 生成 `docs/02-design/API_SPECIFICATION.md`：逐接口表（模块｜方法｜路径｜**用途**｜入参 DTO｜出参 VO｜权限点｜错误码｜示例 JSON），覆盖全部 8 个用户故事
+- [x] **T1.3** 用 **P6-3** 生成 `docs/02-design/UI_UX_SPECIFICATION.md`：路由表（§6.1）、每页组件树、四态设计、Tailwind 令牌、表单校验规则与中文文案
+- [ ] **T1.4** 在 APIFOX 建项目并录入接口 —— **顺延到 M3 收口时执行**：后端未运行前无法"确保每条都能直接发送"，届时用 M3 产出的 OpenAPI 文件一键导入
+- [x] **T1.5** 交叉检查：接口出参字段 ⊂ GLOSSARY 术语，无新增字段 —— 由 `docs/03-qa-review/verify-m1.ps1` 的 **14 项机检**承担（含 VO/DTO 字段字典登记校验 C14）
 
-**DoD**：接口清单与 §6.1 页面清单一一对应；每接口有权限点与错误码；APIFOX 接口齐备
-**验证**：`grep -cE "^\| *(GET|POST|PUT|DELETE)" docs/02-design/API_SPECIFICATION.md`（数量 ≥ 25）
+**DoD**：接口清单与 §6.1 页面清单一一对应；每接口有权限点与错误码；Apifox 齐备（顺延 M3）
+**验证**：
+```bash
+powershell -NoProfile -ExecutionPolicy Bypass -File docs/03-qa-review/verify-m1.ps1   # 14 项机检，全绿则输出 ALL GREEN
+```
+
+**M1 收口记录（2026-09-21）**：设计三件套产出并冻结（ARCHITECTURE 33.7 KB / API_SPECIFICATION ≈120 KB / UI_UX_SPECIFICATION 98 KB），机检 `verify-m1.ps1` **14/14 全绿**。
+**一次冻结决策变更（用户 2026-09-21 拍板：全面对齐老师课件）**：主键改 `BIGINT AUTO_INCREMENT`、审计列改 `created_at/created_by/updated_at/updated_by/deleted`、中间表改复合主键且无 `id` 列、中间表 `_rel` 后缀、`name/code/type/sort_order` 泛用命名、`sys_user.status` 三态取代 `is_enabled`、`sys_login_log` → `sys_user_permission`、取消 `sys_user.role_code` 列（角色走中间表）、库名 `docs_db` → **`campusswap_db`**。
+同步改动：GLOSSARY（升 v2.1，新增 §3.7 VO/DTO 字段字典）、PRD（v2.1 变更记录 + §3.4 算法 + §9 表清单）、USER_STORIES（字段口径）、本手册 §3.1/§4/§5/§8 P5/§9，以及两个机检脚本。
+机检脚本另修掉 2 处误报：索引名 `uk_sys_role_code` 被当成列名、`src/api/request.ts` 被当成接口路径。
 
 ---
 
@@ -398,24 +415,25 @@ powershell -NoProfile -ExecutionPolicy Bypass -File docs/03-qa-review/verify-m0.
 
 **目标**：`docs_db` 建好 14 张表，符合 §2.2。**前置**：M1 完成。
 
-- [ ] **T2.1** 建库：`CREATE DATABASE IF NOT EXISTS docs_db DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;`
+- [ ] **T2.1** 建库：`CREATE DATABASE IF NOT EXISTS campusswap_db DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;`
 - [ ] **T2.2** 用 **P5** 生成 `sql/schema.sql`（14 张表，字段严格按 §4）
 - [ ] **T2.3** DBeaver 打开该文件 → **Alt+X** 执行 → 全部建表成功
-- [ ] **T2.4** 跑下方三条校验 SQL：外键数 0、主键无 `auto_increment`、空注释列 0
-- [ ] **T2.5** 生成 `sql/data.sql` 种子数据：1 个 `SYS_ADMIN`（`admin / Admin@123`，BCrypt 哈希）、3 个角色、§4.2 的 9 条权限、2 个部门、3 篇示例文档 + 分类 + 标签
+- [ ] **T2.4** 跑下方校验 SQL：库名正确、14 张表齐、外键数 0、主键**均为** `auto_increment`（6 张中间表除外）、空注释列 0
+- [ ] **T2.5** 生成 `sql/data.sql` 种子数据：**全部 39 个权限点**（对齐 PRD §3.2）、3 个内置角色 + 角色权限关联、1 个 `SYS_ADMIN`（`admin / Admin@123`，BCrypt 哈希）、1 个部门 + 部门角色绑定、3 篇示例文档 + 分类 + 标签 + 关联行
 - [ ] **T2.6** 收纳：`mkdir -p backend/sql && cp sql/schema.sql backend/sql/`
 
-**DoD**：14 张表齐；无外键；主键无自增；`price_cents` 为 `int unsigned`；注释 0 缺失
+**DoD**：库名 `campusswap_db`；14 张表齐；无外键；非中间表主键均为 `BIGINT AUTO_INCREMENT`；6 张中间表为复合主键且无 `id` 列；`price_cents` 为 `int unsigned`；注释 0 缺失
 **验证**：
 ```sql
+SELECT COUNT(*) AS tbl_count FROM information_schema.TABLES WHERE TABLE_SCHEMA='campusswap_db';   -- 期望 14
 SELECT COUNT(*) AS fk_count FROM information_schema.TABLE_CONSTRAINTS
-  WHERE CONSTRAINT_SCHEMA='docs_db' AND CONSTRAINT_TYPE='FOREIGN KEY';          -- 期望 0
+  WHERE CONSTRAINT_SCHEMA='campusswap_db' AND CONSTRAINT_TYPE='FOREIGN KEY';                      -- 期望 0
 SELECT TABLE_NAME,COLUMN_NAME,EXTRA FROM information_schema.COLUMNS
-  WHERE TABLE_SCHEMA='docs_db' AND COLUMN_KEY='PRI';                            -- EXTRA 无 auto_increment
+  WHERE TABLE_SCHEMA='campusswap_db' AND COLUMN_KEY='PRI' AND EXTRA NOT LIKE '%auto_increment%';  -- 期望只剩 6 张中间表
 SELECT TABLE_NAME,COLUMN_NAME FROM information_schema.COLUMNS
-  WHERE TABLE_SCHEMA='docs_db' AND (COLUMN_COMMENT='' OR COLUMN_COMMENT IS NULL);-- 期望空
+  WHERE TABLE_SCHEMA='campusswap_db' AND (COLUMN_COMMENT='' OR COLUMN_COMMENT IS NULL);           -- 期望空
 SELECT TABLE_NAME,COLUMN_TYPE FROM information_schema.COLUMNS
-  WHERE TABLE_SCHEMA='docs_db' AND COLUMN_NAME='price_cents';                   -- int unsigned
+  WHERE TABLE_SCHEMA='campusswap_db' AND COLUMN_NAME='price_cents';                               -- int unsigned
 ```
 
 ---
@@ -425,7 +443,7 @@ SELECT TABLE_NAME,COLUMN_TYPE FROM information_schema.COLUMNS
 **目标**：工程可启动、统一响应/异常/鉴权齐备，系统域接口全部可用。**前置**：M2 建表完成。
 
 - [ ] **T3.1** 初始化后端工程（包名 `com.campusswap`，Java 17）：依赖 = web、data-jpa、mysql-connector-j、validation、data-redis、lombok、hutool-all、test
-- [ ] **T3.2** `common/`：`Result<T>`、`PageResult<T>`、`ErrorCode`、`BusinessException`、`GlobalExceptionHandler`
+- [ ] **T3.2** `common/`：`ResponseResult<T>`、`PageVo<T>`、`ErrorCode`、`BusinessException`、`GlobalExceptionHandler`（含 `common/security/`：`@RequiresPermission`、`PermissionAspect`、`SecurityContext`、`LoginInterceptor`）
 - [ ] **T3.3** `config/`：`SnowflakeConfig`、`JpaAuditConfig`（`@EnableJpaAuditing` + `AuditorAware`）、`RedisConfig`、`WebMvcConfig`
 - [ ] **T3.4** `entity/`：`BaseEntity` + 14 个实体（**按 §5.1 七戒律**）
 - [ ] **T3.5** `repository/`：14 个接口（含 `findByUsername`、`existsByPermCode`、分页查询等）
@@ -593,15 +611,16 @@ docs/01-requirements/USER_STORIES.md。
 规范与硬性约束：
 1. 每张表显式指定 ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci；
 2. 金额字段统一 INT UNSIGNED price_cents（单位分，0=免费赠送），严禁 FLOAT/DOUBLE；
-3. 主键 BIGINT 雪花算法，程序生成，禁止 AUTO_INCREMENT；禁止创建任何外键约束；
+3. 主键统一 `BIGINT NOT NULL AUTO_INCREMENT`；禁止创建任何外键约束；**纯关联中间表**（sys_user_role / sys_user_permission / sys_role_permission / sys_dept_role / doc_document_tag_rel / doc_favorite）用**复合主键、无 id 列**；
 4. 高频查询列建索引或复合索引（注意最左前缀）；
 5. 所有表与字段必须有清晰完整的 COMMENT；
-6. 所有业务表包含公共字段：id / create_by / create_at / update_by / update_at / is_deleted；
+6. 所有业务表包含公共字段：id / created_at / created_by / updated_at / updated_by / deleted（`created_at DEFAULT CURRENT_TIMESTAMP`、`updated_at ... ON UPDATE CURRENT_TIMESTAMP`、`deleted TINYINT NOT NULL DEFAULT 0`）；
 7. 表清单必须覆盖：
    sys_user, sys_role, sys_permission, sys_user_role, sys_user_permission, sys_role_permission,
-   sys_dept, sys_dept_role, doc_document, doc_category, doc_tag, doc_document_tag, doc_version, doc_favorite；
+   sys_dept, sys_dept_role, doc_document, doc_category, doc_tag, doc_document_tag_rel, doc_version, doc_favorite；
 8. sys_permission / sys_dept / doc_category 必须采用 parent_id + ancestors 祖先链设计（多层树）；
-9. 输出单个 SQL 文件，并在文件头用注释给出表设计说明。
+9. 输出单个 SQL 文件，并在文件头用注释给出表设计说明；
+10. 文件开头写 `CREATE DATABASE IF NOT EXISTS campusswap_db DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;` 与 `USE campusswap_db;`，每张表前置 `DROP TABLE IF EXISTS`。
 ```
 
 ### P6 设计三件套（分三条发送）
@@ -646,6 +665,8 @@ docs/01-requirements/USER_STORIES.md。
 
 ### 9.2 上传步骤
 
+> **本节是"从零开始的首次上传流程"，已经全部执行完毕**（仓库 `RizzyZyaire/campusswap-doc-platform`，分支 `main`，首个提交 `70d47e1`）。日常提交/回滚请用 `docs/03-qa-review/GIT-CHEATSHEET.md`，提交前自检见 §9.4。
+
 ```bash
 cd campusswap
 git init
@@ -665,7 +686,7 @@ spring:
     username: root
     password: ${DB_PASSWORD:}    # 本地设环境变量 DB_PASSWORD=123456
 ```
-或拆出 `application-local.yml`（写真实密码）并加入 `.gitignore`。仓库建议 **Private**。
+或拆出 `application-local.yml`（写真实密码）并加入 `.gitignore`。**本作业仓库为 Public（已推送）**，因此数据库密码一律走环境变量 `${DB_PASSWORD:123456}`，仓库内任何位置都不得出现生产明文密码。
 
 ### 9.4 提交前自检
 
@@ -788,3 +809,4 @@ grep -rn "password" backend/src/main/resources/ | grep -v '\${'   # 不应出现
 |---|---|
 | 2026-09-20 | v1.0 初版：汇总三份课件（需求工程 SOP / JPA 实体规约 / 老师 AGENTS.md）与碎片要求 |
 | 2026-09-21 | **v2.0 冻结版**：业务定为文档管理平台；前端自研；权限 3 层；Redis 用本机；交付三文件夹 + GitHub（含忽略清单）；评分只看源码；删除全部"待确认"表述，新增 M0~M7 可勾选任务看板与 7 组 Prompt |
+| 2026-09-21 | **v2.1（M1 收口）**：全面对齐老师《1.2 示例-数据库物理建表脚本(MySQL版)》—— 自增主键、`created_*/updated_*` 审计列、中间表复合主键无 `id`、`name/code/type/sort_order` 命名、`sys_user.status` 三态、`sys_user_permission` 取代 `sys_login_log`、取消 `sys_user.role_code`；库名改 `campusswap_db`；包结构改为「按模块分包 + entity 顶层」；交付新增 `docs/02-design/` 三件套与 `verify-m1.ps1` |

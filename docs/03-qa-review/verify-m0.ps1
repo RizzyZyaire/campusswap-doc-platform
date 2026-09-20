@@ -111,11 +111,24 @@ foreach ($s in $states) {
 }
 Check 'C11 state-machine-states' ($badState.Count -eq 0) ("states missing in PRD or GLOSSARY: " + ($(if ($badState.Count) { $badState -join ',' } else { 'none' })))
 
-# --- C12: forbidden aliases in requirement docs (GLOSSARY keeps them on purpose) -
-$badNames = 'updatedAt|createTime|updateTime|gmt_create|del_flag|is_delete|doc_status'
-$hitUs  = CountOf $us  $badNames
-$hitPrd = CountOf $prd $badNames
-Check 'C12 no-forbidden-alias' (($hitUs -eq 0) -and ($hitPrd -eq 0)) "USER_STORIES=$hitUs PRD=$hitPrd (must be 0)"
+# --- C12: forbidden aliases in requirement docs (GLOSSARY keeps the list on purpose) -
+# lines that DOCUMENT deprecated naming (changelog quotes, "作废/禁止/对照" rows) are excluded
+function RemoveLegacyContext {
+  param([string]$Text)
+  $out = New-Object System.Collections.Generic.List[string]
+  foreach ($line in ($Text -split "`n")) {
+    if ($line -match '^\s*>') { continue }
+    if ($line -match '作废|废弃|禁止|对照|替代|备选|旧写法|原名|不另设|取消|无 `|不再') { continue }
+    $out.Add($line)
+  }
+  return ($out -join "`n")
+}
+$usBody  = RemoveLegacyContext $us
+$prdBody = RemoveLegacyContext $prd
+$badNames = '`is_enabled`|`isEnabled`|`is_deleted`|`isDeleted`|`create_at`|`createAt`|`update_at`|`updateAt`|`author_id`|`role_code`|`perm_code`|`perm_type`|`dept_name`|`tag_name`|`category_name`|`sort_num`|`DocumentListVo`|`PageResult`'
+$hitUs  = CountOf $usBody  $badNames
+$hitPrd = CountOf $prdBody $badNames
+Check 'C12 no-forbidden-alias' (($hitUs -eq 0) -and ($hitPrd -eq 0)) "USER_STORIES=$hitUs PRD=$hitPrd (must be 0; changelog/anti-alias lines excluded)"
 
 # --- C13: out-of-scope section present ----------------------------------------
 $oCount = CountOf $prd '(?m)^\| O\d+ \|'

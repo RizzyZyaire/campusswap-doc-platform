@@ -11,6 +11,10 @@
 
 ---
 
+> **变更记录 v2.1（M1，2026-09-21）**：对齐老师《1.2 示例-数据库物理建表脚本(MySQL版)》口径 —— 主键改 `BIGINT AUTO_INCREMENT`（原：雪花禁用自增）；审计列改 `created_at / created_by / updated_at / updated_by / deleted`；中间表改**复合主键、无 `id` 列**（新增 `_rel` 后缀）；`sys_login_log` 换成 `sys_user_permission`（支撑权限合并算法的"直授"分支）；`sys_user` 取消 `role_code` 列（角色一律走 `sys_user_role` 中间表）；用户启停由 `is_enabled` 改为 `status` 三态（`ACTIVE` / `LOCKED` / `DISABLED`）。
+
+---
+
 ## 1. 系统概述与 MVP 边界
 
 ### 1.1 一句话定位
@@ -71,7 +75,7 @@
 
 `sys_permission` 用 `parent_id`（直接父节点）+ `ancestors`（祖级路径，逗号分隔，如 `0,1,5`）表达三层树：
 
-| perm_type | 层级 | 说明 | 前端表现 |
+| `type` | 层级 | 说明 | 前端表现 |
 |---|---|---|---|
 | 1 | 目录层 | 一级导航 | 左侧一级菜单组 |
 | 2 | 菜单层 | 二级页面 | 左侧菜单项 / 路由 |
@@ -81,14 +85,14 @@
 
 **目录层（2）**
 
-| perm_code | 名称 |
+| 权限码 `code` | 名称 |
 |---|---|
 | `doc:center` | 文档中心 |
 | `sys:center` | 系统管理 |
 
 **菜单层（9）**
 
-| perm_code | 名称 | 父节点 |
+| 权限码 `code` | 名称 | 父节点 |
 |---|---|---|
 | `doc:mine` | 我的文档 | `doc:center` |
 | `doc:search` | 文档检索 | `doc:center` |
@@ -102,7 +106,7 @@
 
 **按钮层（28）**
 
-| perm_code | 名称 | 父节点 |
+| 权限码 `code` | 名称 | 父节点 |
 |---|---|---|
 | `doc:create` | 新建文档 | `doc:mine` |
 | `doc:edit` | 编辑文档 | `doc:mine` |
@@ -145,11 +149,10 @@
 
 ```
 入参：userId
-1. 查 sys_user → 得 dept_id、role_code
-2. 若 role_code 属于内置角色（STAFF/DOC_ADMIN/SYS_ADMIN）→ 取角色直连权限
-     否 → 走 sys_user_role（用户可多角色，取并集）
-3. 再并入该部门绑定的角色权限（sys_dept_role）
-4. 结果去重 → 权限码集合 Set<String>
+1. 查 sys_user → 得 dept_id
+2. 角色集合 = sys_user_role(user_id = userId) ∪ sys_dept_role(dept_id = user.dept_id)
+3. 权限集合 = sys_role_permission(role_id ∈ 角色集合) ∪ sys_user_permission(user_id = userId)
+4. 去重 → 权限码集合 Set<String>（取 sys_permission.code，deleted = 0）
 5. 缓存：Redis key = perm:user:{userId}，TTL = 30 分钟
 ```
 
@@ -214,7 +217,7 @@ stateDiagram-v2
 | F1-04 | 用户列表 | 关键词、部门、状态、分页 | 不返回 `password_hash` | 分页 `UserVo` | — | `sys:user` |
 | F1-05 | 新增用户 | 工号、姓名、部门、角色、初始密码 | 工号唯一；密码强度 ≥8 位含字母数字 | 新用户 ID | 400 工号重复 | `sys:user:add` |
 | F1-06 | 编辑用户 | 姓名、部门、角色 | 不在此接口改密码 | 空 | 404 | `sys:user:edit` |
-| F1-07 | 停用/启用用户 | userId、`isEnabled` | 停用即强制下线（清 token + 权限缓存） | 空 | 404 | `sys:user:disable` |
+| F1-07 | 变更用户状态 | userId、`status`（ACTIVE / LOCKED / DISABLED） | 改为非 ACTIVE 即强制下线（清该用户全部 token + 权限缓存） | 空 | 404 | `sys:user:disable` |
 | F1-08 | 重置密码 | userId、新密码 | 更新后清空该用户所有 token | 空 | 400 强度不足 | `sys:user:reset` |
 | F1-09 | 角色列表/详情 | 分页 | — | `RoleVo` | — | `sys:role` |
 | F1-10 | 角色增删改 | 角色名、编码、描述 | 编码唯一且不可修改；被用户引用时禁止删除 | 空 | 400/409 | `sys:role:add/edit/delete` |
@@ -229,8 +232,8 @@ stateDiagram-v2
 
 | # | 功能 | 输入 | 业务规则 | 输出 | 异常 | 权限点 |
 |---|---|---|---|---|---|---|
-| F2-01 | 新建草稿 | 标题、摘要、正文、分类、标签、价格标记 | 见 US-02；`author_id=当前用户`；自动带 `author_dept_id` | `DocumentVo` | 400 | `doc:create` |
-| F2-02 | 我的文档列表 | 状态、关键词、分页 | 强制 `author_id = 当前用户`，前端不可传 | 分页 `DocumentVo` | — | `doc:mine` |
+| F2-01 | 新建草稿 | 标题、摘要、正文、分类、标签、价格标记 | 见 US-02；`created_by = 当前用户`（**作者即创建人**，不另设作者字段） | `DocumentVo` | 400 | `doc:create` |
+| F2-02 | 我的文档列表 | 状态、关键词、分页 | 强制 `created_by = 当前用户`，前端不可传 | 分页 `DocumentVo` | — | `doc:mine` |
 | F2-03 | 文档详情 | id | 非属主仅可见 `PUBLISHED`；`PUBLISHED` 阅读量 +1（30 分钟去重） | `DocumentDetailVo`（含 `contentMd`、权限标记 `canEdit`） | 403/404 | `doc:search` |
 | F2-04 | 编辑保存 | id + 字段 | 归属校验 + 状态校验；版本号 +1 | `DocumentVo` | 403/409 | `doc:edit` |
 | F2-05 | 提交发布 | id | `DRAFT → PUBLISHED` | 空 | 403/409 | `doc:publish` |
@@ -256,8 +259,8 @@ stateDiagram-v2
 
 | # | 规则 |
 |---|---|
-| BR-01 | 一个用户只属于一个部门，但可拥有多个角色；内置角色由 `role_code` 决定 |
-| BR-02 | 角色 `role_code` 全局唯一，创建后不可修改 |
+| BR-01 | 一个用户只属于一个部门（`sys_user.dept_id`），但可拥有多个角色（`sys_user_role`）；内置角色由 `sys_role.code` 决定 |
+| BR-02 | 角色 `sys_role.code` 全局唯一，创建后不可修改 |
 | BR-03 | 权限节点删除前必须无子节点且未被任何角色引用 |
 | BR-04 | 标题 1–128 字符、摘要 0–255 字符、正文 0–100000 字符，服务端与前端双重校验 |
 | BR-05 | 分页 `pageNum ≥ 1`、`1 ≤ pageSize ≤ 100`（默认 10），越界一律 400，不静默纠正 |
@@ -271,7 +274,7 @@ stateDiagram-v2
 | BR-13 | 分类树最多 3 层；删除分类前必须先把该分类下的文档迁移到其它分类 |
 | BR-14 | 每篇文档最多 5 个标签，单标签 1–16 字符 |
 | BR-15 | 图片仅支持 jpg/jpeg/png/webp/gif，单文件 ≤ 5MB，存储路径 `uploads/yyyy/MM/{uuid}.{ext}`，以相对 URL 入库 |
-| BR-16 | 所有主键为雪花 ID（BIGINT），返回前端时序列化为**字符串**，前端类型为 `string` |
+| BR-16 | 主键为 `BIGINT AUTO_INCREMENT`；返回前端时统一用 `@JsonSerialize(using = ToStringSerializer.class)` 序列化为**字符串**，前端类型一律 `string` |
 | BR-17 | 价格/积分统一以「分」为单位的 `INT UNSIGNED` 存储（`price_cents`），前端展示时转换为元；本平台 `price_cents` 仅作「免费 / 积分」标记，不涉及真实支付 |
 | BR-18 | 权限缓存 key `perm:user:{userId}`，TTL 30 分钟；授权变更即时失效；Redis 不可用时降级直查 DB |
 | BR-19 | 登录 token 有效期 2 小时，登出后写入 Redis 黑名单直至自然过期 |
@@ -359,11 +362,11 @@ stateDiagram-v2
 
 详见 `GLOSSARY.md` §2 与 M1 产出的 `backend/sql/schema.sql`。
 
-**系统域（8 张）**：`sys_user`、`sys_dept`、`sys_role`、`sys_permission`、`sys_user_role`、`sys_role_permission`、`sys_dept_role`、`sys_login_log`
+**系统域（8 张）**：`sys_user`、`sys_dept`、`sys_role`、`sys_permission`、`sys_user_role`、`sys_user_permission`、`sys_role_permission`、`sys_dept_role`
 
-**文档域（6 张）**：`doc_document`、`doc_version`、`doc_category`、`doc_tag`、`doc_document_tag`、`doc_favorite`
+**文档域（6 张）**：`doc_document`、`doc_version`、`doc_category`、`doc_tag`、`doc_document_tag_rel`、`doc_favorite`
 
-**建表硬约束**：主键 BIGINT 雪花（无 `AUTO_INCREMENT`）、**不建数据库外键**、每表每列带中文 `COMMENT`、公共审计列统一为 `create_by / create_at / update_by / update_at / deleted`。
+**建表硬约束**：主键 `BIGINT AUTO_INCREMENT`、**不建数据库外键**、每表每列带中文 `COMMENT`、公共审计列统一为 `created_at / created_by / updated_at / updated_by / deleted`（逐字对齐老师《1.2 示例-数据库物理建表脚本(MySQL版)》）；中间表（`sys_user_role`、`sys_user_permission`、`sys_role_permission`、`sys_dept_role`、`doc_document_tag_rel`、`doc_favorite`）采用**复合主键、无 `id` 列、仅保留 `created_at`**。
 
 ---
 
