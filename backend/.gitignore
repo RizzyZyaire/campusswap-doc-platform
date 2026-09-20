@@ -1,0 +1,43 @@
+# ===== 后端 .gitignore（CampusSwap 文档管理平台）=====
+# 依据老师要求：不提交 logs/、target/、uploads/
+# 位置：backend/.gitignore
+
+# --- Maven 构建产物 ---
+target/
+!.mvn/wrapper/maven-wrapper.jar
+!**/src/main/**/target/
+!**/src/test/**/target/
+
+# --- 运行期目录（老师明确不传）---
+logs/
+uploads/*
+!uploads/.gitkeep
+
+# --- IDE / 编辑器 ---
+.idea/
+*.iml
+*.ipr
+*.iws
+*.class
+.vscode/
+.settings/
+.project
+.classpath
+.factorypath
+
+# --- 操作系统 ---
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# --- 本地私有配置（含真实密码，绝不入库）---
+application-local.yml
+application-local.properties
+*.local.yml
+*.local.properties
+
+# --- 日志与临时文件 ---
+*.log
+hs_err_pid*
+replay_pid*
+*.tmp

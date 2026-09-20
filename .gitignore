@@ -1,0 +1,36 @@
+# ===== 根级 .gitignore（CampusSwap）=====
+# 各子工程另有自己的 .gitignore（backend/.gitignore、frontend/.gitignore）
+
+# --- IDE / 编辑器 ---
+.idea/
+*.iml
+*.ipr
+*.iws
+.vscode/
+*.swp
+*.swo
+
+# --- 操作系统 ---
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# --- 日志与临时文件 ---
+*.log
+*.tmp
+*.bak
+*~
+
+# --- 本地私有配置（含真实密码，绝不入库）---
+*.local.yml
+*.local.properties
+.env
+.env.local
+application-local.yml
+
+# --- 构建产物兜底（子工程已各自忽略，这里再保一层）---
+target/
+dist/
+node_modules/
+logs/
+# uploads 由 backend/.gitignore 单独处理（保留 .gitkeep 占位）

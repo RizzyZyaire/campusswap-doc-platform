@@ -1,0 +1,45 @@
+# ===== 前端 .gitignore（CampusSwap 文档管理平台 · Vue3 + Vite + TS）=====
+# 依据老师要求：不提交 dist/、node_modules/
+# 位置：frontend/.gitignore
+
+# --- 依赖与构建产物（老师明确不传）---
+node_modules/
+dist/
+dist-ssr/
+*.local
+
+# --- 环境变量（防止把密钥/接口地址提交上去）---
+.env
+.env.*
+!.env.example
+
+# --- 编辑器 / IDE ---
+.vscode/*
+!.vscode/extensions.json
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# --- 日志 ---
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# --- 测试与缓存 ---
+coverage/
+.nyc_output/
+.cache/
+.vite/
+*.tsbuildinfo
+
+# --- 操作系统 ---
+.DS_Store
+Thumbs.db
+desktop.ini
