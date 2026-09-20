@@ -352,26 +352,30 @@ if (!doc.getCreateBy().equals(operatorId) && !hasPerm(operatorId, "doc:manage"))
 
 **目标**：产出需求三剑客并冻结，后续设计与代码以它为准。**前置**：无。
 
-- [ ] **T0.1** 创建目录 `docs/01-requirements/`
-- [ ] **T0.2** 用 **P1** 生成"三角色用户旅程 + 8 个原子用户故事"，人工审校后写入 `docs/01-requirements/USER_STORIES.md`（角色固定 `STAFF/DOC_ADMIN/SYS_ADMIN`；编号固定 `US-01~US-08`）
-- [ ] **T0.3** 用 **P2** 为每个故事补 **Given-When-Then** 验收标准（每故事 **1 正常流 + ≥2 异常流**），追加进同一文件
-- [ ] **T0.4** 用 **P3** 生成 `docs/01-requirements/PRD.md`（必含：系统概述与 MVP 边界、RBAC 权限矩阵、Mermaid 状态机（§4.5）、模块详规与业务规则字典、NFR、显式非目标）
-- [ ] **T0.5** 用 **P4** 生成 `docs/01-requirements/GLOSSARY.md`（实体/枚举/业务动作三类表）
-- [ ] **T0.6** 冻结自检（5 条红线，全绿才进 M1）：
-      - [ ] INVEST 完备（无史诗级大故事，每故事 1~2 天可测完）
-      - [ ] BDD 覆盖（8 故事 × ≥3 条断言 = ≥24 条 `Given`）
-      - [ ] 状态机无死胡同（TRASH 可恢复、每状态都有出口）
-      - [ ] 非目标已锁（在线支付/物流/ES/协同编辑 明确写入 Out of Scope）
-      - [ ] 命名单源（"文档"全篇只用 `Document`）
+- [x] **T0.1** 创建目录 `docs/01-requirements/`
+- [x] **T0.2** 用 **P1** 生成"三角色用户旅程 + 8 个原子用户故事"，人工审校后写入 `docs/01-requirements/USER_STORIES.md`（角色固定 `STAFF/DOC_ADMIN/SYS_ADMIN`；编号固定 `US-01~US-08`）
+- [x] **T0.3** 用 **P2** 为每个故事补 **Given-When-Then** 验收标准（每故事 **1 正常流 + ≥2 异常流**），追加进同一文件
+- [x] **T0.4** 用 **P3** 生成 `docs/01-requirements/PRD.md`（必含：系统概述与 MVP 边界、RBAC 权限矩阵、Mermaid 状态机（对应本计划 §4.5）、模块详规与业务规则字典、NFR、显式非目标）
+- [x] **T0.5** 用 **P4** 生成 `docs/01-requirements/GLOSSARY.md`（实体/枚举/业务动作三类表）
+- [x] **T0.6** 冻结自检（5 条红线，全绿才进 M1）：
+      - [x] INVEST 完备（无史诗级大故事，每故事 1~2 天可测完）
+      - [x] BDD 覆盖（8 故事 × ≥3 条断言 = ≥24 条 `Given`）
+      - [x] 状态机无死胡同（TRASH 可恢复、每状态都有出口）
+      - [x] 非目标已锁（在线支付/物流/ES/协同编辑 明确写入 Out of Scope）
+      - [x] 命名单源（"文档"全篇只用 `Document`）
 
 **产出**：`USER_STORIES.md`、`PRD.md`、`GLOSSARY.md`
-**DoD**：T0.6 五条全绿；`GLOSSARY.md` 中每个实体都能在 §4 找到对应表名
+**DoD**：T0.6 五条全绿；`GLOSSARY.md` 中每个实体都能在实体表（§2）与字段字典（§3）中找到对应表名
 **验证**：
 ```bash
 ls docs/01-requirements/                                # 三个文件都在
 grep -c "Given" docs/01-requirements/USER_STORIES.md   # ≥ 24
-grep -c "^## US-" docs/01-requirements/USER_STORIES.md # 8
+grep -c "^### US-" docs/01-requirements/USER_STORIES.md # 8（故事为三级标题）
+powershell -NoProfile -ExecutionPolicy Bypass -File docs/03-qa-review/verify-m0.ps1   # 13 项机检，全绿则输出 ALL GREEN
 ```
+
+**M0 收口记录（2026-09-21）**：需求三剑客已产出并冻结，机检脚本 `docs/03-qa-review/verify-m0.ps1` 连续两次运行 **13/13 全绿**（8 个故事 / 24 条 BDD 断言 / 39 个权限点 / 14 张表 / 24 条业务规则 / 9 条显式非目标）。
+审校期间修正 2 处：① `US-04` 输出字段 `updatedAt` → `updateAt`（对齐 GLOSSARY §6.2 禁用别名）；② 本手册验证命令的锚点由 `^## US-` 改为 `^### US-`（故事实际为三级标题）。
 
 ---
 
