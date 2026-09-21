@@ -153,7 +153,7 @@
 | 是否已收藏（派生标记） | — | `favorited` | — | VO 字段，Service 计算 |
 | 标签集合（联表展示） | — | `tags` | — | VO 字段：`TagVo[]` |
 
-### 3.3 `doc_version` 文档版本
+### 3.3 `doc_version` 文档版本（除 §1.2 的五列公共审计列外）
 
 | 中文 | 数据库列 | Java 字段 | 说明 |
 |---|---|---|---|
@@ -279,8 +279,10 @@
 | `DeptRoleDtoReq` | `roleIds:string[]`（**角色 ID** 数组） |
 | `RolePermissionVo` | `roleId, permissionIds:string[]` |
 | `DeptRoleVo` | `deptId, roleIds:string[]` |
+| `UserPasswordDtoReq` | `newPassword`（重置密码专用；≥8 位且同时含字母与数字，重置成功后该用户全部 token 失效） |
 
 > ⚠️ 易错点：`UserCreateDtoReq.roles` / `UserUpdateDtoReq.roles` 是**角色编码**数组（如 `['STAFF']`），而 `DeptRoleDtoReq.roleIds` / `RolePermissionDtoReq.permissionIds` 是**主键 ID** 数组。两者不可互换。
+> **不在本字典登记的类型**：① 前端上传工具的非 VO 辅助类型 `UploadEntry`（`blob:Blob, name:string`）；② 第三方库配置字段（axios 的 `baseURL` / `headers` / `timeout`，markdown-it 的 `html` / `linkify` / `breaks` / `typographer` / `plugins`）。它们不是领域字段，不受 R1 红线约束。
 
 **文档域补充（审核 / 派生 / 销毁 / 收藏）**
 

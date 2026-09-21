@@ -471,7 +471,30 @@ public interface DocumentRepository extends JpaRepository<Document, Long>,
 | 收藏列表 | 主键 `(user_id, document_id)` + `idx_fav_doc(document_id)` | |
 | 登录名查用户 | `uk_sys_user_username(username)` | |
 
-**流程要求**：M2 建表时索引一次到位；**M6 用 DBeaver 对 3 条高频 SQL 执行 `EXPLAIN ANALYZE`，把原始输出与结论写入 `docs/03-qa-review/EXPLAIN-NOTES.md`**（命中哪个索引、是否出现 `Seq Scan` / `Using filesort`、最左前缀是否被满足）。
+**流程要求**：M2 建表时索引一次到位；**M6 用 DBeaver 对 3 条高频 SQL 执行 `EXPLAIN ANALYZE`，把原始输出与结论写入 `docs/03-qa-review/EXPLAIN-NOTES.md`**（命中哪个索引、是否出现 `Seq Scan` / `Using filesort`、最左前缀是否被满足）。M2 首测已完成，见该文件（Q1 0.149 ms / Q2 0.221 ms / Q3 修复后 0.135 ms / 对照组全表扫描 18.2 ms）。
+
+### 10.5 每个读接口的 SQL 条数预算（N+1 的设计级验收）
+
+> **判据**：预算必须是**常数** —— 与 `pageSize`、树节点数、标签数、角色数**完全无关**。M6 逐接口用 `show-sql` 日志点数，超出即判为 N+1 缺陷。
+
+| 接口 | SQL 预算 | 步骤 | 明令禁止 |
+|---|---|---|---|
+| `GET /api/documents`（检索列表） | **3** | ① 主表分页（Specification + **DTO 投影**，不读 `content_md`）② `findAllById` 批量取作者名 ③ 批量取分类名（`doc_category` IN …） | ❌ 循环里 `doc.getCategory().getName()`；❌ `Page<Document>` 配集合型 `JOIN FETCH tags`（Hibernate 会先查全部 ID 再分页，报 `HHH000104`） |
+| `GET /api/documents/{id}`（详情） | **4** | ① 主表 + `@EntityGraph(attributePaths={"category"})`（单条，无分页问题）② 作者名 ③ 标签：`doc_document_tag_rel` JOIN `doc_tag` WHERE document_id=? ④ 当前用户是否已收藏 | ❌ 遍历 `tags` 再逐个查 `doc_tag` |
+| `GET /api/documents/mine`、`/trash` | **3** | 同检索列表 | 同上 |
+| `GET /api/review/documents` | **3** | 同检索列表（外加状态条件） | 同上 |
+| `GET /api/favorites` | **3** | ① 收藏 JOIN 文档分页 ② 作者名批量 ③ 分类名批量 | ❌ 先查收藏列表再循环查文档 |
+| `GET /api/users` | **4** | ① 用户分页 ② 部门名批量 ③ `sys_user_role` 批量 ④ `sys_role` 批量取角色码 | ❌ 每个用户查一次角色 |
+| `GET /api/roles` | **3** | ① 角色分页 ② `sys_role_permission` 批量 | ❌ 每个角色查一次权限清单 |
+| `GET /api/permissions/tree` | **1** | **一次查全表 + 内存按 `parent_id` 组树** | ❌ **递归查子节点**（树形结构最容易被忽略的隐藏 N+1） |
+| `GET /api/depts/tree`、`GET /api/categories/tree` | **1** | 同上 | 同上 |
+| `GET /api/roles/{id}/permissions`、`GET /api/depts/{id}/roles` | **2** | ① 关联表一次查全 ② 名称批量取 | ❌ 循环取名称 |
+| `GET /api/stats/overview` | **3** | ① 我的文档计数 ② 我的收藏计数 ③ 平台计数（可用一条聚合/UNION 合并） | ❌ 多次全表 `COUNT` 叠加 |
+
+**三条铁律**
+1. **批量代替循环**：任何"按 N 个 ID 补名称"的场景，一律 `findAllById` / `IN (...)` + 内存 `Map` 分组（课件 3.1 红线二）。
+2. **树形接口一次查全**：`ancestors` + `parent_id` 一次 SELECT 后在内存组装，禁止按层递归查询（这是最隐蔽的 N+1）。
+3. **大文本不进列表**：列表 DTO 投影只取展示列；`contentMd` 仅详情接口返回（课件 3.1 红线三）。
 
 ---
 
@@ -520,8 +543,14 @@ public interface DocumentRepository extends JpaRepository<Document, Long>,
 | 文件 | 内容 |
 |---|---|
 | `application.yml` | 公共配置：`spring.profiles.active: dev`、Jackson 时区 `Asia/Shanghai`、`spring.servlet.multipart.max-file-size: 5MB`、`server.servlet.context-path: /` |
-| `application-dev.yml` | `server.port: 10087`、数据源 `jdbc:mysql://localhost:3306/campusswap_db?...&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true`、`username: root`、`password: ${DB_PASSWORD:123456}`、Redis `localhost:6379`、`ddl-auto: none`、`show-sql: true` |
-| `application-prod.yml` | `server.port: 10180`、`show-sql: false`、日志级别 `INFO`、**密码必须来自环境变量**（无默认值） |
+| `application-dev.yml` | `server.port: 10087`、数据源 `jdbc:mysql://localhost:3306/campusswap_db?...&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true`、**`username: ${DB_USERNAME:campusswap_dev}`**、**`password: ${DB_PASSWORD:CampusSwap@2026}`**、Redis `localhost:6379`、`ddl-auto: none`、`show-sql: true` |
+| `application-prod.yml` | `server.port: 10180`、`show-sql: false`、日志级别 `INFO`、**账号与密码必须来自环境变量**（无默认值） |
+
+**数据库账号（M2 已建好，最小权限）**：应用**不使用 root**，统一用 `campusswap_dev@localhost`（`mysql_native_password`，仅 `SELECT/INSERT/UPDATE/DELETE ON campusswap_db.*`，无 DDL 权限）。建表/改表用 root 或 DBeaver，运行期一律走该账号。迁移到其它机器时执行：
+```sql
+CREATE USER IF NOT EXISTS 'campusswap_dev'@'localhost' IDENTIFIED WITH mysql_native_password BY '<你的密码>';
+GRANT SELECT, INSERT, UPDATE, DELETE ON campusswap_db.* TO 'campusswap_dev'@'localhost';
+```
 
 **安全约定（老师红线）**：仓库中任何位置不得出现生产明文密码；旧库 `docs_db` 时代的列名与连接串一律废弃，统一 `campusswap_db` 与新的审计列命名。
 

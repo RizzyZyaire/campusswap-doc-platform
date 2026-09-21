@@ -40,7 +40,7 @@
 | 9 | 构建命令 | 后端用 `./mvnw`（Maven Wrapper，与老师工程一致）；wrapper 下载慢时改 `distributionUrl` 为阿里云镜像 | 老师工程结构 |
 | 10 | 金额 | 一律整数分 `price_cents INT UNSIGNED` / `priceCents`；**不做真实支付结算**，`price_cents` 只表示"0=免费，>0=需积分兑阅" | 老师红线 + 课件 |
 | 11 | 检索方案 | MySQL `LIKE` / FULLTEXT + 索引，**不引入 Elasticsearch** | MVP 边界 |
-| 12 | 数据库 | 库名 `docs_db`；表前缀 `sys_`（系统域）/ `doc_`（文档域） | 沿用老师工程 |
+| 12 | 数据库 | 库名 **`campusswap_db`**（按老师「项目名_db」约定，与练习项目的 `docs_db` 隔离）；表前缀 `sys_`（系统域）/ `doc_`（文档域）；应用账号 `campusswap_dev`（最小权限，不用 root） | 2026-09-21 对齐课件时变更 |
 | 13 | Java 版本 | **编译目标 17**；可用 Record/Stream 等现代写法，不依赖 21 独有语法 | 老师工程实际配置 |
 | 14 | 演示范畴 | 老师不看效果演示 → **不写演示脚本**，把精力投入源码与测试 | 老师明确 |
 
@@ -496,6 +496,7 @@ SELECT TABLE_NAME,COLUMN_TYPE FROM information_schema.COLUMNS
 - [ ] **T3.10** 验证：`./mvnw clean compile` 零错误；APIFOX 依次跑通「登录 → 查权限树 → 新增用户 → 查询用户列表 → 给用户授角色」
 - [ ] **T3.11** **关联映射（课件 3.1 §1）**：`Document.category` = `@ManyToOne(fetch = LAZY)` + `@JoinColumn(name="category_id", insertable=false, updatable=false)`；`Document.tags` = `@ManyToMany(fetch = LAZY)` **只读**（禁 `add/remove`）；关联字段标 `@ToString.Exclude`；**全仓 `EAGER` 计数为 0**
 - [ ] **T3.12** **查询进阶（课件 3.1 §2/§3）**：`DocumentRepository extends JpaSpecificationExecutor<Document>`；列表查询用 `@EntityGraph` / DTO 构造函数投影；按 ID 批量补名用 `findAllById` + Map 分组；动态条件用 Criteria 组合（**禁字符串 SQL 拼接**）
+- [ ] **T3.13** **按 `ARCHITECTURE §10.5` 的 SQL 条数预算实现每个读接口**：批量补名（`IN` + Map）/ 树形接口一次查全 + 内存建树 / 列表 DTO 投影不读 `content_md`；dev 开 `show-sql` 自检每接口 SQL 条数 ≤ 预算（1~4 条）
 
 **DoD**：编译零错误；登录返回 token 与用户 VO（**不含 `password_hash`**）；未授权访问返回 403；越权改他人数据返回 403；**关联映射全部 `LAZY`（`EAGER` 计数 0）**
 **验证**：
@@ -559,6 +560,7 @@ grep -rn "style=" src/ || echo "✅ 无内联样式"
 - [ ] **T6.6** **性能回归（课件 3.1 实践任务 5）**：注入测试数据（如 1 万篇文档）后重跑 `EXPLAIN ANALYZE`，把「是否仍命中 `idx_doc_cat_status_updated`／`idx_doc_status_updated`」写回 `EXPLAIN-NOTES.md`；核对 `EAGER` 计数 0、列表 SQL 条数为常数、`pageNum > 100` 被拒绝
 
 **DoD**：单测全绿；异常路径有记录；审查清单无未通过项；**列表接口零 N+1（SQL 条数为常数）且高频查询命中复合索引**
+- [ ] **T6.7** **逐接口点数 SQL 条数**（对齐 `ARCHITECTURE §10.5` 预算表：检索/详情/我的/审核/收藏/用户/角色/树形/统计），把每个接口的实测条数写入 `docs/03-qa-review/TEST_CHECKLIST.md`，与 `EXPLAIN-NOTES.md` 的索引回归共同构成"查询性能"证据链
 
 ---
 
