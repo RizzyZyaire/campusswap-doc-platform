@@ -467,7 +467,7 @@ public interface DocumentRepository extends JpaRepository<Document, Long>,
 |---|---|---|
 | 分类 + 状态 + 更新时间倒序（检索主路径） | `idx_doc_cat_status_updated(category_id, status, updated_at, deleted)` | `EXPLAIN ANALYZE` 显示 `Index Scan`，无 `Rows Removed by Filter` |
 | **仅状态 + 更新时间**（审核队列、我的文档） | `idx_doc_status_updated(status, updated_at, deleted)` | **最左前缀**：`status` 单独筛选走不了上一个索引，必须单独建 |
-| 作者维度（我的文档） | `idx_doc_created_by(created_by, deleted)` | |
+| 作者维度（我的文档） | `idx_doc_created_by_updated(created_by, updated_at, deleted)` | **排序键必须进索引**：实测 `(created_by, deleted)` 写法会退化为 filesort（20 000 行时 28.4 ms），改后 0.135 ms |
 | 收藏列表 | 主键 `(user_id, document_id)` + `idx_fav_doc(document_id)` | |
 | 登录名查用户 | `uk_sys_user_username(username)` | |
 

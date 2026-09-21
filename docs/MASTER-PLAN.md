@@ -48,6 +48,8 @@
 
 ## 2. 硬约束（违反即扣分，逐条可检查）
 
+> **决策状态（2026-09-21 用户指示）**：原本列出的"待老师确认的 10 个问题"**已全部关闭** —— 老师已确认的（用默认方案、根目录只 `docs/ backend/ frontend/`、Redis 用本机、必须上传 GitHub、评分只看源码）按确认结果执行，**其余一律按本手册的默认方案锁定，不再等待回复**。任何后续变更走 `docs/03-qa-review/` 留痕。
+
 ### 2.1 编码六红线（来自老师《AGENTS.md》）
 
 | # | 红线 | 检查方式 |
@@ -63,7 +65,7 @@
 
 1. 每张表显式写 `ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`
 2. 金额列 `INT UNSIGNED`（分）
-3. 主键 `BIGINT` **雪花算法、程序生成、不写 AUTO_INCREMENT**
+3. 主键 `BIGINT NOT NULL AUTO_INCREMENT`（**对齐老师《1.2 示例-数据库物理建表脚本(MySQL版)》**，2026-09-21 由"雪花禁用自增"变更而来；**6 张纯关联中间表用复合主键、无 `id` 列**）
 4. **不建任何外键约束**（关联靠逻辑外键 + 代码校验）
 5. 高频查询列建索引/复合索引，注意最左前缀
 6. **每张表、每个字段都要有 `COMMENT`**
@@ -284,7 +286,7 @@ private Set<Tag> tags = new HashSet<>();
 | P2 | **列表接口零 N+1**：优先 **DTO 构造函数投影**，需实体时用 **`@EntityGraph`**，少量定制用 `JOIN FETCH` | dev 开 `show-sql`，列表接口 SQL 条数**为常数（≤3 条）且不随 `pageSize` 增长**；M6 测试留证 |
 | P3 | **列表禁查大文本**：`DocumentVo` 不含 `contentMd` | 接口出参字段核对（GLOSSARY §3.7） |
 | P4 | 动态多条件用 **`JpaSpecificationExecutor` + Criteria**（分类/状态/关键词/时间区间自由组合），禁手写 SQL 拼接 | 组合条件测试用例（课件 3.1 实践任务 4） |
-| P5 | 高频查询命中复合索引：`idx_doc_cat_status_updated(category_id,status,updated_at,deleted)`、`idx_doc_status_updated(status,updated_at,deleted)`（**最左前缀**：仅 status 筛选走不了前者） | DBeaver `EXPLAIN ANALYZE` 输出 + `docs/03-qa-review/EXPLAIN-NOTES.md` 留档 |
+| P5 | 高频查询命中复合索引：`idx_doc_cat_status_updated(category_id,status,updated_at,deleted)`、`idx_doc_status_updated(status,updated_at,deleted)`（**最左前缀**：仅 status 筛选走不了前者）、`idx_doc_created_by_updated(created_by,updated_at,deleted)`（**排序键必须进索引**） | DBeaver `EXPLAIN ANALYZE` 输出 + `docs/03-qa-review/EXPLAIN-NOTES.md` 留档（M2 首测已产出：Q1 0.149ms / Q2 0.221ms / Q3 修复后 0.135ms / 对照组全表扫描 18.2ms） |
 | P6 | 5 大避坑红线：① 禁 `@Data` ② 禁循环查库（改 `findAllById` + Map 分组）③ 列表不查大文本 ④ 参数类型与列类型一致（防隐式转换索引失效） ⑤ 禁无限 `OFFSET` 深分页（`pageNum > 100` 拒绝） | M5/M6 代码走查清单逐条打勾 |
 
 ### 5.2 统一响应与错误码
@@ -445,14 +447,14 @@ powershell -NoProfile -ExecutionPolicy Bypass -File docs/03-qa-review/verify-m1.
 
 **目标**：`docs_db` 建好 14 张表，符合 §2.2。**前置**：M1 完成。
 
-- [ ] **T2.1** 建库：`CREATE DATABASE IF NOT EXISTS campusswap_db DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;`
-- [ ] **T2.2** 用 **P5** 生成 `sql/schema.sql`（14 张表，字段严格按 §4）
-- [ ] **T2.3** DBeaver 打开该文件 → **Alt+X** 执行 → 全部建表成功
-- [ ] **T2.4** 跑下方校验 SQL：库名正确、14 张表齐、外键数 0、主键**均为** `auto_increment`（6 张中间表除外）、空注释列 0
-- [ ] **T2.5** 生成 `sql/data.sql` 种子数据：**全部 39 个权限点**（对齐 PRD §3.2）、3 个内置角色 + 角色权限关联、1 个 `SYS_ADMIN`（`admin / Admin@123`，BCrypt 哈希）、1 个部门 + 部门角色绑定、3 篇示例文档 + 分类 + 标签 + 关联行
-- [ ] **T2.6** 收纳：`mkdir -p backend/sql && cp sql/schema.sql backend/sql/`
-- [ ] **T2.7** 复合索引一次到位（课件 3.1 §4 + 最左前缀）：`idx_doc_cat_status_updated(category_id, status, updated_at, deleted)`、**`idx_doc_status_updated(status, updated_at, deleted)`（仅状态筛选必须单独建，走不了前者）**、`idx_doc_created_by(created_by, deleted)`、`uk_sys_user_username(username)`、`idx_fav_doc(document_id)`、`idx_sys_perm_parent(parent_id, deleted)`、`idx_doc_category_parent(parent_id, deleted)`
-- [ ] **T2.8** 建表后立即用 DBeaver 对 3 条高频 SQL 跑 `EXPLAIN ANALYZE`（检索主路径 / 审核队列 / 我的文档），确认 `Index Scan` 且无 `Seq Scan`·`Using filesort`，原始输出写入 `docs/03-qa-review/EXPLAIN-NOTES.md`
+- [x] **T2.1** 建库：`CREATE DATABASE IF NOT EXISTS campusswap_db DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;`
+- [x] **T2.2** 用 **P5** 生成 `sql/schema.sql`（14 张表，字段严格按 §4）
+- [x] **T2.3** DBeaver 打开该文件 → **Alt+X** 执行 → 全部建表成功
+- [x] **T2.4** 跑下方校验 SQL：库名正确、14 张表齐、外键数 0、主键**均为** `auto_increment`（6 张中间表除外）、空注释列 0
+- [x] **T2.5** 生成 `sql/data.sql` 种子数据：**全部 39 个权限点**（对齐 PRD §3.2）、3 个内置角色 + 角色权限关联、1 个 `SYS_ADMIN`（`admin / Admin@123`，BCrypt 哈希）、1 个部门 + 部门角色绑定、3 篇示例文档 + 分类 + 标签 + 关联行
+- [x] **T2.6** 收纳：`mkdir -p backend/sql && cp sql/schema.sql backend/sql/`
+- [x] **T2.7** 复合索引一次到位（课件 3.1 §4 + 最左前缀）：`idx_doc_cat_status_updated(category_id, status, updated_at, deleted)`、**`idx_doc_status_updated(status, updated_at, deleted)`（仅状态筛选必须单独建，走不了前者）**、**`idx_doc_created_by_updated(created_by, updated_at, deleted)`（排序键必须进索引，否则 ORDER BY updated_at 退化成 filesort）**、`uk_sys_user_username(username)`、`idx_fav_doc(document_id)`、`idx_sys_perm_parent(parent_id, deleted)`、`idx_doc_category_parent(parent_id, deleted)`
+- [x] **T2.8** 建表后立即用 DBeaver 对 3 条高频 SQL 跑 `EXPLAIN ANALYZE`（检索主路径 / 审核队列 / 我的文档），确认 `Index Scan` 且无 `Seq Scan`·`Using filesort`，原始输出写入 `docs/03-qa-review/EXPLAIN-NOTES.md`
 
 **DoD**：库名 `campusswap_db`；14 张表齐；无外键；非中间表主键均为 `BIGINT AUTO_INCREMENT`；6 张中间表为复合主键且无 `id` 列；`price_cents` 为 `int unsigned`；注释 0 缺失
 **验证**：
@@ -467,6 +469,14 @@ SELECT TABLE_NAME,COLUMN_NAME FROM information_schema.COLUMNS
 SELECT TABLE_NAME,COLUMN_TYPE FROM information_schema.COLUMNS
   WHERE TABLE_SCHEMA='campusswap_db' AND COLUMN_NAME='price_cents';                               -- int unsigned
 ```
+
+**M2 收口记录（2026-09-21）**：`campusswap_db` 已建成，**14 张表**（8 系统域 + 6 文档域）+ **20 个索引**一次到位，种子数据 13 项计数全部命中预期（39 权限点 / 3 角色 / STAFF 11 / DOC_ADMIN 20 / SYS_ADMIN 39 / 3 部门 / 3 用户 / 4 分类 / 5 标签 / 5 文档 / 9 版本留痕 / 3 收藏）。
+机检脚本 **`docs/03-qa-review/verify-m2.ps1`（16 项，全绿，可重跑）**：库字符集、表数、引擎与排序规则、**外键 0**、8 张自增主键 + 6 张复合主键、**表与列注释 0 缺失**、`price_cents` 为 `int unsigned`、审计列覆盖 8 张业务表、**0 处旧列名**、18 个预期索引齐备、最左前缀列序正确、种子计数、BCrypt 哈希真实性、枚举取值合法。
+**SQL 性能实测**（`EXPLAIN ANALYZE`，20 000 行压测数据，产出 `docs/03-qa-review/EXPLAIN-NOTES.md`）：Q1 检索主路径 **0.149 ms**（命中 `idx_doc_cat_status_updated`，无 filesort）、Q2 审核队列 **0.221 ms**（命中 `idx_doc_status_updated`）、Q3 我的文档 **0.135 ms**、对照组（忽略索引）**18.2 ms 全表扫描**（≈82 倍差距）。
+**实测中发现并修掉一个索引设计缺陷**：原 `idx_doc_created_by(created_by, deleted)` 不含排序键 → `ORDER BY updated_at DESC` 要读 10 003 行再内存排序（**28.4 ms**）；改为 `idx_doc_created_by_updated(created_by, updated_at, deleted)` 后无排序、**0.135 ms（约 210 倍）**。`ARCHITECTURE §10.4`、本手册 T2.7 与机检脚本已同步。
+**压测夹具**：`backend/sql/perf-fixture.sql`（灌 20 000 行 / 按标题前缀一键清理，M6 回归复用）。
+**内置账号**：`admin/Admin@123`（SYS_ADMIN）、`docadmin/Doc@123456`（DOC_ADMIN）、`staff/Staff@123`（STAFF）——均为 **bcrypt strength 10 真实哈希**，机检 C15 断言 60 字符 `$2b$` 前缀。
+**顺延说明**：T1.4（Apifox 录入）在后端可运行后于 M3 收口时执行。
 
 ---
 
@@ -845,4 +855,5 @@ grep -rn "password" backend/src/main/resources/ | grep -v '\${'   # 不应出现
 |---|---|
 | 2026-09-20 | v1.0 初版：汇总三份课件（需求工程 SOP / JPA 实体规约 / 老师 AGENTS.md）与碎片要求 |
 | 2026-09-21 | **v2.0 冻结版**：业务定为文档管理平台；前端自研；权限 3 层；Redis 用本机；交付三文件夹 + GitHub（含忽略清单）；评分只看源码；删除全部"待确认"表述，新增 M0~M7 可勾选任务看板与 7 组 Prompt |
+| 2026-09-21 | **v2.2（M2 收口）**：数据库落地 —— 14 张表 + 20 个索引 + 种子数据（39 权限点/3 角色/3 账号）建成；新增 `verify-m2.ps1`（16 项）与 `EXPLAIN-NOTES.md`；实测修正索引 `idx_doc_created_by` → `idx_doc_created_by_updated`（排序键必须进索引，28.4ms → 0.135ms）；新增压测夹具 `perf-fixture.sql`；§2 决策状态改为「10 个问题按默认方案锁定」 |
 | 2026-09-21 | **v2.1（M1 收口）**：全面对齐老师《1.2 示例-数据库物理建表脚本(MySQL版)》—— 自增主键、`created_*/updated_*` 审计列、中间表复合主键无 `id`、`name/code/type/sort_order` 命名、`sys_user.status` 三态、`sys_user_permission` 取代 `sys_login_log`、取消 `sys_user.role_code`；库名改 `campusswap_db`；包结构改为「按模块分包 + entity 顶层」；交付新增 `docs/02-design/` 三件套与 `verify-m1.ps1` |
