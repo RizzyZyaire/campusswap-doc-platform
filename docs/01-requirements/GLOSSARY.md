@@ -10,7 +10,7 @@
 | 上游依据 | 老师课件《1.2 示例-数据库物理建表脚本(MySQL版)》《1.2 项目案例介绍》《2.1 专题指南》 |
 | 下游消费 | `backend/sql/schema.sql`、Entity/DTO/VO、`frontend/src/types/` |
 
-**变更记录**
+### Changelog（变更记录 · DEPRECATED 对照）
 
 | 版本 | 变更 |
 |---|---|
@@ -96,6 +96,18 @@
 | 文档-标签 | DocumentTagRel | `doc_document_tag_rel` | `DocumentTagRel` | 复合主键 `(document_id, tag_id)` |
 | 收藏 | Favorite | `doc_favorite` | `Favorite` | 复合主键 `(user_id, document_id)` |
 
+### 2.3 关联字段（读模型，只读；写入一律用 ID / 显式中间表）
+
+| 实体 | 关联字段 | 注解 | 读写约束 |
+|---|---|---|---|
+| `Document` | `category: Category` | `@ManyToOne(fetch = FetchType.LAZY)` + `@JoinColumn(name = "category_id", insertable = false, updatable = false)` | **只读**；写入只认 `categoryId` |
+| `Document` | `tags: Set<Tag>` | `@ManyToMany(fetch = FetchType.LAZY)` + `@JoinTable(name = "doc_document_tag_rel", joinColumns = document_id, inverseJoinColumns = tag_id)` | **只读**；增删一律走 `DocumentTagRelRepository` |
+| `DocumentVersion` | 无关联 | — | 只存 `document_id` |
+| 其余全部实体 | 无对象关联 | — | 只存 `deptId` / `roleId` / `permissionId` / `parentId` / `categoryId` |
+
+> **依据两份课件的分工**：2.1 §4.2 决策树约束**写模型**（独立业务领域一律字段 ID 关联；禁 `@ManyToMany` 因为隐藏中间表挂不了 `created_at`、无法可控清空、误配级联会误删共享数据）；3.1 §1 规范**读模型**（对象关联 + `LAZY` + `@EntityGraph` 才能把列表查询压成一条 SQL）。
+> **硬约束**：禁 `FetchType.EAGER`；**不建反向集合**（不写 `Category.documents`、`Tag.documents`）；树形禁自关联对象（用 `parentId` + `ancestors`）；关联字段上标 `@ToString.Exclude`。
+
 ---
 
 ## 3. 字段级命名字典
@@ -132,7 +144,9 @@
 | 派生来源 | `derived_from_id` | `derivedFromId` | BIGINT | 可空；为空表示原创 |
 | 驳回理由 | `reject_reason` | `rejectReason` | varchar(255) | 审核驳回时写入，回传属主 |
 | 发布时间 | `publish_at` | `publishAt` | DATETIME | 首次发布时写入 |
-| 作者 | `created_by` | `createdBy` | BIGINT | **作者 = 创建人**（复用审计列，不另设 author_id） |
+| 作者 | `created_by` | `createdBy` | BIGINT | **作者 = 创建人**（复用审计列，不另设作者列） |
+| 分类对象（只读关联） | `category_id` | `category` | `Category` | `@ManyToOne(fetch = LAZY)` + `@JoinColumn(insertable=false, updatable=false)`；**只读导航**，写入只用 `categoryId` |
+| 标签集合（只读关联） | 中间表 `doc_document_tag_rel` | `tags` | `Set<Tag>` | `@ManyToMany(fetch = LAZY)`；**只读**，禁止 `add/remove`，增删走 `DocumentTagRelRepository` |
 | 作者名（联表展示） | — | `authorName` | — | VO 字段 |
 | 分类名（联表展示） | — | `categoryName` | — | VO 字段 |
 | 是否可编辑（派生标记） | — | `canEdit` | — | VO 字段，Service 计算 |
@@ -190,6 +204,8 @@
 | 分类筛选 | `categoryId` | string | 可空 |
 | 标签筛选 | `tagIds` | string[] | 可空，多标签 AND 命中 |
 | 部门筛选 | `deptId` | string | 可空 |
+| 起始时间 | `startTime` | string | 可空，`yyyy-MM-dd HH:mm:ss`，按 `created_at` 过滤（闭区间） |
+| 结束时间 | `endTime` | string | 可空，`yyyy-MM-dd HH:mm:ss`，与 `startTime` 成对使用；`startTime > endTime` 返回 400「开始时间不能晚于结束时间」 |
 | 排序 | `sort` | `DocumentSort` | 可空，默认 `updatedAt_desc`；取值 `updatedAt_desc` / `publishAt_desc` / `viewCount_desc` |
 
 **分页出参**：`PageVo<T>` = `{ list: T[], total: number, pageNum: number, pageSize: number }`。

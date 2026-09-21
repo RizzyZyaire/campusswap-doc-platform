@@ -125,6 +125,8 @@ public record ResponseResult<T>(int code, String message, T data) { }
 | `categoryId` | string | 可空 | 分类筛选 |
 | `tagIds` | string[] | 可空 | 标签筛选（多标签 **AND** 命中，需同时包含全部所选标签） |
 | `deptId` | string | 可空 | 部门筛选 |
+| `startTime` | string | 可空，`yyyy-MM-dd HH:mm:ss` | 起始时间（闭区间），按 `created_at` 过滤 |
+| `endTime` | string | 可空，`yyyy-MM-dd HH:mm:ss` | 结束时间；与 `startTime` 成对使用，`startTime > endTime` 返回 400「开始时间不能晚于结束时间」 |
 | `sort` | `DocumentSort` | 可空，默认 `updatedAt_desc` | 列表排序方式，取值 `updatedAt_desc` / `publishAt_desc` / `viewCount_desc` |
 
 > **排序与命名说明（与前端规范对齐）**：列表排序统一用**单个** `sort` 字段（类型 `DocumentSort`，取值 `updatedAt_desc` / `publishAt_desc` / `viewCount_desc`，默认 `updatedAt_desc`）。`sortOrder` 在本文件中**只有一个语义**——角色 / 权限 / 分类 / 部门 / 标签等实体 VO 的**排序号**（数据库列 `sort_order`，数字），与列表排序无关，二者不得混用。
@@ -1347,6 +1349,8 @@ Content-Type: application/json;charset=UTF-8
 | `categoryId` | string | 否 | 分类 ID；传父分类 = 含全部子孙分类 | 分类ID格式不正确 |
 | `tagIds` | string[] | 否 | 标签 ID 数组；**AND 命中**（文档需同时包含全部所选标签） | 标签ID格式不正确 |
 | `status` | string | 否 | 本接口只查已发布：可空或 `PUBLISHED`，传其它值返回 400 | 本接口仅支持查询已发布文档 |
+| `startTime` | string | 否 | `yyyy-MM-dd HH:mm:ss`，闭区间；与 `endTime` 成对使用 | 时间格式不正确，应为 yyyy-MM-dd HH:mm:ss |
+| `endTime` | string | 否 | 同上；`startTime > endTime` 报错 | 开始时间不能晚于结束时间 |
 | `sort` | string | 否 | `DocumentSort`：`updatedAt_desc`（默认）/ `publishAt_desc` / `viewCount_desc` | 排序方式仅支持 updatedAt_desc、publishAt_desc、viewCount_desc |
 
 **出参** `PageVo<DocumentVo>`
@@ -1365,6 +1369,9 @@ Content-Type: application/json;charset=UTF-8
 - 关键词无命中时返回 `200` + `list: []` + `total: 0`，**不是** 404 或 500（US-04 AC-04.2）。
 - 列表项的 `canEdit` 仅当「当前用户是作者」且状态属于 `DRAFT`/`PUBLISHED` 时为 `true`。
 - 作者名与分类名批量补齐，禁止 N+1（NFR-P2）。
+- **动态条件用 `JpaSpecificationExecutor` + Criteria API 组合**（课件 3.1 §3）：分类、状态、关键词、时间区间任一为空则自动跳过，全程类型安全，**禁止字符串 SQL 拼接**。
+- **列表走 DTO 构造函数投影**（课件 3.1 §2.4）：只查列表所需列，**不含 `contentMd` 大文本**；整条链路的 SQL 条数必须为常数（≤ 3 条）且不随 `pageSize` 增长（课件 3.1 §2 验收）。
+- 需要实体对象做业务判断的查询用 `@EntityGraph(attributePaths = {...})`（课件 3.1 §2.3）；仅按 ID 批量补名称用 `findAllById` + Map 分组，禁止循环查库（课件 3.1 红线二）。
 
 **示例**
 
@@ -2453,7 +2460,7 @@ Content-Type: image/png
 
 ---
 
-## 附录 A：作废写法对照表（迁移既有文档用，**代码中禁止出现**）
+## 附录 A：作废写法对照表（DEPRECATED — anti-alias reference）（迁移既有文档用，**代码中禁止出现**）
 
 > 用途：`PRD.md` / `USER_STORIES.md` / `MASTER-PLAN.md §5.2 §5.3` 迁移到 GLOSSARY v2.1 时的逐项对照依据。
 > 约束：本表右列为**唯一合法名**；左列仅作为历史写法出现在本附录，**不得出现在 Entity / DTO / VO / TS 类型 / 接口字段中**。

@@ -237,9 +237,9 @@ stateDiagram-v2
 | 2 | 必须无参构造 | 同上（Hibernate 代理需要） |
 | 3 | 主键用包装类 `Long` | `private Long id;`（禁 `long`） |
 | 4 | 禁 `ddl-auto=update` | `spring.jpa.hibernate.ddl-auto=none`，表结构走 `schema.sql` |
-| 5 | 禁 `@ManyToMany` | 中间表建**显式实体**（可挂 `create_by/create_at`） |
+| 5 | **禁 `@ManyToMany` 参与写入**（课件 2.1 §4.4） | 中间表建**显式实体**（`UserRole` / `RolePermission` / `DocumentTagRel`），挂 `created_at`，可整表清空重插；查询导航可用**只读** `@ManyToMany`（课件 3.1 §1.2），但禁止 `add/remove` |
 | 6 | 禁自关联对象 | 树形用 `parentId` + `ancestors` 字段 |
-| 7 | 雪花 ID 序列化为 String | `@JsonSerialize(using = ToStringSerializer.class)` |
+| 7 | 所有 ID 序列化为 String | `@JsonSerialize(using = ToStringSerializer.class)`（主键 `BIGINT AUTO_INCREMENT`，Java 侧包装类 `Long`） |
 
 **配套写法**：
 ```java
@@ -256,6 +256,36 @@ public class Document extends BaseEntity { … }
 - 枚举：`@Enumerated(EnumType.STRING)`（禁 ORDINAL）
 - 创建人/创建时间：`@Column(updatable = false)`
 - 审计自动填充：`BaseEntity` 加 `@EntityListeners(AuditingEntityListener.class)` + `@CreatedBy/@CreatedDate/@LastModifiedBy/@LastModifiedDate`，配置类开 `@EnableJpaAuditing`
+
+### 5.1.1 关联映射与查询性能（课件 3.1，**M3/M4 逐条验收**）
+
+**核心口径：写 ID、读关联**（两份课件的分工，详见 `docs/02-design/ARCHITECTURE.md` §10.1）
+
+```java
+// 写模型（Service 写入）：只认 ID / 显式中间实体
+document.setCategoryId(dto.categoryId());
+documentTagRelRepository.deleteByDocumentId(docId);   // 标签清空重插
+
+// 读模型（查询导航）：只读对象关联，一律 LAZY
+@ManyToOne(fetch = FetchType.LAZY)
+@JoinColumn(name = "category_id", insertable = false, updatable = false)
+private Category category;
+
+@ManyToMany(fetch = FetchType.LAZY)          // 只读视图，禁止 add/remove
+@JoinTable(name = "doc_document_tag_rel",
+           joinColumns = @JoinColumn(name = "document_id"),
+           inverseJoinColumns = @JoinColumn(name = "tag_id"))
+private Set<Tag> tags = new HashSet<>();
+```
+
+| # | 要求 | 验收证据 |
+|---|---|---|
+| P1 | 关联全部 `FetchType.LAZY`，无裸露 `EAGER` | 全仓 grep `EAGER` = 0；`@ManyToOne` 处均显式写 LAZY |
+| P2 | **列表接口零 N+1**：优先 **DTO 构造函数投影**，需实体时用 **`@EntityGraph`**，少量定制用 `JOIN FETCH` | dev 开 `show-sql`，列表接口 SQL 条数**为常数（≤3 条）且不随 `pageSize` 增长**；M6 测试留证 |
+| P3 | **列表禁查大文本**：`DocumentVo` 不含 `contentMd` | 接口出参字段核对（GLOSSARY §3.7） |
+| P4 | 动态多条件用 **`JpaSpecificationExecutor` + Criteria**（分类/状态/关键词/时间区间自由组合），禁手写 SQL 拼接 | 组合条件测试用例（课件 3.1 实践任务 4） |
+| P5 | 高频查询命中复合索引：`idx_doc_cat_status_updated(category_id,status,updated_at,deleted)`、`idx_doc_status_updated(status,updated_at,deleted)`（**最左前缀**：仅 status 筛选走不了前者） | DBeaver `EXPLAIN ANALYZE` 输出 + `docs/03-qa-review/EXPLAIN-NOTES.md` 留档 |
+| P6 | 5 大避坑红线：① 禁 `@Data` ② 禁循环查库（改 `findAllById` + Map 分组）③ 列表不查大文本 ④ 参数类型与列类型一致（防隐式转换索引失效） ⑤ 禁无限 `OFFSET` 深分页（`pageNum > 100` 拒绝） | M5/M6 代码走查清单逐条打勾 |
 
 ### 5.2 统一响应与错误码
 
@@ -421,6 +451,8 @@ powershell -NoProfile -ExecutionPolicy Bypass -File docs/03-qa-review/verify-m1.
 - [ ] **T2.4** 跑下方校验 SQL：库名正确、14 张表齐、外键数 0、主键**均为** `auto_increment`（6 张中间表除外）、空注释列 0
 - [ ] **T2.5** 生成 `sql/data.sql` 种子数据：**全部 39 个权限点**（对齐 PRD §3.2）、3 个内置角色 + 角色权限关联、1 个 `SYS_ADMIN`（`admin / Admin@123`，BCrypt 哈希）、1 个部门 + 部门角色绑定、3 篇示例文档 + 分类 + 标签 + 关联行
 - [ ] **T2.6** 收纳：`mkdir -p backend/sql && cp sql/schema.sql backend/sql/`
+- [ ] **T2.7** 复合索引一次到位（课件 3.1 §4 + 最左前缀）：`idx_doc_cat_status_updated(category_id, status, updated_at, deleted)`、**`idx_doc_status_updated(status, updated_at, deleted)`（仅状态筛选必须单独建，走不了前者）**、`idx_doc_created_by(created_by, deleted)`、`uk_sys_user_username(username)`、`idx_fav_doc(document_id)`、`idx_sys_perm_parent(parent_id, deleted)`、`idx_doc_category_parent(parent_id, deleted)`
+- [ ] **T2.8** 建表后立即用 DBeaver 对 3 条高频 SQL 跑 `EXPLAIN ANALYZE`（检索主路径 / 审核队列 / 我的文档），确认 `Index Scan` 且无 `Seq Scan`·`Using filesort`，原始输出写入 `docs/03-qa-review/EXPLAIN-NOTES.md`
 
 **DoD**：库名 `campusswap_db`；14 张表齐；无外键；非中间表主键均为 `BIGINT AUTO_INCREMENT`；6 张中间表为复合主键且无 `id` 列；`price_cents` 为 `int unsigned`；注释 0 缺失
 **验证**：
@@ -452,8 +484,10 @@ SELECT TABLE_NAME,COLUMN_TYPE FROM information_schema.COLUMNS
 - [ ] **T3.8** 鉴权：`@RequiresPermission` + `PermissionAspect`（§5.5）+ `PermissionCacheService`（Redis 缓存 §4.4 结果）
 - [ ] **T3.9** `controller/`：登录、用户 CRUD、角色 CRUD 与授权、权限树查询、部门树 CRUD；入参 `@Valid`、出参 VO
 - [ ] **T3.10** 验证：`./mvnw clean compile` 零错误；APIFOX 依次跑通「登录 → 查权限树 → 新增用户 → 查询用户列表 → 给用户授角色」
+- [ ] **T3.11** **关联映射（课件 3.1 §1）**：`Document.category` = `@ManyToOne(fetch = LAZY)` + `@JoinColumn(name="category_id", insertable=false, updatable=false)`；`Document.tags` = `@ManyToMany(fetch = LAZY)` **只读**（禁 `add/remove`）；关联字段标 `@ToString.Exclude`；**全仓 `EAGER` 计数为 0**
+- [ ] **T3.12** **查询进阶（课件 3.1 §2/§3）**：`DocumentRepository extends JpaSpecificationExecutor<Document>`；列表查询用 `@EntityGraph` / DTO 构造函数投影；按 ID 批量补名用 `findAllById` + Map 分组；动态条件用 Criteria 组合（**禁字符串 SQL 拼接**）
 
-**DoD**：编译零错误；登录返回 token 与用户 VO（**不含 `password_hash`**）；未授权访问返回 403；越权改他人数据返回 403
+**DoD**：编译零错误；登录返回 token 与用户 VO（**不含 `password_hash`**）；未授权访问返回 403；越权改他人数据返回 403；**关联映射全部 `LAZY`（`EAGER` 计数 0）**
 **验证**：
 ```bash
 cd backend && ./mvnw clean compile
@@ -477,6 +511,7 @@ curl -s -X POST http://localhost:10086/backend/api/auth/login \
 - [ ] **T4.8** 归档 / 回收站 / 恢复（状态机 §4.5 全分支）
 - [ ] **T4.9** 图片上传：≤5MB，类型白名单（jpg/png/webp），存 `backend/uploads/yyyy/MM/`，返回访问 URL；文件名校验防路径穿越
 - [ ] **T4.10** 分类树与标签维护接口（`DOC_ADMIN`）
+- [ ] **T4.11** **零 N+1 验收（课件 3.1 §2）**：dev 开 `spring.jpa.show-sql` 抓日志，任一列表接口的 SQL 条数**为常数（≤3 条）且不随 `pageSize` 增长**；列表出参 `DocumentVo` 不含 `contentMd`（走 DTO 投影）；日志与结论写入 `docs/03-qa-review/TEST_CHECKLIST.md`
 
 **DoD**：`US-02~US-08` 每条 BDD 断言都有一条通过记录（写入 `docs/03-qa-review/TEST_CHECKLIST.md`）
 
@@ -511,8 +546,9 @@ grep -rn "style=" src/ || echo "✅ 无内联样式"
 - [ ] **T6.3** 异常路径回归（逐条留记录）：越权改他人文档→403、状态冲突→409、非法参数→400、重复收藏→幂等/409
 - [ ] **T6.4** `docs/03-qa-review/TEST_CHECKLIST.md` + `CODE_REVIEW.md`（对照 §2 逐条自查）
 - [ ] **T6.5** `docs/03-qa-review/tasks.md` 全部勾选 + 每项 3 句变动说明
+- [ ] **T6.6** **性能回归（课件 3.1 实践任务 5）**：注入测试数据（如 1 万篇文档）后重跑 `EXPLAIN ANALYZE`，把「是否仍命中 `idx_doc_cat_status_updated`／`idx_doc_status_updated`」写回 `EXPLAIN-NOTES.md`；核对 `EAGER` 计数 0、列表 SQL 条数为常数、`pageNum > 100` 被拒绝
 
-**DoD**：单测全绿；异常路径有记录；审查清单无未通过项
+**DoD**：单测全绿；异常路径有记录；审查清单无未通过项；**列表接口零 N+1（SQL 条数为常数）且高频查询命中复合索引**
 
 ---
 

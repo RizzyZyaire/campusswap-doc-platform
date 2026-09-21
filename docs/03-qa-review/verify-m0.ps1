@@ -112,16 +112,12 @@ foreach ($s in $states) {
 Check 'C11 state-machine-states' ($badState.Count -eq 0) ("states missing in PRD or GLOSSARY: " + ($(if ($badState.Count) { $badState -join ',' } else { 'none' })))
 
 # --- C12: forbidden aliases in requirement docs (GLOSSARY keeps the list on purpose) -
-# lines that DOCUMENT deprecated naming (changelog quotes, "作废/禁止/对照" rows) are excluded
+# deprecated naming may only survive inside quote lines (">") -- i.e. the changelog notes.
+# NOTE: this script must stay pure ASCII: PS 5.1 reads BOM-less UTF-8 as ANSI, so CJK
+#       literals inside filters decode to garbage and silently stop matching.
 function RemoveLegacyContext {
   param([string]$Text)
-  $out = New-Object System.Collections.Generic.List[string]
-  foreach ($line in ($Text -split "`n")) {
-    if ($line -match '^\s*>') { continue }
-    if ($line -match '作废|废弃|禁止|对照|替代|备选|旧写法|原名|不另设|取消|无 `|不再') { continue }
-    $out.Add($line)
-  }
-  return ($out -join "`n")
+  return (($Text -split "`n" | Where-Object { $_ -notmatch '^\s*>' }) -join "`n")
 }
 $usBody  = RemoveLegacyContext $us
 $prdBody = RemoveLegacyContext $prd

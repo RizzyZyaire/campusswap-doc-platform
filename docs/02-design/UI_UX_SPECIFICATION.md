@@ -16,7 +16,7 @@
 2. **样式**：只用 Tailwind 原子类（令牌见 §2）；模板内不出现内联 style（红线 R6）；复合样式写进 `src/main.css` 的 `@layer components`。
 3. **类型**：主键（后端 64 位自增 `BIGINT`）统一序列化为字符串，前端 TS 全部为 `string`；不使用 TypeScript 顶层通配逃逸类型（红线 R6），需要宽松类型时用 `unknown` + 类型守卫。
 
-### 0.1 口径基线（2026-09-21 用户拍板，对齐老师课件示例）
+### 0.1 口径基线（baseline · anti-alias reference）（2026-09-21 用户拍板，对齐老师课件示例）
 
 本文件按下列**新口径**编写；`GLOSSARY.md` 中与本节冲突的旧写法作废（GLOSSARY 同步重写中）。前端可感知的差异如下：
 
@@ -387,7 +387,7 @@ export const permDirective: Directive<HTMLElement, string | string[]> = {
 
 ### 5.1 `src/types/` 完整定义
 
-`GLOSSARY.md` §7 的示例按 §0.1 新口径更新后引用（`updateAt` → `updatedAt`）；`AuditVo` / `UserStatus` / `PermType` / `UserStatusDtoReq` / `StatVo` / `DocumentVersionVo` / `ImageVo` / `PermissionVo` / `DeptVo` / `RoleVo` / `UserVo` 的字段按 §0.1 与 `PRD.md` §5 的输入输出说明**在本文件首次登记**（M1 收口时回填 `GLOSSARY.md` §3）。
+`GLOSSARY.md` §7 的示例已按 §0.1 新口径更新（审计字段统一为 `createdAt` / `updatedAt`）后引用；`AuditVo` / `UserStatus` / `PermType` / `UserStatusDtoReq` / `StatVo` / `DocumentVersionVo` / `ImageVo` / `PermissionVo` / `DeptVo` / `RoleVo` / `UserVo` 的字段按 §0.1 与 `PRD.md` §5 的输入输出说明定义，并已在 M1 收口时登记进 `GLOSSARY.md` §3.7（字段级唯一真源）。
 
 **审计字段约定**：所有实体型 VO 继承 `AuditVo`（`createdAt` / `createdBy` / `updatedAt` / `updatedBy`）；聚合 VO（`StatVo`）与上传回执（`ImageVo`）不继承；`deleted` 不进入任何 VO（§0.1 第 8 条）。权限 / 部门 / 分类三类节点**没有启停字段**（§0.1 第 9 条），失效一律由软删除表达，前端只提供「删除」入口；全站只有 `sys_user` 有 `status` 三态。
 

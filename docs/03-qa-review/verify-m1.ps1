@@ -1,7 +1,7 @@
 # verify-m1.ps1 -- M1 design-freeze self-check (ASCII output only)
 # Usage: powershell -NoProfile -ExecutionPolicy Bypass -File verify-m1.ps1
 # Re-runnable. Exit code 0 = all checks passed, 1 = at least one failed.
-# NOTE: sections/lines that DOCUMENT the rejected old naming (changelog, "作废/对照" tables,
+# NOTE: sections that DOCUMENT the rejected old naming (changelog / anti-alias tables)
 #       anti-alias lists) are excluded on purpose -- otherwise the checker would fire on the
 #       very tables that exist to prevent drift.
 
@@ -36,20 +36,18 @@ function CountOf {
   param([string]$Text, [string]$Pattern)
   return ([regex]::Matches($Text, $Pattern)).Count
 }
-# drop whole sections whose heading announces a changelog / comparison / anti-alias list,
-# and single lines that explicitly discuss deprecated naming
+# drop whole sections whose heading carries an ASCII anti-alias/changelog marker.
+# NOTE: keep this script pure ASCII -- PS 5.1 reads BOM-less UTF-8 as ANSI, so CJK literals
+#       inside filters decode to garbage and silently stop matching.
+# ASCII markers used by the docs: 'Anti-alias' (GLOSSARY 6), 'Changelog' (GLOSSARY changelog),
+# 'DEPRECATED' (API appendix A), 'baseline' (UI 0.1).
 function RemoveLegacyContext {
   param([string]$Text)
   $out = New-Object System.Collections.Generic.List[string]
   $skip = $false
   foreach ($line in ($Text -split "`n")) {
-    if ($line -match '^#{2,4}\s') {
-      $skip = ($line -match '变更|对照|基线|口径|禁用|作废|废弃|Anti-alias')
-    } elseif ($line -match '^\*\*变更记录') {
-      $skip = $true
-    }
+    if ($line -match '^#{2,4}\s') { $skip = ($line -match 'Anti-alias|DEPRECATED|Changelog|baseline') }
     if ($skip) { continue }
-    if ($line -match '作废|废弃|禁止|对照|替代|备选|旧写法|原名|不另设|取消|无 `|没有启停|不再') { continue }
     $out.Add($line)
   }
   return ($out -join "`n")
@@ -191,6 +189,15 @@ $voNeeds = @('LoginVo', 'UserInfoVo', 'UserVo', 'UserCreateDtoReq', 'UserStatusD
 $voMissing = @()
 foreach ($v in $voNeeds) { if ($glo -notlike "*$v*") { $voMissing += $v } }
 Check 'C14 vo-dictionary-registered' ($voMissing.Count -eq 0) ("registered=" + ($voNeeds.Count - $voMissing.Count) + "/" + $voNeeds.Count + " missing=" + $(if ($voMissing.Count) { $voMissing -join ',' } else { '0' }))
+
+# --- C15: JPA performance rules (courseware 3.1) registered in the design docs -
+# NOTE: keep this script pure ASCII -- PowerShell 5.1 reads BOM-less UTF-8 as ANSI and
+#       CJK literals break the parser. Match ASCII anchors only.
+$jpaNeedsA = @('FetchType.LAZY', '@EntityGraph', 'JpaSpecificationExecutor', 'EXPLAIN ANALYZE', 'idx_doc_status_updated', 'HHH000104')
+$jpaMissingA = @(); foreach ($k in $jpaNeedsA) { if ($arc -notlike "*$k*") { $jpaMissingA += $k } }
+$jpaNeedsG = @('startTime', 'Set<Tag>', 'updatable')
+$jpaMissingG = @(); foreach ($k in $jpaNeedsG) { if ($glo -notlike "*$k*") { $jpaMissingG += $k } }
+Check 'C15 jpa-performance-rules' (($jpaMissingA.Count -eq 0) -and ($jpaMissingG.Count -eq 0)) ("ARCH missing=" + $(if ($jpaMissingA.Count) { $jpaMissingA -join ',' } else { '0' }) + " | GLOSSARY missing=" + $(if ($jpaMissingG.Count) { $jpaMissingG -join ',' } else { '0' }))
 
 # --- summary ------------------------------------------------------------------
 Write-Host ''

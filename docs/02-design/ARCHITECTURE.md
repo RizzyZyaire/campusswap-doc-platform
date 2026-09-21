@@ -194,7 +194,7 @@ sequenceDiagram
 |---|---|---|---|
 | ① 认证 | `LoginInterceptor`（`WebMvcConfig` 注册，排除 `/api/auth/login`、`/uploads/**`） | `Authorization: Bearer <token>` 是否在 Redis 中存在且未过期 | 401 `UNAUTHORIZED` |
 | ② 上下文 | 同上 | 把 `userId` / `token` 放入 `SecurityContext`（`ThreadLocal`），请求结束 `finally` 清理 | — |
-| ③ 功能权限 | `PermissionAspect`（`@Before` 切 `@RequiresPermission`） | 权限集合是否包含注解声明的 `perm_code` | 403 `NO_PERMISSION` |
+| ③ 功能权限 | `PermissionAspect`（`@Before` 切 `@RequiresPermission`） | 权限集合是否包含注解声明的权限码 `code` | 403 `NO_PERMISSION` |
 | ④ 数据归属 | Service 方法内 | 资源存在性 + 归属（属主/管理员）+ 状态合法性 | 404 / 403 / 409 |
 
 > **关卡④ 是防平行越权（IDOR）的唯一可靠位置**：前端隐藏按钮、URL 里猜 ID 都拦不住，只有 Service 层用"当前用户 ID vs 资源属主"判断才有效。
@@ -386,17 +386,92 @@ public enum ErrorCode {
 | # | 规约 | 说明 |
 |---|---|---|
 | 1 | 主键 `Long id` + `AUTO_INCREMENT`，**禁 `long`** | 包装类型避免 Hibernate 代理判空陷阱 |
-| 2 | 实体禁 `@Data`，用 `@Getter @Setter @ToString(callSuper = true) @NoArgsConstructor @AllArgsConstructor @Builder` | `@Data` 的 `equals/hashCode` 会在懒加载代理上炸 |
+| 2 | 实体禁 `@Data`（3.1 红线一） | `@Data` 的 `toString/equals/hashCode` 在双向关联上会递归到 `StackOverflowError`；用 `@Getter @Setter @ToString(callSuper = true) @NoArgsConstructor @AllArgsConstructor @Builder` |
 | 3 | 所有业务实体继承 `BaseEntity`（`created_at/created_by/updated_at/updated_by/deleted` + 审计监听器） | 审计列由框架填，业务代码不手写 |
 | 4 | `@SQLDelete(sql = "UPDATE 表 SET deleted = 1 WHERE id = ?")` + `@SQLRestriction("deleted = 0")` | 业务查询永不手写 `deleted = 0` |
 | 5 | 枚举一律 `@Enumerated(EnumType.STRING)` | 禁 `ORDINAL`，避免枚举顺序变更后数据错位 |
-| 6 | 禁 `@ManyToMany`：中间表建显式实体（`UserRole` / `RolePermission` / `DocumentTagRel` …） | 关联表可视化、可挂 `created_at` |
-| 7 | 禁自关联对象（`@ManyToOne` 指自己）：树形统一 `parentId` + `ancestors` | 避免懒加载地狱与递归序列化 |
-| 8 | 跨表只存 ID，不建数据库外键 | 与课件示例一致，删除与迁移不受约束阻塞 |
-| 9 | `ddl-auto: none` | 表结构只能来自 `sql/schema.sql` |
-| 10 | 列表查询用 `Pageable`，禁止 `findAll()` 全表返回 | 配合 `BR-05` 分页上限 |
-| 11 | 批量补齐关联名称（作者/分类/标签）用 `IN` 查询，禁止循环内单条查询 | N+1 防护（NFR-P2） |
-| 12 | 计数型更新（`view_count`/`favorite_count`）用 `@Modifying @Query` 原子自增 | 避免"读-改-写"丢失更新 |
+| 6 | **关联映射遵循"写 ID、读关联"**（2.1 §4.2 决策树 + 3.1 §1） | 写入一律用字段 ID / 显式中间实体；查询导航用**只读**对象关联，见 §10.1 |
+| 7 | 关联字段一律 `FetchType.LAZY`，**禁 `EAGER`**（3.1 §1.3、DoD） | `@ManyToOne` 默认是 EAGER，必须显式覆写；否则查一条连带一条 JOIN |
+| 8 | 树形禁自关联对象（2.1 §4.5）：`parent_id` + `ancestors` | 杜绝递归 `toString` 与懒加载地狱 |
+| 9 | 不建数据库外键 | 与老师 MySQL 示例一致（只有 `INDEX`，无 `FOREIGN KEY`），删除与迁移不被约束阻塞 |
+| 10 | `ddl-auto: none` | 表结构只能来自 `sql/schema.sql` |
+| 11 | 列表查询用 `Pageable`，禁止 `findAll()` 全表返回 | 配合 `BR-05` 分页上限 |
+| 12 | **列表查询禁 N+1**（3.1 §2、红线二）：`@EntityGraph` / DTO 投影 / `JOIN FETCH`；禁止循环内调用 Repository | 详见 §10.2 选用表 |
+| 13 | **列表禁查大文本**（3.1 红线三）：`DocumentVo` 不含 `contentMd`，列表走 DTO 投影 | 20 条 × 数万字正文 = 响应体 5MB，带宽与堆内存双爆 |
+| 14 | 动态多条件查询用 `JpaSpecificationExecutor`（3.1 §3），禁手写 SQL 拼接 | 详见 §10.3 |
+| 15 | 计数型更新（`view_count`/`favorite_count`）用 `@Modifying @Query` 原子自增 | 避免"读-改-写"丢失更新 |
+| 16 | 参数类型必须与列类型一致（3.1 红线四） | `VARCHAR` 列传数字会触发隐式转换 → 索引失效 |
+| 17 | 深分页保护（3.1 红线五） | `pageNum > 100` 拒绝（400）或改游标；禁止无限 `OFFSET` |
+
+### 10.1 关联映射规范：写 ID、读关联（两份课件的分工）
+
+```java
+// ── 写模型：Service 写入时只用 ID / 显式中间实体 ─────────────────────────
+document.setCategoryId(dto.categoryId());                 // 字段 ID 关联（2.1 §4.2 决策树）
+documentTagRelRepository.deleteByDocumentId(docId);       // 标签用显式中间实体清空重插（2.1 §4.4）
+
+// ── 读模型：查询导航用的只读对象关联（3.1 §1.1 / §1.2） ────────────────
+@ManyToOne(fetch = FetchType.LAZY)                        // 绝不 EAGER
+@JoinColumn(name = "category_id", insertable = false, updatable = false)   // 只读：写入不经过它
+private Category category;
+
+@ManyToMany(fetch = FetchType.LAZY)                       // 只读视图，禁止 add/remove
+@JoinTable(name = "doc_document_tag_rel",
+           joinColumns = @JoinColumn(name = "document_id"),
+           inverseJoinColumns = @JoinColumn(name = "tag_id"))
+private Set<Tag> tags = new HashSet<>();
+```
+
+| # | 纪律 | 理由 |
+|---|---|---|
+| A1 | 关联字段全部 `LAZY`，无裸露 `EAGER` | 3.1 §1.3：EAGER 是隐式连表风暴的源头 |
+| A2 | `category` 用 `insertable = false, updatable = false`；写入只认 `categoryId` | 同一列不被两处映射争抢，写入行为可预期 |
+| A3 | `tags` 集合**只读**：标签增删一律走 `DocumentTagRelRepository` | 2.1 §4.4：`@ManyToMany` 的差异比对会逐条 DELETE，且隐藏表挂不了 `created_at` |
+| A4 | **反向集合不建**（不写 `Category.documents`、`Tag.documents`） | 单向即可满足查询；双向必带递归与 `@Data` 栈溢出风险 |
+| A5 | `@ToString.Exclude` 标在关联字段上 | 打印日志时不触发懒加载 SQL |
+
+> **为什么两者都要**：2.1 §4.2 决策树约束的是**写模型**（独立业务领域 → 字段 ID 关联；禁 `@ManyToMany` 是因为隐藏中间表无法挂审计字段、无法可控清空、误配级联会误删共享数据）；3.1 §1/§2 教的是**读模型**（对象关联 + LAZY + `@EntityGraph` 才能一条 SQL 抓完）。本平台把两者分工：**写 ID，读关联**。
+
+### 10.2 N+1 三大解法选用表（3.1 §2）
+
+| 场景 | 首选方案 | 理由 |
+|---|---|---|
+| **列表分页**（要作者名/分类名，不要正文） | **DTO 构造函数投影** | 3.1 §2.4：只查必要列，绕过实体状态机，内存占用降 80% |
+| 需要实体对象做后续业务判断（详情、状态校验） | **`@EntityGraph(attributePaths = {...})`** | 3.1 §2.3 企业推荐：派生查询 + 分页都能用，底层自动 `LEFT JOIN` |
+| 单条 / 少量固定关联的定制查询 | **`JOIN FETCH`**（JPQL） | 3.1 §2.2：一条 SQL 抓完，直观可控 |
+| 按 N 个 ID 批量补名称（作者/部门） | `findAllById` + Map 分组 | 3.1 红线二：一条 `IN` 查询替代 N 条单查 |
+
+**明令禁止**：循环内调用 Repository；`Page<Entity>` 配集合型 `JOIN FETCH`（Hibernate 会退化成内存分页并告警 `HHH000104`）。
+**验收手段**：dev 环境开 `spring.jpa.show-sql`，任一列表接口的 SQL 条数**必须是常数**（≤ 3 条，且不随 `pageSize` 增长）；M6 测试留证。
+
+### 10.3 动态多条件查询：`JpaSpecificationExecutor`（3.1 §3）
+
+```java
+public interface DocumentRepository extends JpaRepository<Document, Long>,
+                                            JpaSpecificationExecutor<Document> { }
+```
+
+| 接口 | 动态条件 |
+|---|---|
+| `GET /api/documents`（检索） | 关键词 + 分类（含子孙）+ 标签 + 状态 + **时间区间** |
+| `GET /api/review/documents`（审核队列） | 状态 + 关键词 + 时间区间 |
+| `GET /api/users`（用户列表） | 关键词 + 部门 + 状态 |
+| `GET /api/documents/mine`、`/trash` | 状态 + 关键词 + 时间区间 |
+
+- 条件用 `criteriaBuilder.and(...)` 组合，空值自动跳过（**无 `1=1` 拼接、无字符串 SQL**）。
+- 固定条件（按 ID 查详情、按用户名查用户）仍用派生查询，不要为动态而动态。
+
+### 10.4 索引与执行计划（3.1 §4）
+
+| 高频查询 | 目标索引 | 验证方式 |
+|---|---|---|
+| 分类 + 状态 + 更新时间倒序（检索主路径） | `idx_doc_cat_status_updated(category_id, status, updated_at, deleted)` | `EXPLAIN ANALYZE` 显示 `Index Scan`，无 `Rows Removed by Filter` |
+| **仅状态 + 更新时间**（审核队列、我的文档） | `idx_doc_status_updated(status, updated_at, deleted)` | **最左前缀**：`status` 单独筛选走不了上一个索引，必须单独建 |
+| 作者维度（我的文档） | `idx_doc_created_by(created_by, deleted)` | |
+| 收藏列表 | 主键 `(user_id, document_id)` + `idx_fav_doc(document_id)` | |
+| 登录名查用户 | `uk_sys_user_username(username)` | |
+
+**流程要求**：M2 建表时索引一次到位；**M6 用 DBeaver 对 3 条高频 SQL 执行 `EXPLAIN ANALYZE`，把原始输出与结论写入 `docs/03-qa-review/EXPLAIN-NOTES.md`**（命中哪个索引、是否出现 `Seq Scan` / `Using filesort`、最左前缀是否被满足）。
 
 ---
 
@@ -448,7 +523,7 @@ public enum ErrorCode {
 | `application-dev.yml` | `server.port: 10087`、数据源 `jdbc:mysql://localhost:3306/campusswap_db?...&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true`、`username: root`、`password: ${DB_PASSWORD:123456}`、Redis `localhost:6379`、`ddl-auto: none`、`show-sql: true` |
 | `application-prod.yml` | `server.port: 10180`、`show-sql: false`、日志级别 `INFO`、**密码必须来自环境变量**（无默认值） |
 
-**安全约定（老师红线）**：仓库中任何位置不得出现生产明文密码；`docs_db` 时代遗留的 `is_deleted`、`docs_db` 连接串等一律废弃，统一 `campusswap_db` + `deleted`。
+**安全约定（老师红线）**：仓库中任何位置不得出现生产明文密码；旧库 `docs_db` 时代的列名与连接串一律废弃，统一 `campusswap_db` 与新的审计列命名。
 
 ---
 
@@ -499,7 +574,7 @@ graph LR
 | # | 决策 | 备选 | 结论与理由 |
 |---|---|---|---|
 | ADR-01 | 主键策略 | 雪花 ID / DB 自增 | **自增**：与老师 MySQL 示例一致；单机无分布式需求；`AUTO_INCREMENT` 让 `schema.sql` 可读性更好。前端仍统一字符串（预留切换空间） |
-| ADR-02 | 审计列命名 | `create_at/update_at` / `created_at/updated_at` | **`created_at/created_by/updated_at/updated_by/deleted`**：逐字对齐老师示例 |
+| ADR-02 | 审计列命名 | 旧前缀方案 / 统一 `created_*` `updated_*` | **`created_at/created_by/updated_at/updated_by/deleted`**：逐字对齐老师示例 |
 | ADR-03 | 逻辑删除实现 | 手写 `WHERE deleted = 0` / `@SQLRestriction` | **注解**：一处声明全局生效，业务代码零负担（课件《2.1》明确收益） |
 | ADR-04 | 认证方案 | JWT / 随机 token + Redis | **随机 token**：可主动失效（登出、停用、改密），实现更短更可控 |
 | ADR-05 | 权限模型 | 仅角色 / 角色 + 部门 + 直授 | **三者合并**：覆盖"岗位继承"与"个别补权"两个真实场景，且课件表清单含 `sys_user_permission` |
