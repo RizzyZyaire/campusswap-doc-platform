@@ -97,7 +97,7 @@ public record ResponseResult<T>(int code, String message, T data) { }
 | `登录即可` | 只校验 token 有效，不校验权限点 | 拦截器校验 token → 注入 `currentUserId` |
 | `权限点` | 校验 token **且** 校验权限码 | `@RequiresPermission("<权限码>")` + `PermissionAspect`（MASTER-PLAN §5.5） |
 
-- token 有效期 2 小时；登出后写入 Redis 黑名单直至自然过期（BR-19）。
+- token 有效期 2 小时；登出直接 `DEL login:token:{token}` 并把它从 `user:tokens:{userId}` 集合里移除（**不写黑名单** —— 删掉即失效，黑名单只会多占一份内存；见 ARCHITECTURE §5.2/§7）。
 - 权限码集合来源：`sys_user_role` + `sys_role_permission` + `sys_dept_role` + `sys_user_permission` 合并去重，缓存 key `perm:user:{userId}`，TTL 30 分钟，授权变更即时失效（BR-18）。
 - **越权一律 403 `NO_PERMISSION`**；涉及已存在资源的读写接口，Service 层必须再做归属校验（防 IDOR，BR-21）。
 
@@ -486,8 +486,7 @@ Content-Type: application/json;charset=UTF-8
 |---|---|---|
 | 401 `UNAUTHORIZED` | token 缺失、已失效或已在黑名单中 | 登录状态已失效，请重新登录 |
 
-- token 写入 Redis 黑名单，TTL = 该 token 的剩余有效期（BR-19）。
-- 重复登出**幂等**：已失效 token 再调也返回 200，避免前端并发登出报错。
+- token 直接 `DEL`（登出、停用、重置密码），**不维护黑名单**；重复登出**幂等**：已失效 token 再调也返回 200，避免前端并发登出报错。
 - 前端约定：无论成功失败都清空本地 token 与 Pinia 用户态，跳转 `/login`。
 
 **示例**

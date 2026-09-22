@@ -1,0 +1,26 @@
+# 生产环境配置（示例，本机课程作业不实际部署）
+# 安全约定：账号与密码必须来自环境变量，仓库内不出现任何明文口令
+spring:
+  datasource:
+    url: jdbc:mysql://localhost:3306/campusswap_db?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+  jpa:
+    hibernate:
+      ddl-auto: none
+    show-sql: false
+    open-in-view: false
+  data:
+    redis:
+      host: localhost
+      port: 6379
+      database: 0
+
+server:
+  port: 10180
+
+logging:
+  level:
+    root: info
+    com.campusswap: info

@@ -380,7 +380,8 @@ if (!doc.getCreatedBy().equals(operatorId) && !hasPerm(operatorId, "doc:manage")
 
 ## 7. 执行计划（M0 → M7）
 
-> 用法：按顺序执行；每个任务都是可勾选项。**任务完成的标准 = 里程碑 DoD 通过 + 在 `docs/03-qa-review/tasks.md` 打勾并写 3 句以内变动说明。**
+> 用法：按顺序执行；每个任务都是可勾选项。**任务完成的标准 = 里程碑 DoD 通过 + 在本节（M0~M7 任务看板）把对应任务打勾 + 在 `docs/03-qa-review/` 留一份收口记录（含机检脚本与实测证据）。**
+> **看板的唯一真源就是本文件**（不再另建 `tasks.md`，避免两份清单各自漂移）；收口记录按里程碑命名，例如 `M3-CLOSURE.md`、`AUDIT-M0-M2.md`。
 
 ### 起步（今天就做这三件）
 1. 在 GitHub 新建**空**仓库 —— 本作业仓库**已建好**：`https://github.com/RizzyZyaire/campusswap-doc-platform.git`（**Public**，分支 `main`）
@@ -389,7 +390,7 @@ if (!doc.getCreatedBy().equals(operatorId) && !hasPerm(operatorId, "doc:manage")
 
 ---
 
-### M0 需求冻结（0.5~1 天）
+### M0 需求冻结（0.5~1 天）　✅ 已完成（2026-09-21，commit `e8d951d`；机检 `verify-m0.ps1` 13 项）
 
 **目标**：产出需求三剑客并冻结，后续设计与代码以它为准。**前置**：无。
 
@@ -420,17 +421,17 @@ powershell -NoProfile -ExecutionPolicy Bypass -File docs/03-qa-review/verify-m0.
 
 ---
 
-### M1 设计定稿（1 天）
+### M1 设计定稿（1 天）　✅ 已完成（2026-09-21，commit `747e47a`；机检 `verify-m1.ps1` 15 项 + `verify-api-spec.ps1` 24 项）
 
 **目标**：把需求翻译成架构、接口契约、UI 规范。**前置**：M0 冻结通过。
 
 - [x] **T1.1** 用 **P6-1** 生成 `docs/02-design/ARCHITECTURE.md`：分层架构图、请求流转、RBAC 权限合并算法（§4.4）、Redis 键设计与失效时机、事务边界、统一响应与全局异常、鉴权拦截链路（+ §16 功能价值说明、§17 ADR）
 - [x] **T1.2** 用 **P6-2** 生成 `docs/02-design/API_SPECIFICATION.md`：逐接口表（模块｜方法｜路径｜**用途**｜入参 DTO｜出参 VO｜权限点｜错误码｜示例 JSON），覆盖全部 8 个用户故事
 - [x] **T1.3** 用 **P6-3** 生成 `docs/02-design/UI_UX_SPECIFICATION.md`：路由表（§6.1）、每页组件树、四态设计、Tailwind 令牌、表单校验规则与中文文案
-- [ ] **T1.4** 在 APIFOX 建项目并录入接口 —— **顺延到 M3 收口时执行**：后端未运行前无法"确保每条都能直接发送"，届时用 M3 产出的 OpenAPI 文件一键导入
+- [x] **T1.4** 在 APIFOX 建项目并录入接口 —— **已产出 `docs/02-design/openapi-campusswap.json`（OpenAPI 3.0.3，25 个已实现端点 / 34 个 schema，JSON 校验通过），Apifox 里「导入 → OpenAPI/Swagger → 选文件」即可**；文档域 30 条随 M4 实现追加到同一文件
 - [x] **T1.5** 交叉检查：接口出参字段 ⊂ GLOSSARY 术语，无新增字段 —— 由 `docs/03-qa-review/verify-m1.ps1` 的 **14 项机检**承担（含 VO/DTO 字段字典登记校验 C14）
 
-**DoD**：接口清单与 §6.1 页面清单一一对应；每接口有权限点与错误码；Apifox 齐备（顺延 M3）
+**DoD**：接口清单与 §6.1 页面清单一一对应；每接口有权限点与错误码；Apifox 齐备（→ 已于 M3 收口交付 `docs/02-design/openapi-campusswap.json`）
 **验证**：
 ```bash
 powershell -NoProfile -ExecutionPolicy Bypass -File docs/03-qa-review/verify-m1.ps1   # 14 项机检，全绿则输出 ALL GREEN
@@ -443,7 +444,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File docs/03-qa-review/verify-m1.
 
 ---
 
-### M2 数据库落地（0.5 天）
+### M2 数据库落地（0.5 天）　✅ 已完成（2026-09-21，commit `6397964`；机检 `verify-m2.ps1` 16 项 + `verify-db-deep.ps1` 9 项，见 `EXPLAIN-NOTES.md`）
 
 **目标**：`docs_db` 建好 14 张表，符合 §2.2。**前置**：M1 完成。
 
@@ -476,33 +477,43 @@ SELECT TABLE_NAME,COLUMN_TYPE FROM information_schema.COLUMNS
 **实测中发现并修掉一个索引设计缺陷**：原 `idx_doc_created_by(created_by, deleted)` 不含排序键 → `ORDER BY updated_at DESC` 要读 10 003 行再内存排序（**28.4 ms**）；改为 `idx_doc_created_by_updated(created_by, updated_at, deleted)` 后无排序、**0.135 ms（约 210 倍）**。`ARCHITECTURE §10.4`、本手册 T2.7 与机检脚本已同步。
 **压测夹具**：`backend/sql/perf-fixture.sql`（灌 20 000 行 / 按标题前缀一键清理，M6 回归复用）。
 **内置账号**：`admin/Admin@123`（SYS_ADMIN）、`docadmin/Doc@123456`（DOC_ADMIN）、`staff/Staff@123`（STAFF）——均为 **bcrypt strength 10 真实哈希**，机检 C15 断言 60 字符 `$2b$` 前缀。
-**顺延说明**：T1.4（Apifox 录入）在后端可运行后于 M3 收口时执行。
+**顺延说明**：T1.4（Apifox 录入）已在 M3 收口时执行 —— 产出 25 端点的 OpenAPI 文件，用户在 Apifox 侧一键导入即可发请求。
 
 ---
 
-### M3 后端骨架 + RBAC（2~3 天）
+### M3 后端骨架 + RBAC（2~3 天）　✅ 已完成（2026-09-22，收口记录 `docs/03-qa-review/M3-CLOSURE.md`）
 
 **目标**：工程可启动、统一响应/异常/鉴权齐备，系统域接口全部可用。**前置**：M2 建表完成。
 
-- [ ] **T3.1** 初始化后端工程（包名 `com.campusswap`，Java 17）：依赖 = web、data-jpa、mysql-connector-j、validation、data-redis、lombok、hutool-all、test
-- [ ] **T3.2** `common/`：`ResponseResult<T>`、`PageVo<T>`、`ErrorCode`、`BusinessException`、`GlobalExceptionHandler`（含 `common/security/`：`@RequiresPermission`、`PermissionAspect`、`SecurityContext`、`LoginInterceptor`）
-- [ ] **T3.3** `config/`：`SnowflakeConfig`、`JpaAuditConfig`（`@EnableJpaAuditing` + `AuditorAware`）、`RedisConfig`、`WebMvcConfig`
-- [ ] **T3.4** `entity/`：`BaseEntity` + 14 个实体（**按 §5.1 七戒律**）
-- [ ] **T3.5** `repository/`：14 个接口（含 `findByUsername`、`existsByPermCode`、分页查询等）
-- [ ] **T3.6** `dto/` `vo/`：登录三件套 + 用户/角色/权限/部门/文档各自的 DTO 与 VO
-- [ ] **T3.7** `service` + `service/impl`：`AuthService`（登录/登出/改密）、`UserService`、`RoleService`、`PermissionService`、`DeptService`；写操作加 `@Transactional`
-- [ ] **T3.8** 鉴权：`@RequiresPermission` + `PermissionAspect`（§5.5）+ `PermissionCacheService`（Redis 缓存 §4.4 结果）
-- [ ] **T3.9** `controller/`：登录、用户 CRUD、角色 CRUD 与授权、权限树查询、部门树 CRUD；入参 `@Valid`、出参 VO
-- [ ] **T3.10** 验证：`./mvnw clean compile` 零错误；APIFOX 依次跑通「登录 → 查权限树 → 新增用户 → 查询用户列表 → 给用户授角色」
-- [ ] **T3.11** **关联映射（课件 3.1 §1）**：`Document.category` = `@ManyToOne(fetch = LAZY)` + `@JoinColumn(name="category_id", insertable=false, updatable=false)`；`Document.tags` = `@ManyToMany(fetch = LAZY)` **只读**（禁 `add/remove`）；关联字段标 `@ToString.Exclude`；**全仓 `EAGER` 计数为 0**
-- [ ] **T3.12** **查询进阶（课件 3.1 §2/§3）**：`DocumentRepository extends JpaSpecificationExecutor<Document>`；列表查询用 `@EntityGraph` / DTO 构造函数投影；按 ID 批量补名用 `findAllById` + Map 分组；动态条件用 Criteria 组合（**禁字符串 SQL 拼接**）
-- [ ] **T3.13** **按 `ARCHITECTURE §10.5` 的 SQL 条数预算实现每个读接口**：批量补名（`IN` + Map）/ 树形接口一次查全 + 内存建树 / 列表 DTO 投影不读 `content_md`；dev 开 `show-sql` 自检每接口 SQL 条数 ≤ 预算（1~4 条）
+- [x] **T3.1** 初始化后端工程（包名 `com.campusswap`，Java 17）：依赖 = web、data-jpa、mysql-connector-j、validation、data-redis、lombok、hutool-all、test
+      （**Boot 4 实际坐标**：Web starter = `spring-boot-starter-webmvc`，测试配套 `spring-boot-starter-webmvc-test`）
+- [x] **T3.2** `common/`：`ResponseResult<T>`、`PageVo<T>`、`ErrorCode`、`BusinessException`、`GlobalExceptionHandler`（含 `common/security/`：`@RequiresPermission`、`PermissionAspect`、`SecurityContext`、`LoginInterceptor`）
+      （**实际新增**：`common/api/{PageDtoReq,AuditVo}`、`common/security/{BearerToken,RedisKeys}`、`common/util/{IdUtil,TimeUtil,TxUtil}`）
+- [x] **T3.3** `config/`：`JpaAuditConfig`（`@EnableJpaAuditing` + `AuditorAware`）、`RedisConfig`、`WebMvcConfig`、`CorsConfig`
+      （**取消 `SnowflakeConfig`**：M1 已冻结 `BIGINT AUTO_INCREMENT` 主键，不再需要雪花 ID）
+- [x] **T3.4** `entity/`：`BaseEntity` + 14 个实体（**按 §5.1 七戒律**；另含 6 个复合主键类 `UserRoleId`/`UserPermissionId`/`RolePermissionId`/`DeptRoleId`/`DocumentTagRelId`/`FavoriteId`）
+- [x] **T3.5** `repository/`：14 个接口（含 `findByUsername`、`existsByCode`、分页查询等；动态条件用 `*Specifications` + Criteria）
+- [x] **T3.6** `dto/` `vo/`：登录三件套 + 用户/角色/权限/部门各自的 DTO 与 VO
+      （**范围澄清**：文档域 DTO/VO 随 M4 文档接口一起落地，本里程碑只做系统域）
+- [x] **T3.7** `service` + `service/impl`：`AuthService`（登录/登出/改密）、`UserService`、`RoleService`、`PermissionService`、`DeptService`；写操作加 `@Transactional`
+- [x] **T3.8** 鉴权：`@RequiresPermission` + `PermissionAspect`（§5.5）+ `PermissionCacheService`（Redis 缓存 §4.4 结果）
+- [x] **T3.9** `controller/`：登录、用户 CRUD、角色 CRUD 与授权、权限树查询、部门树 CRUD；入参 `@Valid`、出参 VO（5 个 Controller / 25 个端点）
+- [x] **T3.10** 验证：`./mvnw clean compile` 零错误；「登录 → 查权限树 → 新增用户 → 查询用户列表 → 给用户授角色」跑通
+      → 机检脚本 **`docs/03-qa-review/verify-m3-http.ps1`（122 项全绿，可重跑）**
+- [x] **T3.11** **关联映射（课件 3.1 §1）**：`Document.category` = `@ManyToOne(fetch = LAZY)` + `@JoinColumn(name="category_id", insertable=false, updatable=false)`；`Document.tags` = `@ManyToMany(fetch = LAZY)` **只读**（禁 `add/remove`）；关联字段标 `@ToString.Exclude`；**全仓 `EAGER` 计数为 0**（`verify-m3.ps1` C7b 机检）
+- [x] **T3.12** **查询进阶（课件 3.1 §2/§3）**：`DocumentRepository extends JpaSpecificationExecutor<Document>`；列表查询用 `@EntityGraph` / DTO 构造函数投影；按 ID 批量补名用 `findAllById` + Map 分组；动态条件用 Criteria 组合（**禁字符串 SQL 拼接**）
+- [x] **T3.13** **按 `ARCHITECTURE §10.5` 的 SQL 条数预算实现每个读接口**：批量补名（`IN` + Map）/ 树形接口一次查全 + 内存建树 / 列表 DTO 投影不读 `content_md`；dev 开 `show-sql` 自检每接口 SQL 条数 ≤ 预算
+      → 实测：权限树 1 / 部门树 1 / 用户列表 4~5 / 角色列表 1 / 角色权限 2 / 部门角色 2（`pageSize` 1→100 条数不变，见 `docs/03-qa-review/M3-CLOSURE.md`）
 
 **DoD**：编译零错误；登录返回 token 与用户 VO（**不含 `password_hash`**）；未授权访问返回 403；越权改他人数据返回 403；**关联映射全部 `LAZY`（`EAGER` 计数 0）**
 **验证**：
 ```bash
 cd backend && ./mvnw clean compile
-curl -s -X POST http://localhost:10086/backend/api/auth/login \
+# 静态自检（无需起服务）
+powershell -NoProfile -ExecutionPolicy Bypass -File docs/03-qa-review/verify-m3.ps1
+# 接口验收（需先跑 mvnw spring-boot:run，dev 端口 10087）
+powershell -NoProfile -ExecutionPolicy Bypass -File docs/03-qa-review/verify-m3-http.ps1
+curl -s -X POST http://localhost:10087/api/auth/login \
      -H "Content-Type: application/json" -d '{"username":"admin","password":"Admin@123"}'
 ```
 
@@ -515,14 +526,14 @@ curl -s -X POST http://localhost:10086/backend/api/auth/login \
 - [ ] **T4.1** 文档创建/保存草稿（标题、摘要、正文、分类、标签）→ `US-02`
 - [ ] **T4.2** 提交发布：`DRAFT → PUBLISHED`，同时写 `doc_version` → `US-03`
 - [ ] **T4.3** 编辑与版本：每次保存 `version_num + 1` 并记录版本 → `US-06`
-- [ ] **T4.4** 检索分页：关键词 + 分类（含子孙，`ancestors LIKE`）+ 标签 + 状态；只返回有权查看的 → `US-04`
+- [ ] **T4.4** 检索分页：关键词 + 分类（含子孙，**按完整路径段匹配** `ancestors = :path OR ancestors LIKE CONCAT(:path, ',%')`）+ 标签 + 状态；只返回有权查看的 → `US-04`
 - [ ] **T4.5** 派生：`derived_from_id` 指向源文档、正文预填；源文档无权访问返回 403 → `US-05`
-- [ ] **T4.6** 收藏 + 阅读量：`doc_favorite` CRUD；阅读量用 Redis `INCR`，异步/定时回写 `view_count`
+- [ ] **T4.6** 收藏 + 阅读量：`doc_favorite` CRUD（复合主键天然幂等）；阅读量 `view:doc:{docId}:{userId}` **SETNX 去重成功后 `view_count` 原子自增**（`@Modifying` UPDATE，不做"读-改-写"，也不做异步回写）→ `US-05`
 - [ ] **T4.7** 审核：`DOC_ADMIN` 通过/驳回（驳回理由必填）→ `US-07`
 - [ ] **T4.8** 归档 / 回收站 / 恢复（状态机 §4.5 全分支）
 - [ ] **T4.9** 图片上传：≤5MB，类型白名单（jpg/png/webp），存 `backend/uploads/yyyy/MM/`，返回访问 URL；文件名校验防路径穿越
 - [ ] **T4.10** 分类树与标签维护接口（`DOC_ADMIN`）
-- [ ] **T4.11** **零 N+1 验收（课件 3.1 §2）**：dev 开 `spring.jpa.show-sql` 抓日志，任一列表接口的 SQL 条数**为常数（≤3 条）且不随 `pageSize` 增长**；列表出参 `DocumentVo` 不含 `contentMd`（走 DTO 投影）；日志与结论写入 `docs/03-qa-review/TEST_CHECKLIST.md`
+- [ ] **T4.11** **零 N+1 验收（课件 3.1 §2）**：dev 开 `spring.jpa.show-sql` 抓日志，任一列表接口的 SQL 条数**为常数（≤3 条，不含 Spring Data 在末页自动跳过的分页 count 查询）且不随 `pageSize` 增长**；列表出参 `DocumentVo` 不含 `contentMd`（走 DTO 投影）；日志与结论写入 `docs/03-qa-review/TEST_CHECKLIST.md`
 
 **DoD**：`US-02~US-08` 每条 BDD 断言都有一条通过记录（写入 `docs/03-qa-review/TEST_CHECKLIST.md`）
 
@@ -859,3 +870,4 @@ grep -rn "password" backend/src/main/resources/ | grep -v '\${'   # 不应出现
 | 2026-09-21 | **v2.0 冻结版**：业务定为文档管理平台；前端自研；权限 3 层；Redis 用本机；交付三文件夹 + GitHub（含忽略清单）；评分只看源码；删除全部"待确认"表述，新增 M0~M7 可勾选任务看板与 7 组 Prompt |
 | 2026-09-21 | **v2.2（M2 收口）**：数据库落地 —— 14 张表 + 20 个索引 + 种子数据（39 权限点/3 角色/3 账号）建成；新增 `verify-m2.ps1`（16 项）与 `EXPLAIN-NOTES.md`；实测修正索引 `idx_doc_created_by` → `idx_doc_created_by_updated`（排序键必须进索引，28.4ms → 0.135ms）；新增压测夹具 `perf-fixture.sql`；§2 决策状态改为「10 个问题按默认方案锁定」 |
 | 2026-09-21 | **v2.1（M1 收口）**：全面对齐老师《1.2 示例-数据库物理建表脚本(MySQL版)》—— 自增主键、`created_*/updated_*` 审计列、中间表复合主键无 `id`、`name/code/type/sort_order` 命名、`sys_user.status` 三态、`sys_user_permission` 取代 `sys_login_log`、取消 `sys_user.role_code`；库名改 `campusswap_db`；包结构改为「按模块分包 + entity 顶层」；交付新增 `docs/02-design/` 三件套与 `verify-m1.ps1` |
+| 2026-09-22 | **v2.3（M3 收口）**：后端骨架 + RBAC 落地（Spring Boot 4.1.1 / Java 17，14 实体 + 14 仓储 + 5 服务 + 5 控制器 / 25 端点）；四道鉴权关卡跑通；新增两个可重跑机检脚本 `verify-m3.ps1`（36 项静态检查）与 `verify-m3-http.ps1`（122 项接口验收），收口记录 `M3-CLOSURE.md`。**修掉 3 个实现级缺陷**：① 软删除行占着唯一索引导致重建同名编码 500（改为删除时改写唯一列）；② 树形子孙查询用裸 `LIKE '0,1%'` 在 id 段位复用时会误判（改为完整路径段匹配）；③ 登出接口被拦截器挡成 401、不满足"重复登出幂等"（改为放行 + 请求头解析）。同步口径修正：取消 `SnowflakeConfig`；`/api/roles` SQL 预算 3 → 1；`GET /api/users` 预算标注"4（不含分页 count 查询，末页跳过）"；登出不写黑名单而是直接 `DEL` token |

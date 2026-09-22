@@ -1,0 +1,26 @@
+spring:
+  application:
+    name: campusswap-backend
+  profiles:
+    active: dev
+  jackson:
+    time-zone: Asia/Shanghai
+  data:
+    redis:
+      # 本项目只用 RedisTemplate 手写键（login:/perm:/view:/user:），
+      # 不用 Spring Data Redis 的 Repository 抽象 —— 关掉扫描，避免启动日志刷屏。
+      repositories:
+        enabled: false
+  servlet:
+    multipart:
+      max-file-size: 5MB
+      max-request-size: 10MB
+
+server:
+  port: 10087
+  servlet:
+    context-path: /
+
+logging:
+  level:
+    root: info

@@ -88,7 +88,11 @@ CREATE TABLE `sys_role` (
 
 -- -----------------------------------------------------------------------------
 -- 4. 权限表: sys_permission（三层树：DIR 目录 / MENU 菜单 / BUTTON 按钮）
---    查「某节点下全部权限」: WHERE ancestors LIKE '0,1%'（无递归）
+--    查「某节点下全部权限」按【完整路径段】匹配，禁止裸前缀 LIKE：
+--      SELECT * FROM sys_permission
+--       WHERE deleted = 0 AND (ancestors = '0,1' OR ancestors LIKE CONCAT('0,1', ',%'));
+--    原因：裸 LIKE '0,1%' 会把 '0,10'（根级 10 号节点的子树）误判成 '0,1' 的后代；
+--          本项目权限点 id 正是 1 / 10 / 100 段位复用，误判风险真实存在（M3 实测）。
 -- -----------------------------------------------------------------------------
 DROP TABLE IF EXISTS `sys_permission`;
 CREATE TABLE `sys_permission` (
@@ -219,6 +223,8 @@ CREATE TABLE `doc_version` (
 
 -- -----------------------------------------------------------------------------
 -- 11. 文档分类表: doc_category（最多 3 层，parent_id + ancestors）
+--     查「某分类及全部子孙」同样按完整路径段匹配：
+--       WHERE deleted = 0 AND (ancestors = '0,1' OR ancestors LIKE CONCAT('0,1', ',%'))
 -- -----------------------------------------------------------------------------
 DROP TABLE IF EXISTS `doc_category`;
 CREATE TABLE `doc_category` (
@@ -283,5 +289,7 @@ CREATE TABLE `doc_favorite` (
 --   ① 目录层 type=DIR     id=1  文档中心 doc:center   ancestors='0'
 --   ② 菜单层 type=MENU    id=10 我的文档 doc:mine     ancestors='0,1'      parent_id=1
 --   ③ 按钮层 type=BUTTON  id=100 新建文档 doc:create  ancestors='0,1,10'   parent_id=10
---   查「文档中心下全部权限」：SELECT * FROM sys_permission WHERE ancestors LIKE '0,1%';
+--   查「文档中心下全部权限」（完整路径段匹配，勿用裸 LIKE '0,1%'）：
+--     SELECT * FROM sys_permission
+--      WHERE deleted = 0 AND (ancestors = '0,1' OR ancestors LIKE CONCAT('0,1', ',%'));
 -- =============================================================================

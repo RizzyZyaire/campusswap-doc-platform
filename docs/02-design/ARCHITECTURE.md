@@ -76,9 +76,11 @@ backend/src/main/java/com/campusswap
 ├── CampusSwapApplication.java
 ├── common/                       # 全平台共享，不含业务
 │   ├── api/          ResponseResult.java · PageVo.java · ErrorCode.java
+│   │                 PageDtoReq.java（列表分页入参基类）· AuditVo.java（实体型 VO 审计基类）
 │   ├── exception/    BusinessException.java · GlobalExceptionHandler.java
 │   ├── security/     RequiresPermission.java · PermissionAspect.java · SecurityContext.java · LoginInterceptor.java
-│   └── util/         IdUtil? · FileNameUtil.java · MarkdownUtil.java
+│   │                 BearerToken.java（Authorization 头解析）· RedisKeys.java（键名与 TTL 唯一定义处）
+│   └── util/         IdUtil.java（Long ↔ JSON 字符串）· TimeUtil.java（yyyy-MM-dd HH:mm:ss）· TxUtil.java（afterCommit）
 ├── config/                       # Spring 配置
 │   ├── JpaAuditConfig.java       # @EnableJpaAuditing + AuditorAware
 │   ├── WebMvcConfig.java         # 拦截器注册 + 静态资源映射（/uploads/**）
@@ -89,14 +91,18 @@ backend/src/main/java/com/campusswap
 │   ├── UserRole.java · UserPermission.java · RolePermission.java · DeptRole.java
 │   ├── Document.java · DocumentVersion.java · Category.java · Tag.java
 │   ├── DocumentTagRel.java · Favorite.java
+│   ├── *Id.java（6 个复合主键类，与 @IdClass 配套：UserRoleId/UserPermissionId/RolePermissionId/DeptRoleId/DocumentTagRelId/FavoriteId）
 │   └── enums/        DocumentStatus.java · UserStatus.java · PermType.java · RoleCode.java · ChangeType.java
 ├── system/                       # 模块一：系统与权限
 │   ├── controller/   AuthController · UserController · RoleController · PermissionController · DeptController
-│   ├── service/      接口 + impl（AuthServiceImpl …）
+│   ├── service/      接口 + impl（AuthServiceImpl …；另有 TokenService、PermissionCacheService）
 │   ├── repository/   UserRepository · RoleRepository · PermissionRepository · DeptRepository · 各关联表 Repository
-│   ├── dto/          LoginDtoReq · UserCreateDtoReq · UserUpdateDtoReq · RoleDtoReq · PermissionDtoReq · DeptDtoReq …
-│   └── vo/           LoginVo · UserInfoVo · UserVo · RoleVo · PermissionVo · DeptVo
-└── document/                     # 模块二：文档业务
+│   │                 UserSpecifications.java · RoleSpecifications.java（Criteria 动态条件，禁字符串 SQL 拼接）
+│   ├── dto/          LoginDtoReq · UserCreateDtoReq · UserUpdateDtoReq · UserStatusDtoReq · UserPasswordDtoReq
+│   │                 UserPageDtoReq · RoleDtoReq · RolePageDtoReq · RolePermissionDtoReq
+│   │                 PermissionCreateDtoReq · PermissionUpdateDtoReq · DeptCreateDtoReq · DeptUpdateDtoReq · DeptRoleDtoReq
+│   └── vo/           LoginVo · UserInfoVo · UserVo · RoleVo · RolePermissionVo · PermissionVo · DeptVo · DeptRoleVo
+└── document/                     # 模块二：文档业务（M4 落地）
     ├── controller/   DocumentController · ReviewController · CategoryController · TagController · FileController · StatController
     ├── service/      接口 + impl
     ├── repository/   DocumentRepository · DocumentVersionRepository · CategoryRepository · TagRepository · DocumentTagRelRepository · FavoriteRepository
@@ -192,12 +198,16 @@ sequenceDiagram
 
 | 关卡 | 位置 | 检查内容 | 失败返回 |
 |---|---|---|---|
-| ① 认证 | `LoginInterceptor`（`WebMvcConfig` 注册，排除 `/api/auth/login`、`/uploads/**`） | `Authorization: Bearer <token>` 是否在 Redis 中存在且未过期 | 401 `UNAUTHORIZED` |
+| ① 认证 | `LoginInterceptor`（`WebMvcConfig` 注册，排除 `/api/auth/login`、`/api/auth/logout`、`/uploads/**`） | `Authorization: Bearer <token>` 是否在 Redis 中存在且未过期 | 401 `UNAUTHORIZED` |
 | ② 上下文 | 同上 | 把 `userId` / `token` 放入 `SecurityContext`（`ThreadLocal`），请求结束 `finally` 清理 | — |
 | ③ 功能权限 | `PermissionAspect`（`@Before` 切 `@RequiresPermission`） | 权限集合是否包含注解声明的权限码 `code` | 403 `NO_PERMISSION` |
 | ④ 数据归属 | Service 方法内 | 资源存在性 + 归属（属主/管理员）+ 状态合法性 | 404 / 403 / 409 |
 
 > **关卡④ 是防平行越权（IDOR）的唯一可靠位置**：前端隐藏按钮、URL 里猜 ID 都拦不住，只有 Service 层用"当前用户 ID vs 资源属主"判断才有效。
+
+> **为什么登出要排除在拦截器之外**（M3 实现细节）：API_SPECIFICATION §4.1.2 要求「重复登出幂等返回 200」，
+> 而拦截器对无效 token 一律 401，会把第二次登出挡在 Controller 之前。因此 `/api/auth/logout` 放行到 Controller，
+> 由它用 `BearerToken.parse(请求头)` 取 token → `TokenService.revoke`（DEL 一个不存在的键是安全空操作）；**请求头为空才 401**。
 
 ### 5.2 Token 方案：随机串 + Redis（**不用 JWT**）
 
@@ -345,7 +355,7 @@ public record PageVo<T>(List<T> list, long total, int pageNum, int pageSize) {
 
 // common/api/ErrorCode.java —— code 与 HTTP 状态码保持一致（GLOSSARY §4.2）
 public enum ErrorCode {
-    SUCCESS(200, "操作成功"),
+    SUCCESS(200, "成功"),                       // 与 API_SPECIFICATION §2.1 的示例响应逐字一致
     BAD_REQUEST(400, "参数校验失败"),
     UNAUTHORIZED(401, "登录状态已失效，请重新登录"),
     NO_PERMISSION(403, "无权限执行该操作"),
@@ -362,9 +372,12 @@ public enum ErrorCode {
 |---|---|---|
 | `BusinessException` | 携带的 `ErrorCode` | 异常自带（写死中文） |
 | `MethodArgumentNotValidException`（`@Valid` 失败） | 400 | **DTO 注解里的 `message`**（中文，取第一条） |
+| `BindException`（Query 参数对象绑定/校验失败） | 400 | 同上（`MethodArgumentNotValidException` 是其子类，非 `@RequestBody` 的失败走这条） |
 | `ConstraintViolationException`（`@RequestParam` 校验） | 400 | 同上 |
-| `MethodArgumentTypeMismatchException`（路径参数类型错） | 400 | 「参数格式不正确：{参数名}」 |
+| `HandlerMethodValidationException`（Spring 7 的方法参数校验） | 400 | 同上 |
+| `MethodArgumentTypeMismatchException`（路径/查询参数类型错） | 400 | 「参数格式不正确：{参数名}」；**枚举参数**额外列出可选值：「参数取值非法：{参数名}（可选值 A / B）」 |
 | `HttpMessageNotReadableException`（JSON 解析失败） | 400 | 「请求体格式不正确」 |
+| `DataIntegrityViolationException`（唯一索引等约束冲突） | 409 | 「数据已存在或状态冲突，请刷新后重试」（兜住并发窗口，避免把并发冲突暴露成 500） |
 | `MaxUploadSizeExceededException` | 400 | 「图片大小不能超过 5MB」 |
 | `NoResourceFoundException` / 404 | 404 | 「请求的资源不存在」 |
 | `Exception`（兜底） | 500 | 「服务器开小差了，请稍后重试」+ **日志打完整堆栈**（响应体绝不暴露堆栈与 SQL） |
@@ -388,7 +401,7 @@ public enum ErrorCode {
 | 1 | 主键 `Long id` + `AUTO_INCREMENT`，**禁 `long`** | 包装类型避免 Hibernate 代理判空陷阱 |
 | 2 | 实体禁 `@Data`（3.1 红线一） | `@Data` 的 `toString/equals/hashCode` 在双向关联上会递归到 `StackOverflowError`；用 `@Getter @Setter @ToString(callSuper = true) @NoArgsConstructor @AllArgsConstructor @Builder` |
 | 3 | 所有业务实体继承 `BaseEntity`（`created_at/created_by/updated_at/updated_by/deleted` + 审计监听器） | 审计列由框架填，业务代码不手写 |
-| 4 | `@SQLDelete(sql = "UPDATE 表 SET deleted = 1 WHERE id = ?")` + `@SQLRestriction("deleted = 0")` | 业务查询永不手写 `deleted = 0` |
+| 4 | `@SQLDelete(sql = "UPDATE 表 SET deleted = 1 WHERE id = ?")` + `@SQLRestriction("deleted = 0")` | 业务查询永不手写 `deleted = 0`；**唯一列要在删除时一并改写**，见规约 18 |
 | 5 | 枚举一律 `@Enumerated(EnumType.STRING)` | 禁 `ORDINAL`，避免枚举顺序变更后数据错位 |
 | 6 | **关联映射遵循"写 ID、读关联"**（2.1 §4.2 决策树 + 3.1 §1） | 写入一律用字段 ID / 显式中间实体；查询导航用**只读**对象关联，见 §10.1 |
 | 7 | 关联字段一律 `FetchType.LAZY`，**禁 `EAGER`**（3.1 §1.3、DoD） | `@ManyToOne` 默认是 EAGER，必须显式覆写；否则查一条连带一条 JOIN |
@@ -402,6 +415,8 @@ public enum ErrorCode {
 | 15 | 计数型更新（`view_count`/`favorite_count`）用 `@Modifying @Query` 原子自增 | 避免"读-改-写"丢失更新 |
 | 16 | 参数类型必须与列类型一致（3.1 红线四） | `VARCHAR` 列传数字会触发隐式转换 → 索引失效 |
 | 17 | 深分页保护（3.1 红线五） | `pageNum > 100` 拒绝（400）或改游标；禁止无限 `OFFSET` |
+| 18 | **软删除 + 唯一索引：删除时改写唯一列**（M3 实测缺陷） | 唯一索引不含 `deleted`，只置 `deleted = 1` 会让编码被"占位"：之后新建同名编码能过 Service 前置校验（`@SQLRestriction` 看不到已删行），却撞唯一索引报 500。做法：`@SQLDelete` 里同时把唯一列改写成 `CONCAT(LEFT(code,30),'#del#',id)`，既释放唯一键又保留可追溯性。适用列：`sys_role.code`、`sys_permission.code`、`doc_tag.name`（M5 落地时同样处理） |
+| 19 | 树形子孙查询按**完整路径段**匹配（M3 实测缺陷） | 裸 `ancestors LIKE '0,1%'` 会把 `"0,10"`（根级 10 号节点的子树）误判成 `"0,1"` 的后代——本项目权限点 id 正是 1/10/100 段位复用，风险真实存在。写法：`ancestors = :path OR ancestors LIKE CONCAT(:path, ',%')` |
 
 ### 10.1 关联映射规范：写 ID、读关联（两份课件的分工）
 
@@ -485,7 +500,7 @@ public interface DocumentRepository extends JpaRepository<Document, Long>,
 | `GET /api/review/documents` | **3** | 同检索列表（外加状态条件） | 同上 |
 | `GET /api/favorites` | **3** | ① 收藏 JOIN 文档分页 ② 作者名批量 ③ 分类名批量 | ❌ 先查收藏列表再循环查文档 |
 | `GET /api/users` | **4** | ① 用户分页 ② 部门名批量 ③ `sys_user_role` 批量 ④ `sys_role` 批量取角色码 | ❌ 每个用户查一次角色 |
-| `GET /api/roles` | **3** | ① 角色分页 ② `sys_role_permission` 批量 | ❌ 每个角色查一次权限清单 |
+| `GET /api/roles` | **1** | ① 角色分页（`RoleVo` 不含权限规模，API_SPECIFICATION §4.3.1 明确不返回） | ❌ 为显示一个权限数而对每个角色查一次 `sys_role_permission` |
 | `GET /api/permissions/tree` | **1** | **一次查全表 + 内存按 `parent_id` 组树** | ❌ **递归查子节点**（树形结构最容易被忽略的隐藏 N+1） |
 | `GET /api/depts/tree`、`GET /api/categories/tree` | **1** | 同上 | 同上 |
 | `GET /api/roles/{id}/permissions`、`GET /api/depts/{id}/roles` | **2** | ① 关联表一次查全 ② 名称批量取 | ❌ 循环取名称 |
@@ -495,6 +510,10 @@ public interface DocumentRepository extends JpaRepository<Document, Long>,
 1. **批量代替循环**：任何"按 N 个 ID 补名称"的场景，一律 `findAllById` / `IN (...)` + 内存 `Map` 分组（课件 3.1 红线二）。
 2. **树形接口一次查全**：`ancestors` + `parent_id` 一次 SELECT 后在内存组装，禁止按层递归查询（这是最隐蔽的 N+1）。
 3. **大文本不进列表**：列表 DTO 投影只取展示列；`contentMd` 仅详情接口返回（课件 3.1 红线三）。
+
+> **分页 count 查询的说明（M3 实测）**：上表预算不含 Spring Data 的分页 `count` 查询。`PageableExecutionUtils` 在
+> **末页（返回条数 < pageSize）会跳过 count**，满页才发一次 —— 所以 `GET /api/users` 实测是 **4 条（末页）/ 5 条（满页）**，
+> 两者都与数据量和 `pageSize` 无关，仍是常数预算。M6 逐接口点数时按"≤ 预算 + 1"判读，且**必须用满页数据**验证（否则会误判为达标）。
 
 ---
 

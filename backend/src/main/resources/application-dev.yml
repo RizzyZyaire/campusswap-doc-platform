@@ -1,0 +1,33 @@
+# 开发环境配置（本机单实例）
+# 数据库：campusswap_db，应用账号 campusswap_dev（最小权限，仅 CRUD），密码走环境变量
+# Redis ：本机 5.0.14，端口 6379
+spring:
+  datasource:
+    url: jdbc:mysql://localhost:3306/campusswap_db?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true
+    username: ${DB_USERNAME:campusswap_dev}
+    password: ${DB_PASSWORD:CampusSwap@2026}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 2
+      connection-timeout: 10000
+  jpa:
+    hibernate:
+      # 表结构只来自 backend/sql/schema.sql，永远不让 Hibernate 改表
+      ddl-auto: none
+    show-sql: true
+    # 关闭 open-in-view：禁止在视图渲染阶段触发懒加载（那是 N+1 的温床）
+    open-in-view: false
+    properties:
+      hibernate:
+        format_sql: true
+  data:
+    redis:
+      host: localhost
+      port: 6379
+      database: 0
+      timeout: 3000ms
+
+logging:
+  level:
+    com.campusswap: debug
