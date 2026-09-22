@@ -428,7 +428,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File docs/03-qa-review/verify-m0.
 - [x] **T1.1** 用 **P6-1** 生成 `docs/02-design/ARCHITECTURE.md`：分层架构图、请求流转、RBAC 权限合并算法（§4.4）、Redis 键设计与失效时机、事务边界、统一响应与全局异常、鉴权拦截链路（+ §16 功能价值说明、§17 ADR）
 - [x] **T1.2** 用 **P6-2** 生成 `docs/02-design/API_SPECIFICATION.md`：逐接口表（模块｜方法｜路径｜**用途**｜入参 DTO｜出参 VO｜权限点｜错误码｜示例 JSON），覆盖全部 8 个用户故事
 - [x] **T1.3** 用 **P6-3** 生成 `docs/02-design/UI_UX_SPECIFICATION.md`：路由表（§6.1）、每页组件树、四态设计、Tailwind 令牌、表单校验规则与中文文案
-- [x] **T1.4** 在 APIFOX 建项目并录入接口 —— **已产出 `docs/02-design/openapi-campusswap.json`（OpenAPI 3.0.3，25 个已实现端点 / 34 个 schema，JSON 校验通过），Apifox 里「导入 → OpenAPI/Swagger → 选文件」即可**；文档域 30 条随 M4 实现追加到同一文件
+- [x] **T1.4** 在 APIFOX 建项目并录入接口 —— **已产出 `docs/02-design/openapi-campusswap.json`（OpenAPI 3.0.3，**55 个端点 / 52 个 schema**，JSON 校验通过），Apifox 里「导入 → OpenAPI/Swagger → 选文件」即可**；M3 交付 25 条系统域、M4 追加 30 条文档域，端点清单与 `API_SPECIFICATION.md` 逐条对账 0 缺失
 - [x] **T1.5** 交叉检查：接口出参字段 ⊂ GLOSSARY 术语，无新增字段 —— 由 `docs/03-qa-review/verify-m1.ps1` 的 **14 项机检**承担（含 VO/DTO 字段字典登记校验 C14）
 
 **DoD**：接口清单与 §6.1 页面清单一一对应；每接口有权限点与错误码；Apifox 齐备（→ 已于 M3 收口交付 `docs/02-design/openapi-campusswap.json`）

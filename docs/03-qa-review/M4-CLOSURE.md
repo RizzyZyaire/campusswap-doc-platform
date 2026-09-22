@@ -116,6 +116,7 @@ select d1_0.id, d1_0.title, d1_0.summary, d1_0.category_id, d1_0.created_by, d1_
 | `ARCHITECTURE.md` | §10.5 | 检索列表预算 3 → **3~5**（按实测，逐条说明 count / 分类子孙 / 批量补名）；其余接口补实测值 |
 | `MASTER-PLAN.md` | §7 M4 | 11 个任务全部打勾 + 补实做细节；M4 标题标记"已完成"；新增验证命令 |
 | `MASTER-PLAN.md` | 附录 D | 新增 v2.4 变更行 |
+| `openapi-campusswap.json` | 全文 | 追加文档域 30 条接口与 18 个 schema（25 → **55** 端点 / 34 → 52 schema），与 API_SPECIFICATION 端点清单对账 0 缺失；桌面副本同步刷新 |
 | `TEST_CHECKLIST.md` | 新建 | US-02~US-08 的 21 条断言逐条对账 + 状态机覆盖表 |
 
 ---
