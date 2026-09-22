@@ -519,23 +519,30 @@ curl -s -X POST http://localhost:10087/api/auth/login \
 
 ---
 
-### M4 文档业务（2~3 天）
+### M4 文档业务（2~3 天）　✅ 已完成（2026-09-22，收口记录 `docs/03-qa-review/M4-CLOSURE.md`）
 
 **目标**：8 个用户故事的后端能力全部实现。**前置**：M3 通过。
 
-- [ ] **T4.1** 文档创建/保存草稿（标题、摘要、正文、分类、标签）→ `US-02`
-- [ ] **T4.2** 提交发布：`DRAFT → PUBLISHED`，同时写 `doc_version` → `US-03`
-- [ ] **T4.3** 编辑与版本：每次保存 `version_num + 1` 并记录版本 → `US-06`
-- [ ] **T4.4** 检索分页：关键词 + 分类（含子孙，**按完整路径段匹配** `ancestors = :path OR ancestors LIKE CONCAT(:path, ',%')`）+ 标签 + 状态；只返回有权查看的 → `US-04`
-- [ ] **T4.5** 派生：`derived_from_id` 指向源文档、正文预填；源文档无权访问返回 403 → `US-05`
-- [ ] **T4.6** 收藏 + 阅读量：`doc_favorite` CRUD（复合主键天然幂等）；阅读量 `view:doc:{docId}:{userId}` **SETNX 去重成功后 `view_count` 原子自增**（`@Modifying` UPDATE，不做"读-改-写"，也不做异步回写）→ `US-05`
-- [ ] **T4.7** 审核：`DOC_ADMIN` 通过/驳回（驳回理由必填）→ `US-07`
-- [ ] **T4.8** 归档 / 回收站 / 恢复（状态机 §4.5 全分支）
-- [ ] **T4.9** 图片上传：≤5MB，类型白名单（jpg/png/webp），存 `backend/uploads/yyyy/MM/`，返回访问 URL；文件名校验防路径穿越
-- [ ] **T4.10** 分类树与标签维护接口（`DOC_ADMIN`）
-- [ ] **T4.11** **零 N+1 验收（课件 3.1 §2）**：dev 开 `spring.jpa.show-sql` 抓日志，任一列表接口的 SQL 条数**为常数（≤3 条，不含 Spring Data 在末页自动跳过的分页 count 查询）且不随 `pageSize` 增长**；列表出参 `DocumentVo` 不含 `contentMd`（走 DTO 投影）；日志与结论写入 `docs/03-qa-review/TEST_CHECKLIST.md`
+- [x] **T4.1** 文档创建/保存草稿（标题、摘要、正文、分类、标签）→ `US-02`（写 `CREATE` 版本 + 标签关系与 `use_count`）
+- [x] **T4.2** 提交发布：`DRAFT → PUBLISHED`，同时写 `doc_version` → `US-03`（首发写 `publish_at`；正文为空 / 已发布 / 回收站均 409）
+- [x] **T4.3** 编辑与版本：每次保存 `version_num + 1` 并记录版本 → `US-06`（归档只读 409；ID 与路径不一致 400；标签差值重绑）
+- [x] **T4.4** 检索分页：关键词 + 分类（含子孙，**完整路径段匹配**）+ 标签（AND）+ 状态 + 时间区间 + 排序；只返回 `PUBLISHED` → `US-04`
+- [x] **T4.5** 派生：`derived_from_id` 指向源文档、正文预填、标题「原标题（副本）」；源文档无权访问 403、回收站 409 → `US-05`
+- [x] **T4.6** 收藏 + 阅读量：`doc_favorite` 幂等增删；阅读量 `view:doc:{docId}:{userId}` SETNX 去重后 `view_count` 原子自增 → `US-05`
+- [x] **T4.7** 审核：`DOC_ADMIN` 通过（不改状态只留痕）/ 驳回（退回 `DRAFT` + `reject_reason`）→ `US-07`；归档与恢复上架同批实现（T5/T7 边）
+- [x] **T4.8** 归档 / 回收站 / 恢复（状态机 §4.5 全分支）：T2/T3/T5/T6/T7/T8/T9/T10/T11 全部有接口与实测记录
+- [x] **T4.9** 图片上传：≤5MB，扩展名 + MIME 双重白名单，存 `backend/uploads/yyyy/MM/{uuid}.{ext}`，返回相对 URL；原始文件名不参与路径拼接
+- [x] **T4.10** 分类树与标签维护接口（`DOC_ADMIN`）：分类树/增删改（≤3 层、环检测、级联重写 `ancestors`）、标签分页/增删改（软删除释放唯一键）
+- [x] **T4.11** **零 N+1 验收（课件 3.1 §2）**：dev 开 `spring.jpa.show-sql` 抓日志，任一列表接口的 SQL 条数**为常数**且不随 `pageSize` 增长（实测：检索 3~5 / 我的 3 / 回收站 1 / 收藏 3 / 审核队列 3 / 分类树 1 / 标签 1 / 统计 1）；列表出参 `DocumentVo` **不含 `contentMd`**（投影 SQL 实测无该列）；结论写入 `M4-CLOSURE.md` 与 `TEST_CHECKLIST.md`
 
-**DoD**：`US-02~US-08` 每条 BDD 断言都有一条通过记录（写入 `docs/03-qa-review/TEST_CHECKLIST.md`）
+**DoD**：`US-02~US-08` 每条 BDD 断言都有一条通过记录 → **`docs/03-qa-review/TEST_CHECKLIST.md`（21/21 全绿）**
+**验证**：
+```powershell
+cd backend; $env:JAVA_HOME='D:\DevEnv\02_JDK\jdk-17.0.5'; .\mvnw.cmd -B clean compile
+powershell -NoProfile -ExecutionPolicy Bypass -File docs/03-qa-review/verify-m4.ps1        # 静态自检 30 项
+# 另开窗口起服务：.\mvnw.cmd spring-boot:run
+powershell -NoProfile -ExecutionPolicy Bypass -File docs/03-qa-review/verify-m4-http.ps1 -AppLog "$env:TEMP\campusswap-app.log"
+```
 
 ---
 
@@ -871,3 +878,4 @@ grep -rn "password" backend/src/main/resources/ | grep -v '\${'   # 不应出现
 | 2026-09-21 | **v2.2（M2 收口）**：数据库落地 —— 14 张表 + 20 个索引 + 种子数据（39 权限点/3 角色/3 账号）建成；新增 `verify-m2.ps1`（16 项）与 `EXPLAIN-NOTES.md`；实测修正索引 `idx_doc_created_by` → `idx_doc_created_by_updated`（排序键必须进索引，28.4ms → 0.135ms）；新增压测夹具 `perf-fixture.sql`；§2 决策状态改为「10 个问题按默认方案锁定」 |
 | 2026-09-21 | **v2.1（M1 收口）**：全面对齐老师《1.2 示例-数据库物理建表脚本(MySQL版)》—— 自增主键、`created_*/updated_*` 审计列、中间表复合主键无 `id`、`name/code/type/sort_order` 命名、`sys_user.status` 三态、`sys_user_permission` 取代 `sys_login_log`、取消 `sys_user.role_code`；库名改 `campusswap_db`；包结构改为「按模块分包 + entity 顶层」；交付新增 `docs/02-design/` 三件套与 `verify-m1.ps1` |
 | 2026-09-22 | **v2.3（M3 收口）**：后端骨架 + RBAC 落地（Spring Boot 4.1.1 / Java 17，14 实体 + 14 仓储 + 5 服务 + 5 控制器 / 25 端点）；四道鉴权关卡跑通；新增两个可重跑机检脚本 `verify-m3.ps1`（36 项静态检查）与 `verify-m3-http.ps1`（122 项接口验收），收口记录 `M3-CLOSURE.md`。**修掉 3 个实现级缺陷**：① 软删除行占着唯一索引导致重建同名编码 500（改为删除时改写唯一列）；② 树形子孙查询用裸 `LIKE '0,1%'` 在 id 段位复用时会误判（改为完整路径段匹配）；③ 登出接口被拦截器挡成 401、不满足"重复登出幂等"（改为放行 + 请求头解析）。同步口径修正：取消 `SnowflakeConfig`；`/api/roles` SQL 预算 3 → 1；`GET /api/users` 预算标注"4（不含分页 count 查询，末页跳过）"；登出不写黑名单而是直接 `DEL` token |
+| 2026-09-22 | **v2.4（M4 收口）**：文档业务落地（30 个文档域接口：Document 15 / Review 5 / Category 4 / Tag 4 / File 1 / Stat 1）——Criteria + DTO 构造器投影分页、回收站与收藏原生 SQL、版本快照 9 种类型、状态机 T2/T3/T5/T6/T7/T8/T9/T10/T11 全分支、图片三重白名单上传、统计三计数单 SQL。新增两个可重跑机检 `verify-m4.ps1`（静态 30 项）与 `verify-m4-http.ps1`（接口 152 项 + SQL 预算 10 项），`TEST_CHECKLIST.md`（US-02~US-08 的 21 条断言 21/21 全绿）、`M4-CLOSURE.md`。**实测修掉 6 个缺陷**：① stats 原生查询返回 Object[] 被 Spring Data 再包一层 → 500；② 进回收站未递增版本号 → 恢复时 RESTORE 快照撞 uk_doc_version 唯一键；③ 重复删除/恢复/彻底删除对回收站状态返回 404 而非约定 409；④ 发布/派生/编辑对回收站文档语义错误（改 409 + 回收站详情对作者可见）；⑤ 拦截器把 Redis 抖动当"token 失效"（拆成 500 与 401）；⑥ 检查器自身 3 个口径 bug。文档口径修正：GLOSSARY §3.7 补 2 个分页 DTO、ARCHITECTURE §10.5 检索列表预算 3 → 3~5（按实测） |

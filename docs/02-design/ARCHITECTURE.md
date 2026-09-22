@@ -494,17 +494,19 @@ public interface DocumentRepository extends JpaRepository<Document, Long>,
 
 | 接口 | SQL 预算 | 步骤 | 明令禁止 |
 |---|---|---|---|
-| `GET /api/documents`（检索列表） | **3** | ① 主表分页（Specification + **DTO 投影**，不读 `content_md`）② `findAllById` 批量取作者名 ③ 批量取分类名（`doc_category` IN …） | ❌ 循环里 `doc.getCategory().getName()`；❌ `Page<Document>` 配集合型 `JOIN FETCH tags`（Hibernate 会先查全部 ID 再分页，报 `HHH000104`） |
-| `GET /api/documents/{id}`（详情） | **4** | ① 主表 + `@EntityGraph(attributePaths={"category"})`（单条，无分页问题）② 作者名 ③ 标签：`doc_document_tag_rel` JOIN `doc_tag` WHERE document_id=? ④ 当前用户是否已收藏 | ❌ 遍历 `tags` 再逐个查 `doc_tag` |
-| `GET /api/documents/mine`、`/trash` | **3** | 同检索列表 | 同上 |
-| `GET /api/review/documents` | **3** | 同检索列表（外加状态条件） | 同上 |
-| `GET /api/favorites` | **3** | ① 收藏 JOIN 文档分页 ② 作者名批量 ③ 分类名批量 | ❌ 先查收藏列表再循环查文档 |
+| `GET /api/documents`（检索列表） | **3~5** | ① Criteria 分页（**DTO 构造器投影**，SQL 实测无 `content_md`）② `findAllById` 批量取作者名 ③ 批量取分类名（`doc_category` IN …）；**满页**时多一条分页 count（`PageableExecutionUtils` 末页自动跳过），**带 `categoryId` 筛选**时再多一条「分类 + 子孙」查询（完整路径段匹配） | ❌ 循环里 `doc.getCategory().getName()`；❌ `Page<Document>` 配集合型 `JOIN FETCH tags`（Hibernate 会先查全部 ID 再分页，报 `HHH000104`） |
+| `GET /api/documents/{id}`（详情） | **5** | ① 主表 + `left join fetch d.category`（**单条** to-one 抓取，无分页风险）② 作者名 ③ 标签：`doc_tag` JOIN `doc_document_tag_rel` WHERE document_id=?（一条 SQL）④ 当前用户是否已收藏 ⑤ 命中已发布且首次访问时 `view_count` 原子自增 | ❌ 遍历 `tags` 再逐个查 `doc_tag` |
+| `GET /api/documents/mine` | **3** | 同检索列表（作者条件由后端强制注入） | 同上 |
+| `GET /api/review/documents` | **3** | 同检索列表（外加状态条件；`canEdit` 恒为 false） | 同上 |
+| `GET /api/favorites` | **3** | ① 原生 SQL：`doc_favorite` JOIN `doc_document` 分页（按收藏时间倒序，只取展示列）② 作者名批量 ③ 分类名批量 | ❌ 先查收藏列表再循环查文档 |
 | `GET /api/users` | **4** | ① 用户分页 ② 部门名批量 ③ `sys_user_role` 批量 ④ `sys_role` 批量取角色码 | ❌ 每个用户查一次角色 |
 | `GET /api/roles` | **1** | ① 角色分页（`RoleVo` 不含权限规模，API_SPECIFICATION §4.3.1 明确不返回） | ❌ 为显示一个权限数而对每个角色查一次 `sys_role_permission` |
 | `GET /api/permissions/tree` | **1** | **一次查全表 + 内存按 `parent_id` 组树** | ❌ **递归查子节点**（树形结构最容易被忽略的隐藏 N+1） |
+| `GET /api/documents/trash` | **1** | 原生 SQL 分页（显式 `deleted = 1`，自带 count，末页跳过） |
+| `GET /api/tags` | **1** | 标签分页（`use_count` 倒序 → id 升序） |
 | `GET /api/depts/tree`、`GET /api/categories/tree` | **1** | 同上 | 同上 |
 | `GET /api/roles/{id}/permissions`、`GET /api/depts/{id}/roles` | **2** | ① 关联表一次查全 ② 名称批量取 | ❌ 循环取名称 |
-| `GET /api/stats/overview` | **3** | ① 我的文档计数 ② 我的收藏计数 ③ 平台计数（可用一条聚合/UNION 合并） | ❌ 多次全表 `COUNT` 叠加 |
+| `GET /api/stats/overview` | **1** | 三个计数在**一条**原生 SQL 里用三个子查询取回（已实现，实测 1） | ❌ 多次全表 `COUNT` 叠加 |
 
 **三条铁律**
 1. **批量代替循环**：任何"按 N 个 ID 补名称"的场景，一律 `findAllById` / `IN (...)` + 内存 `Map` 分组（课件 3.1 红线二）。

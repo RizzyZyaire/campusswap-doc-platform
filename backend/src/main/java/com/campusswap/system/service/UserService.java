@@ -9,7 +9,9 @@ import com.campusswap.system.dto.UserStatusDtoReq;
 import com.campusswap.system.dto.UserUpdateDtoReq;
 import com.campusswap.system.vo.UserInfoVo;
 import com.campusswap.system.vo.UserVo;
+import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 
 /**
  * 用户服务（US-02 账号与组织维护）。
@@ -98,4 +100,20 @@ public interface UserService {
      * @return 角色编码集合
      */
     List<String> roleCodesOf(Long userId);
+
+    /**
+     * 批量取用户姓名（一条 {@code IN} 查询 + 内存 Map，供文档列表补作者名）。
+     *
+     * @param userIds 用户 ID 集合
+     * @return 用户 ID → 姓名
+     */
+    Map<Long, String> realNamesOf(Collection<Long> userIds);
+
+    /**
+     * 取单个用户姓名（文档详情补作者名）。
+     *
+     * @param userId 用户 ID
+     * @return 姓名；用户不存在时返回 null
+     */
+    String realNameOf(Long userId);
 }

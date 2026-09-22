@@ -261,11 +261,15 @@
 |---|---|
 | `UserPageDtoReq` | `pageNum?, pageSize?, keyword?, status?:UserStatus, deptId?` |
 | `RolePageDtoReq` | `pageNum?, pageSize?, keyword?` |
-| `ReviewPageDtoReq` | `pageNum?, pageSize?, keyword?, status?:DocumentStatus` |
+| `DocumentSearchDtoReq` | 字段见「文档域」一行（`extends PageDtoReq`：`keyword?, categoryId?, tagIds?:string[], status?:DocumentStatus, sort?:DocumentSort`） |
+| `DocumentMineDtoReq` | `pageNum?, pageSize?, keyword?, status?:DocumentStatus`（仅 `DRAFT` / `PUBLISHED` / `ARCHIVED`；回收站走 `DocumentTrashDtoReq`） |
+| `DocumentTrashDtoReq` | `pageNum?, pageSize?, keyword?` |
+| `ReviewPageDtoReq` | `pageNum?, pageSize?, keyword?, status?:DocumentStatus`（仅 `PUBLISHED` / `ARCHIVED`，默认 `PUBLISHED`） |
 | `FavoritePageDtoReq` | `pageNum?, pageSize?, keyword?` |
 | `TagPageDtoReq` | `pageNum?, pageSize?, keyword?` |
 
-> 以上 5 个 `*PageDtoReq` 省略 `pageNum` / `pageSize` 时按 §3.6 取默认值 1 / 10，语义等价于 `extends PageDtoReq`。
+> 以上 8 个 `*PageDtoReq` 省略 `pageNum` / `pageSize` 时按 §3.6 取默认值 1 / 10，语义等价于 `extends PageDtoReq`。
+> `DocumentSearchDtoReq` / `DocumentMineDtoReq` / `DocumentTrashDtoReq` 是 M4 实现文档域时补齐的登记项（此前只有 5 个）。
 
 **系统域补充（新建 / 更新 / 关联）**
 

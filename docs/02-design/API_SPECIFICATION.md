@@ -1572,7 +1572,7 @@ Content-Type: application/json;charset=UTF-8
 | 404 `NOT_FOUND` | 文档不存在或已被彻底删除 | 文档不存在或已被删除 |
 
 - **可见性规则**：`PUBLISHED` 对全部登录用户可见；`DRAFT`、`ARCHIVED`、`TRASH` **仅作者本人与拥有 `doc:manage` 的管理员**可见，否则 403（防 IDOR，BR-21）。
-- **阅读量**：仅当文档为 `PUBLISHED` 时 `view_count` +1；同一用户 30 分钟内重复打开不重复计数（Redis `SETNX`，键 `view:doc:{docId}:user:{userId}`，TTL 1800 秒，BR-09）。
+- **阅读量**：仅当文档为 `PUBLISHED` 时 `view_count` +1；同一用户 30 分钟内重复打开不重复计数（Redis `SETNX`，键 `view:doc:{docId}:{userId}`，TTL 1800 秒（与 ARCHITECTURE §7 的键设计一致），BR-09）。
 - `draft` 作者访问自己的草稿不累加阅读量（只统计已发布内容的传播量）。
 
 #### 4.6.6 `PUT /api/documents/{id}` 编辑文档

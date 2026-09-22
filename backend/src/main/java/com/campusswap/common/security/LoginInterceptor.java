@@ -51,9 +51,21 @@ public class LoginInterceptor implements HandlerInterceptor {
             return false;
         }
 
-        String userId = stringRedisTemplate.opsForValue().get(RedisKeys.token(token));
+        String userId;
+        try {
+            userId = stringRedisTemplate.opsForValue().get(RedisKeys.token(token));
+        } catch (Exception ex) {
+            // Redis 故障必须与「token 无效」分开：否则一次抖动会被前端当成"登录过期"，
+            // 用户被集体踢回登录页，真实原因（连接不可用）被掩盖成 401。
+            log.error("读取登录 token 失败（Redis 不可用）: {}", ex.getMessage());
+            writeServerError(response);
+            return false;
+        }
         if (userId == null) {
-            log.debug("token 已失效或不存在，拒绝访问: {}", request.getRequestURI());
+            // 记 WARN 而不是 DEBUG：出现过"同一 token 前后都有效、中间一次 401"的瞬时现象，
+            // 留一个可检索的痕迹（只记前 8 位，不落完整 token）。
+            log.warn("token 不存在于 Redis，按未登录处理: uri={}, tokenPrefix={}",
+                    request.getRequestURI(), token.substring(0, Math.min(8, token.length())));
             writeUnauthorized(response);
             return false;
         }
@@ -87,5 +99,18 @@ public class LoginInterceptor implements HandlerInterceptor {
         response.setCharacterEncoding(StandardCharsets.UTF_8.name());
         response.setContentType("application/json;charset=UTF-8");
         response.getWriter().write("{\"code\":401,\"message\":\"登录状态已失效，请重新登录\",\"data\":null}");
+    }
+
+    /**
+     * 写回 500（Redis 不可用，无法判定 token 有效性）。
+     *
+     * @param response 当前响应
+     * @throws Exception IO 异常
+     */
+    private void writeServerError(HttpServletResponse response) throws Exception {
+        response.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
+        response.setCharacterEncoding(StandardCharsets.UTF_8.name());
+        response.setContentType("application/json;charset=UTF-8");
+        response.getWriter().write("{\"code\":500,\"message\":\"登录状态校验失败，请稍后重试\",\"data\":null}");
     }
 }

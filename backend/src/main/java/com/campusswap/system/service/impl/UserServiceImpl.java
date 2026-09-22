@@ -30,6 +30,7 @@ import com.campusswap.system.vo.UserInfoVo;
 import com.campusswap.system.vo.UserVo;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -272,6 +273,40 @@ public class UserServiceImpl implements UserService {
     @Transactional(readOnly = true)
     public List<String> roleCodesOf(Long userId) {
         return roleRepository.findCodesByUserId(userId);
+    }
+
+    /**
+     * 批量取用户姓名（一条 IN 查询）。
+     *
+     * @param userIds 用户 ID 集合
+     * @return 用户 ID → 姓名
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public Map<Long, String> realNamesOf(Collection<Long> userIds) {
+        if (userIds == null || userIds.isEmpty()) {
+            return Map.of();
+        }
+        Map<Long, String> names = new HashMap<>();
+        for (User user : userRepository.findAllById(userIds)) {
+            names.put(user.getId(), user.getRealName());
+        }
+        return names;
+    }
+
+    /**
+     * 取单个用户姓名。
+     *
+     * @param userId 用户 ID
+     * @return 姓名；用户不存在时返回 null
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public String realNameOf(Long userId) {
+        if (userId == null) {
+            return null;
+        }
+        return userRepository.findById(userId).map(User::getRealName).orElse(null);
     }
 
     /**

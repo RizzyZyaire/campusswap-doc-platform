@@ -128,14 +128,19 @@ foreach ($j in $junctions) {
 Check 'C9  6 junction entities: @IdClass, no soft delete' ($badJunction.Count -eq 0) ('issues=' + ($badJunction -join ','))
 
 # --- C10: repositories -------------------------------------------------------
+# NOTE: count real JPA repositories only. M4 added DocumentQueryRepository, a Spring Data
+# *fragment* interface (custom Criteria implementation), which does not extend JpaRepository.
 $systemRepo = @(Get-ChildItem -LiteralPath (Join-Path $javaRoot 'system\repository') -Filter '*Repository.java' -File)
 $docRepo = @(Get-ChildItem -LiteralPath (Join-Path $javaRoot 'document\repository') -Filter '*Repository.java' -File)
-$repoFiles = @($systemRepo + $docRepo)
+$allRepos = @($systemRepo + $docRepo)
+$repoFiles = @($allRepos | Where-Object { (Read-All $_.FullName) -like '*extends JpaRepository*' })
+$fragments = @($allRepos | Where-Object { (Read-All $_.FullName) -notlike '*extends JpaRepository*' })
 $notJpa = @($repoFiles | Where-Object { (Read-All $_.FullName) -notlike '*extends JpaRepository*' })
-Check 'C10 14 repositories, all extend JpaRepository' `
-    (($repoFiles.Count -eq 14) -and ($notJpa.Count -eq 0)) ('count=' + $repoFiles.Count)
+Check 'C10 14 JPA repositories, all extend JpaRepository' `
+    (($repoFiles.Count -eq 14) -and ($notJpa.Count -eq 0)) `
+    ('count=' + $repoFiles.Count + ' fragments=' + (($fragments | ForEach-Object { $_.Name }) -join ','))
 $specRepo = @($repoFiles | Where-Object { (Read-All $_.FullName) -like '*JpaSpecificationExecutor*' })
-Check 'C10b dynamic query repos use JpaSpecificationExecutor' ($specRepo.Count -ge 3) ('count=' + $specRepo.Count)
+Check 'C10b dynamic query repos use JpaSpecificationExecutor' ($specRepo.Count -ge 4) ('count=' + $specRepo.Count)
 
 # --- C11: controllers and endpoint inventory --------------------------------
 $ctrlDir = Join-Path $javaRoot 'system\controller'
@@ -213,13 +218,19 @@ $svcImpl = @(Get-ChildItem -LiteralPath (Join-Path $javaRoot 'system\service\imp
 $unpaged = @($svcImpl | Where-Object { (Read-All $_.FullName) -like '*findAll()*' })
 Check 'C18 no unpaged findAll() in service impls' ($unpaged.Count -eq 0) ('files=' + (($unpaged | ForEach-Object { $_.Name }) -join ','))
 
-# --- C19: no Page + collection JOIN FETCH ----------------------------------
-$pageFetch = @()
-foreach ($f in $repoFiles) {
-    $c = Read-All $f.FullName
-    if (($c -like '*Page<*') -and ($c -like '*join fetch*')) { $pageFetch += $f.Name }
+# --- C19: JOIN FETCH only on to-one associations (collection fetch breaks paging) ---
+# The forbidden combo is Page<Entity> + collection JOIN FETCH (Hibernate HHH000104).
+# A single-result JOIN FETCH on a @ManyToOne (Document.category) is the documented approach.
+$badFetch = @()
+foreach ($f in $allRepos) {
+    $code = @(Get-Content -LiteralPath $f.FullName | Where-Object { $_ -notmatch '^\s*(\*|//|/\*)' }) -join "`n"
+    foreach ($m in [regex]::Matches($code, 'join fetch\s+([A-Za-z0-9_.]+)')) {
+        $target = $m.Groups[1].Value
+        if ($target -notmatch '\.category$') { $badFetch += ($f.Name + ':' + $target) }
+    }
 }
-Check 'C19 no Page<Entity> + JOIN FETCH combination' ($pageFetch.Count -eq 0) ('files=' + ($pageFetch -join ','))
+Check 'C19 no collection JOIN FETCH (only to-one category fetch allowed)' ($badFetch.Count -eq 0) `
+    ('violations=' + ($badFetch -join ','))
 
 # --- C20: ancestors matching by full path segment ---------------------------
 $permRepo = Read-All (Join-Path $javaRoot 'system\repository\PermissionRepository.java')

@@ -41,6 +41,19 @@ public interface FavoriteRepository extends JpaRepository<Favorite, FavoriteId> 
     @Query("select f.userId from Favorite f where f.documentId = :documentId")
     List<Long> findUserIdsByDocumentId(@Param("documentId") Long documentId);
 
+    /**
+     * 彻底删除文档时清理收藏关系（物理删除）。
+     *
+     * <p>文档已处于 {@code deleted = 1}，用原生 SQL 保证一次清干净（BR-08）。</p>
+     *
+     * @param documentId 文档 ID
+     * @return 删除行数
+     */
+    @Modifying
+    @Transactional
+    @Query(value = "DELETE FROM doc_favorite WHERE document_id = :documentId", nativeQuery = true)
+    int deleteByDocumentIdPhysically(@Param("documentId") Long documentId);
+
     /** 某时间点之前的收藏（预留：清理历史数据用）。 */
     long countByCreatedAtBefore(LocalDateTime time);
 }

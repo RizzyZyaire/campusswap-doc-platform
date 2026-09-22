@@ -46,6 +46,20 @@ public class PageDtoReq {
     }
 
     /**
+     * 转成 Spring Data 的 {@link Pageable}（不排序）。
+     *
+     * <p>原生 SQL 查询自带 {@code ORDER BY}，再追加 Sort 会拼出第二个排序子句或引用不存在的别名，
+     * 因此这类接口用本方法（回收站 / 我的收藏）。</p>
+     *
+     * @return 分页参数
+     */
+    public Pageable toPageableUnsorted() {
+        int num = pageNum == null ? 1 : pageNum;
+        int size = pageSize == null ? 10 : pageSize;
+        return PageRequest.of(num - 1, size);
+    }
+
+    /**
      * 转成 Spring Data 的 {@link Pageable}。
      *
      * @param sort 排序规则

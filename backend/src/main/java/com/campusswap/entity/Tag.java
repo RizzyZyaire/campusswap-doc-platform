@@ -25,7 +25,9 @@ import org.hibernate.annotations.SQLRestriction;
 @Builder
 @Entity
 @Table(name = "doc_tag")
-@SQLDelete(sql = "UPDATE doc_tag SET deleted = 1 WHERE id = ?")
+// 软删除 + 唯一键共存：name 上有唯一索引 uk_doc_tag_name，删除时改写成 name#del#id 释放唯一键，
+// 否则同名标签再也建不出来（唯一索引被已删除行占位），见 ARCHITECTURE §10 规约 18。
+@SQLDelete(sql = "UPDATE doc_tag SET deleted = 1, name = CONCAT(LEFT(name, 30), '#del#', id) WHERE id = ?")
 @SQLRestriction("deleted = 0")
 public class Tag extends BaseEntity {
 
