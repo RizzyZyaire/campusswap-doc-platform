@@ -221,9 +221,16 @@ D:\DevEnv\04_Redis\redis-cli.exe -p 6379 KEYS 'perm:*'
 
 ## 9 欠账与 M5 开工前的两个待拍板点
 
-**欠账**：M5 前端未开工（`frontend/` 只有骨架目录）；M6 测试与评审、M7 交付未做；Apifox 手动导入 + 发请求待你操作；防火墙 3306/6379 的入站放行规则未按建议收窄；`DIFF-VS-TEACHER.md` 仍为未跟踪文件（未提交）。
+**欠账**：M5 前端未开工（`frontend/` 只有骨架目录；M5 开工前的观感确认已交付：`docs/02-design/UI-PREVIEW.html` 静态单文件预览稿 + `ui-preview.smoke.mjs` 35 项冒烟断言）；M6 测试与评审、M7 交付未做；Apifox 手动导入 + 发请求待你操作；防火墙 3306/6379 的入站放行规则未按建议收窄。
 
 **待拍板（M5 前）**：
 
 1. **分类 / 标签的 6 个写接口要不要给界面入口？** 后端已实现 `POST/PUT/DELETE /api/categories/**` 与 `/api/tags/**`，权限点 `doc:category:edit` / `doc:tag:edit` 也在权限树里；但 `UI_UX_SPECIFICATION §5.3` 把它们判为"路径清单缺位 → 不渲染入口"（§8.7 的"分类与标签"tab 因此是只读的）。两条路：① 补入口（需修订 §5.3 与 §8.7，加 4 个按钮）；② 保持只读（在 M5 收口记录里写明理由）。
 2. **`sys_user_permission`（用户级直授权）要不要给界面入口？** 中间表与权限合并逻辑都在，M3 已实测"直授权立即生效"，但接口清单里没有写接口 → 界面上没有入口。当前默认：不渲染，只在文档里说明。
+3. **「文档治理」页拿不到全状态列表 —— 规格与后端不一致（实锤，M5 前必须解决）。** `UI_UX_SPECIFICATION §8.7` 的依赖清单写的是 `GET /api/documents`（权限 `doc:manage`、含状态筛选、能看到全平台 `DRAFT`/`ARCHIVED`/`TRASH`）；但后端事实是：
+   - `GET /api/documents` 的权限点是 **`doc:search`**，且 `DocumentServiceImpl.search()` 第 109–111 行把状态**硬编码**为 `PUBLISHED`，传其他状态直接 400「本接口仅支持查询已发布文档」；
+   - `GET /api/review/documents`（`doc:review`）在 `ReviewServiceImpl` 第 55–66 行**只允许** `PUBLISHED` / `ARCHIVED`；
+   - 结论：**当前没有任何接口**能返回「全平台含草稿与回收站」的列表。
+
+   两条路：① M5 前补一个 `doc:manage` 的全状态列表接口（治理语义才完整，**推荐**）；② 治理页只治理「已发布 / 已归档」，草稿与回收站仍归「我的文档」。
+   *发现路径（留痕）*：做静态预览稿时按 §8.7 摆了「草稿/已归档/回收站」三行 → 复核后端才发现这几行拿不到数据 → 已把事实写进预览稿治理页的红色提示，并删掉检索页里同类越权的三行（§8.2 本就规定检索只出现 `PUBLISHED`）。
