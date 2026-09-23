@@ -1,5 +1,5 @@
 // =============================================================================
-//  UI-PREVIEW.html（v5 · 河北师范大学口径）冒烟自检
+//  UI-PREVIEW.html（v8.2 · 河北师范大学口径）冒烟自检
 //
 //  覆盖四类最容易写错的东西：
 //   ① Markdown 渲染（代码块/表格/引用/列表 —— v2 就栽在跨行正则上）
@@ -10,7 +10,7 @@
 //  用法（Node 18+，本机 F:\node\node.exe）：
 //      node docs/02-design/ui-preview.smoke.mjs
 //  退出码 = 失败数（0 = 全绿）。路径相对本文件解析。
-//  该脚本是预览稿自检，不计入 docs/03-qa-review 的 9 个产品机检（420 项断言）。
+//  该脚本是预览稿自检，不计入 docs/03-qa-review 的 9 个产品机检（504 项断言）。
 // =============================================================================
 import { readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
@@ -153,7 +153,7 @@ t('检索页筛选按 created_at 口径（创建时间，不再是更新时间�
 t('预览不再出现「发文单位 / 提交单位」字样', !/发文单位|提交单位/.test(all + api.render('kit')))
 t('数据层不再带 unit 字段（doc_document 无单位列）', !/unit:/.test(html))
 t('登录下拉的所属单位与用户数据一致', ['系统管理员 · 信息化中心 · 赵慕辰', '文档管理员 · 信息化中心 · 王砚秋', '教职工 · 软件学院（网络教育学院） · 李承霖'].every((s) => html.includes(s)))
-t('预览稿版本号统一为 v8（标题/页头/预览条）', (html.match(/界面预览稿 v8/g) || []).length === 2 && html.includes('预览稿 v8 · 假数据')
+t('预览稿版本号统一为 v8.2（标题/页头/预览条）', (html.match(/界面预览稿 v8\.2/g) || []).length === 2 && html.includes('预览稿 v8.2 · 假数据')
   && !/界面预览稿 v[1-7]/.test(html.replace(/<!--[\s\S]*?-->/g, '')))
 t('我的文档页不再有「单位」筛选', !/<label class="label">单位<\/label>/.test(api.render('mine')))
 
@@ -183,6 +183,14 @@ t('noperm 是流式排版（不再把行内片段压成竖排）', /\.noperm\{di
 /* 只看真实标记，注释里提到旧写法不算（HTML 注释与 JS 块注释都先剥掉） */
 const htmlNoComments = html.replace(/<!--[\s\S]*?-->/g, '').replace(/\/\*[\s\S]*?\*\//g, '')
 t('详情/治理页不再重复写「拟稿人」', !/拟稿：/.test(htmlNoComments) && !/<div class="k">拟稿<\/div>/.test(htmlNoComments))
+
+console.log('=== ⑤d v8.2：编辑接口必填 versionNum → 409 版本冲突 ===')
+/* 后端 PUT /api/documents/{id} 新增必填 versionNum，版本不一致返回 409（陈旧表单防覆盖）。
+   预览稿必须把这一态渲染出来，并把契约登记进「落地接口对照」，否则前端 M5 按老契约写就会漏掉 409。 */
+t('设计系统页有 409 版本冲突提示与 toast', /id="conflictAlert"/.test(api.render('kit')) && /版本冲突（409）/.test(api.render('kit'))
+  && /保存失败：内容已被他人修改/.test(api.render('kit')))
+t('落地接口对照登记了必填 versionNum 契约', /versionNum<\/span>（必填/.test(api.render('kit'))
+  && /PUT \/api\/documents\/\{id\}[\s\S]{0,200}409/.test(api.render('kit')) && /四项变更已落地/.test(api.render('kit')))
 
 console.log('=== ⑤b v6：预览条 / 选择器位置 / 三版式首页 / 退出登录 ===')
 /* ①预览条：白底白字的胶囊必须消失，chip 必须有底色与文字色 */

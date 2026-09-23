@@ -1,6 +1,5 @@
 package com.campusswap.system.service.impl;
 
-import cn.hutool.crypto.digest.BCrypt;
 import com.campusswap.common.api.ErrorCode;
 import com.campusswap.common.exception.BusinessException;
 import com.campusswap.common.security.SecurityContext;
@@ -18,6 +17,7 @@ import com.campusswap.system.vo.LoginVo;
 import com.campusswap.system.vo.UserInfoVo;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -39,9 +39,7 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class AuthServiceImpl implements AuthService {
 
-    /** BCrypt 强度（BR-20，与 {@code UserServiceImpl} 一致）。 */
-    private static final int BCRYPT_STRENGTH = 10;
-
+    private final PasswordEncoder passwordEncoder;
     private final UserRepository userRepository;
     private final UserService userService;
     private final TokenService tokenService;
@@ -58,7 +56,7 @@ public class AuthServiceImpl implements AuthService {
         String username = req.username().trim();
         User user = userRepository.findByUsername(username)
                 .orElseThrow(() -> new BusinessException(ErrorCode.UNAUTHORIZED, "用户名或密码错误"));
-        if (!BCrypt.checkpw(req.password(), user.getPasswordHash())) {
+        if (!passwordEncoder.matches(req.password(), user.getPasswordHash())) {
             log.debug("登录失败（密码错误）: username={}", username);
             throw new BusinessException(ErrorCode.UNAUTHORIZED, "用户名或密码错误");
         }
@@ -117,11 +115,11 @@ public class AuthServiceImpl implements AuthService {
     public void changePassword(PasswordChangeDtoReq req) {
         Long userId = SecurityContext.requireUserId();
         User user = userService.getUserOrThrow(userId);
-        if (!BCrypt.checkpw(req.oldPassword(), user.getPasswordHash())) {
+        if (!passwordEncoder.matches(req.oldPassword(), user.getPasswordHash())) {
             log.warn("自助改密失败（原密码不正确）: userId={}", userId);
             throw new BusinessException(ErrorCode.BAD_REQUEST, "原密码不正确");
         }
-        user.setPasswordHash(BCrypt.hashpw(req.newPassword(), BCrypt.gensalt(BCRYPT_STRENGTH)));
+        user.setPasswordHash(passwordEncoder.encode(req.newPassword()));
         userRepository.saveAndFlush(user);
         TxUtil.afterCommit(() -> tokenService.revokeAll(userId));
         log.info("自助改密成功: userId={}", userId);

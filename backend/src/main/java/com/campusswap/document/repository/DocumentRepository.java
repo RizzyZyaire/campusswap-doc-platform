@@ -56,13 +56,13 @@ public interface DocumentRepository extends JpaRepository<Document, Long>,
     long countMine(@Param("userId") Long userId);
 
     /** 阅读量原子自增（Redis 去重后调用，避免丢失更新）。 */
-    @Modifying
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Transactional
     @Query("update Document d set d.viewCount = d.viewCount + 1 where d.id = :id")
     int increaseViewCount(@Param("id") Long id);
 
     /** 收藏数原子增减（delta 为 +1 / -1）。 */
-    @Modifying
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Transactional
     @Query("update Document d set d.favoriteCount = d.favoriteCount + :delta where d.id = :id")
     int updateFavoriteCount(@Param("id") Long id, @Param("delta") int delta);
@@ -134,7 +134,7 @@ public interface DocumentRepository extends JpaRepository<Document, Long>,
      * @param operatorId 操作人（写 updated_by）
      * @return 影响行数
      */
-    @Modifying
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Transactional
     @Query(value = "UPDATE doc_document SET status = 'TRASH', deleted = 1,"
             + " version_num = version_num + 1, updated_at = NOW(), updated_by = :operatorId"
@@ -148,7 +148,7 @@ public interface DocumentRepository extends JpaRepository<Document, Long>,
      * @param operatorId 操作人
      * @return 影响行数
      */
-    @Modifying
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Transactional
     @Query(value = "UPDATE doc_document SET deleted = 0, status = 'DRAFT', reject_reason = NULL,"
             + " version_num = version_num + 1, updated_at = NOW(), updated_by = :operatorId"
@@ -161,7 +161,7 @@ public interface DocumentRepository extends JpaRepository<Document, Long>,
      * @param id 文档 ID
      * @return 影响行数
      */
-    @Modifying
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Transactional
     @Query(value = "DELETE FROM doc_document WHERE id = :id AND deleted = 1", nativeQuery = true)
     int destroyPhysically(@Param("id") Long id);

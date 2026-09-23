@@ -38,7 +38,7 @@ public interface DocumentVersionRepository extends JpaRepository<DocumentVersion
      * @param documentId 文档 ID
      * @return 删除行数
      */
-    @Modifying
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Transactional
     @Query(value = "DELETE FROM doc_version WHERE document_id = :documentId", nativeQuery = true)
     int deleteByDocumentIdPhysically(@Param("documentId") Long documentId);

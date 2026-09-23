@@ -30,13 +30,13 @@ public interface DeptRoleRepository extends JpaRepository<DeptRole, DeptRoleId> 
     long countByRoleId(Long roleId);
 
     /** 清空某部门的角色绑定（重新绑定前先清后插）。 */
-    @Modifying
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Transactional
     @Query("delete from DeptRole dr where dr.deptId = :deptId")
     int deleteByDeptId(@Param("deptId") Long deptId);
 
     /** 删除某角色的全部部门绑定（删除角色时先解绑）。 */
-    @Modifying
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Transactional
     @Query("delete from DeptRole dr where dr.roleId = :roleId")
     int deleteByRoleId(@Param("roleId") Long roleId);

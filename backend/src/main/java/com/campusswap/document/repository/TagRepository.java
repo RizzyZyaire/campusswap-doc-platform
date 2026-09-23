@@ -44,7 +44,7 @@ public interface TagRepository extends JpaRepository<Tag, Long>, JpaSpecificatio
     boolean existsByName(String name);
 
     /** 被引用次数原子增减（打/取消标签时调用）。 */
-    @Modifying
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Transactional
     @Query("update Tag t set t.useCount = t.useCount + :delta where t.id = :id")
     int updateUseCount(@Param("id") Long id, @Param("delta") int delta);
@@ -55,7 +55,7 @@ public interface TagRepository extends JpaRepository<Tag, Long>, JpaSpecificatio
      * @param ids 标签 ID 集合
      * @return 影响行数
      */
-    @Modifying
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Transactional
     @Query("update Tag t set t.useCount = t.useCount + 1 where t.id in :ids")
     int increaseUseCount(@Param("ids") Collection<Long> ids);
@@ -66,7 +66,7 @@ public interface TagRepository extends JpaRepository<Tag, Long>, JpaSpecificatio
      * @param ids 标签 ID 集合
      * @return 影响行数
      */
-    @Modifying
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Transactional
     @Query("update Tag t set t.useCount = case when t.useCount > 0 then t.useCount - 1 else 0 end"
             + " where t.id in :ids")

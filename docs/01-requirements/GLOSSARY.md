@@ -248,7 +248,7 @@
 | `DocumentVo` extends `AuditVo` | `id, title, summary, categoryId, categoryName, authorId, authorName, status:DocumentStatus, versionNum:number, priceCents:number, viewCount:number, favoriteCount:number, canEdit:boolean, highlight?:string\|null, matchedIn?:'title'\|'summary'\|'content'\|null`（后两个字段**只有全文检索分支**填充，其余列表接口为 `null`） |
 | `DocumentDetailVo` extends `DocumentVo` | `contentMd, derivedFromId:string\|null, rejectReason:string\|null, favorited:boolean, tags:TagVo[]` |
 | `DocumentCreateDtoReq` | `title, summary, contentMd, categoryId, tagIds:string[], priceCents:number` |
-| `DocumentUpdateDtoReq` extends `DocumentCreateDtoReq` | `id`（必填，必须与路径 `{id}` 一致；业务字段按 create 同规则**全量提交**，不是"只传改动字段"） |
+| `DocumentUpdateDtoReq` extends `DocumentCreateDtoReq` | `id`（必填，必须与路径 `{id}` 一致；业务字段按 create 同规则**全量提交**，不是"只传改动字段"）、`versionNum`（**必填**，带详情接口返回的那一版；与库中当前版本不一致 → 409「该文档已被他人修改（当前版本 v3），请刷新后重试」，缺失 → 400；2026-09-23 新增，见 `ARCHITECTURE §17 ADR-07`） |
 | `DocumentSearchDtoReq` extends `PageDtoReq` | `keyword?, categoryId?, tagIds?:string[], status?:DocumentStatus, sort?:DocumentSort` |
 | `DocumentVersionVo` extends `AuditVo` | `id, documentId, versionNum:number, title, contentMd, changeType:string, changeRemark:string\|null, operatorId, operatorName` |
 | `CategoryVo` extends `AuditVo` | `id, name, parentId, ancestors, sortOrder:number, children:CategoryVo[]` |

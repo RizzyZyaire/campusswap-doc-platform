@@ -47,6 +47,14 @@
             <artifactId>spring-boot-starter-validation</artifactId>
         </dependency>
 
+        <!-- 密码哈希：官方 PasswordEncoder / BCryptPasswordEncoder（课件 5.1 DoD①）。
+             只引 crypto 一个模块 —— 不引 spring-security-web / -config，
+             因此不会带来过滤器链，也不会触发 Spring Security 的 Web 自动配置。 -->
+        <dependency>
+            <groupId>org.springframework.security</groupId>
+            <artifactId>spring-security-crypto</artifactId>
+        </dependency>
+
         <!-- Redis：token、权限缓存、阅读量去重 -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
@@ -60,7 +68,7 @@
             <scope>runtime</scope>
         </dependency>
 
-        <!-- 工具库：BCrypt、IdUtil、StrUtil -->
+        <!-- 工具库：IdUtil、StrUtil（密码哈希已改用官方 PasswordEncoder，见上） -->
         <dependency>
             <groupId>cn.hutool</groupId>
             <artifactId>hutool-all</artifactId>

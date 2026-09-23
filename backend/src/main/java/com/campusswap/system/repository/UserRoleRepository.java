@@ -35,13 +35,13 @@ public interface UserRoleRepository extends JpaRepository<UserRole, UserRoleId> 
     long countByRoleId(Long roleId);
 
     /** 清空某用户的全部角色（重新授权时先清后插）。 */
-    @Modifying
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Transactional
     @Query("delete from UserRole ur where ur.userId = :userId")
     int deleteByUserId(@Param("userId") Long userId);
 
     /** 删除某角色的全部绑定（删除角色时先解绑）。 */
-    @Modifying
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Transactional
     @Query("delete from UserRole ur where ur.roleId = :roleId")
     int deleteByRoleId(@Param("roleId") Long roleId);

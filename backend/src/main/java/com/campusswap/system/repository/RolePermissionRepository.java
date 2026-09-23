@@ -27,13 +27,13 @@ public interface RolePermissionRepository extends JpaRepository<RolePermission, 
     long countByPermissionId(Long permissionId);
 
     /** 清空某角色的权限（重新授权时先清后插）。 */
-    @Modifying
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Transactional
     @Query("delete from RolePermission rp where rp.roleId = :roleId")
     int deleteByRoleId(@Param("roleId") Long roleId);
 
     /** 删除某权限点的全部授权（删除权限点时先回收）。 */
-    @Modifying
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Transactional
     @Query("delete from RolePermission rp where rp.permissionId = :permissionId")
     int deleteByPermissionId(@Param("permissionId") Long permissionId);

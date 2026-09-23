@@ -1,6 +1,5 @@
 package com.campusswap.system.service.impl;
 
-import cn.hutool.crypto.digest.BCrypt;
 import com.campusswap.common.api.ErrorCode;
 import com.campusswap.common.api.PageVo;
 import com.campusswap.common.exception.BusinessException;
@@ -39,6 +38,7 @@ import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -57,9 +57,7 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class UserServiceImpl implements UserService {
 
-    /** BCrypt 强度（BR-20）。 */
-    private static final int BCRYPT_STRENGTH = 10;
-
+    private final PasswordEncoder passwordEncoder;
     private final UserRepository userRepository;
     private final DeptRepository deptRepository;
     private final RoleRepository roleRepository;
@@ -112,7 +110,7 @@ public class UserServiceImpl implements UserService {
 
         User user = User.builder()
                 .username(username)
-                .passwordHash(BCrypt.hashpw(req.password(), BCrypt.gensalt(BCRYPT_STRENGTH)))
+                .passwordHash(passwordEncoder.encode(req.password()))
                 .realName(req.realName().trim())
                 .deptId(deptId)
                 .email(blankToNull(req.email()))
@@ -213,7 +211,7 @@ public class UserServiceImpl implements UserService {
     @Transactional
     public void resetPassword(Long id, UserPasswordDtoReq req) {
         User user = getUserOrThrow(id);
-        user.setPasswordHash(BCrypt.hashpw(req.newPassword(), BCrypt.gensalt(BCRYPT_STRENGTH)));
+        user.setPasswordHash(passwordEncoder.encode(req.newPassword()));
         userRepository.saveAndFlush(user);
         TxUtil.afterCommit(() -> tokenService.revokeAll(id));
     }

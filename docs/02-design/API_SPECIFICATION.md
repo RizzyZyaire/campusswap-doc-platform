@@ -1618,11 +1618,12 @@ Content-Type: application/json;charset=UTF-8
 
 **权限点**：`doc:edit`
 
-**入参** `DocumentUpdateDtoReq`（请求体 JSON；继承 `DocumentCreateDtoReq` 并新增 `id`，业务字段与新增**同规则**）
+**入参** `DocumentUpdateDtoReq`（请求体 JSON；继承 `DocumentCreateDtoReq` 并新增 `id` 与 `versionNum`，业务字段与新增**同规则**）
 
 | 字段 | 类型 | 必填 | 校验规则 | 中文错误提示 |
 |---|---|---|---|---|
 | `id` | string | 是 | 必须与路径 `{id}` 完全一致 | 请求体中的文档ID与路径不一致 |
+| `versionNum` | number | 是 | ≥ 1；必须等于库中当前 `version_num`，否则 409（**陈旧表单防覆盖**） | 缺少文档版本号，请刷新页面后重试 / 该文档已被他人修改（当前版本 v3），请刷新后重试 |
 | `title` | string | 是 | 1–128 字符 | 文档标题不能为空且不超过128字 |
 | `summary` | string | 否 | ≤ 255 字符 | 文档摘要不能超过255字 |
 | `contentMd` | string | 否 | ≤ 100000 字符 | 文档正文不能超过100000字 |
@@ -1636,13 +1637,15 @@ Content-Type: application/json;charset=UTF-8
 
 | 错误码 | 触发条件 | 前端提示 |
 |---|---|---|
-| 400 `BAD_REQUEST` | 字段校验失败；`categoryId` / `tagIds` 不存在 | 返回 `message` 原文 |
+| 400 `BAD_REQUEST` | 字段校验失败（含**缺 `versionNum`**）；`categoryId` / `tagIds` 不存在 | 返回 `message` 原文 |
 | 401 `UNAUTHORIZED` | 未登录 | 登录状态已失效，请重新登录 |
 | 403 `NO_PERMISSION` | 缺少 `doc:edit`；**或当前用户不是作者**（US-06 AC-06.2，越权不得改动任何字段） | 无权限修改该文档 |
 | 404 `NOT_FOUND` | 文档不存在 | 文档不存在或已被删除 |
-| 409 `CONFLICT_STATUS` | 文档状态为 `ARCHIVED` 或 `TRASH`（只读，US-06 AC-06.3 / BR-11） | 归档文档为只读，请先恢复上架 |
+| 409 `CONFLICT_STATUS` | ① 文档状态为 `ARCHIVED` 或 `TRASH`（只读，US-06 AC-06.3 / BR-11）；② **`versionNum` 与库中当前版本不一致**（陈旧表单防覆盖，2026-09-23 新增） | 归档文档为只读，请先恢复上架 / 该文档已被他人修改（当前版本 v3），请刷新后重试 |
 
 - 属主校验在 Service 层完成：`created_by != 当前用户ID` 且无 `doc:manage` → 403，且**不产生任何写入**。
+- **校验顺序**（2026-09-23 定）：`id` 与路径一致（400）→ 文档存在（404）→ 归属（403）→ 归档/回收站只读（409）→ **`versionNum` 一致（409）**→ 写入。顺序决定了"同时踩两个错误时前端看到哪一条"，故写死在此。
+- **陈旧表单防覆盖的实现口径**：复用文档自带的业务版本号 `version_num`（每次正文写入或状态流转 +1，BR-06），**不引入 JPA `@Version` 乐观锁**（不新增列、不让状态流转抛 `ObjectOptimisticLockingFailureException`）。理由与取舍见 `ARCHITECTURE.md §17 ADR-07`。
 - 任一次成功保存：`versionNum` +1（BR-06），刷新 `updated_by` / `updated_at`，新增一条 `doc_version`（`changeType = EDIT`）。
 - 允许编辑的状态：`DRAFT`、`PUBLISHED`（PRD 不变式 I1）。
 
@@ -2580,6 +2583,26 @@ Content-Type: image/png
 
 `sys_permission` 中存在 `doc:offline`（DOC_ADMIN / SYS_ADMIN 均持有），但后端无任何 `offline` 端点，v1 界面也未渲染入口。
 处置：**本轮不新增下架接口** —— 状态机里 `ARCHIVED`（归档＝下架但可检索只读）已覆盖该语义，二者重复。该权限点作为预留位保留在权限树中，界面上不出现任何入口；是否在 M6 清理权限树（会牵动 PRD §3.2 与 `data.sql` 的角色权限条数）留待 M6 评审决定。
+
+### 9.5 编辑接口新增必填 `versionNum`（陈旧表单防覆盖，2026-09-23）
+
+**触发**：老师后续课件《4.1 高并发与一致性进阶：乐观锁与 SQL 原子操作》要求"Web 全链路防覆盖"——
+前端携带版本号 → 应用层前置校验 → 版本冲突返回 **409**（该课件称"第一道防线"）。
+
+**改动**：`PUT /api/documents/{id}` 的 `DocumentUpdateDtoReq` 新增**必填** `versionNum`；
+与库中当前 `version_num` 不一致 → `409 CONFLICT_STATUS`「该文档已被他人修改（当前版本 v3），请刷新后重试」；
+缺失 → `400`「缺少文档版本号，请刷新页面后重试」。**端点总数不变（仍 57 个），不新增接口。**
+
+**为什么复用 `version_num` 而不新增 `lock_version` + JPA `@Version`**：`version_num` 是业务版本号
+（每次正文写入或状态流转 +1，BR-06），它天然就是"用户打开编辑页时读到的那一版"的标识；
+而新增一列乐观锁会让"状态流转"与"并发冲突检测"两套语义互相污染（提交/审核/归档/回收都会 +1，
+挂上 `@Version` 后这些正常操作会在高并发下开始抛冲突），且要给 14 条保存路径都评估重试语义。
+取舍与回退方案见 `ARCHITECTURE.md §17 ADR-07`（已按本次决定改写，并保留原决策的作废说明）。
+
+**影响面**：① 前端 M5 编辑页保存时必须回传详情接口返回的 `versionNum`，并对 409 给出"刷新后重试"提示
+（预览稿 v8.2 已在「设计系统 → 四态与提示」与「与前端的落地接口对照」登记）；② `verify-m4-http.ps1`
+6 处编辑调用同步补字段，新增 3 条断言（过期版本 409 / 冲突后内容分毫不动 / 缺版本号 400）；
+③ OpenAPI 与 GLOSSARY 同步。
 
 ---
 

@@ -1,5 +1,8 @@
 # verify-db-deep.ps1 -- deep database verification (pure ASCII, re-runnable)
-# Usage: $env:DB_PASSWORD='...'; powershell -NoProfile -ExecutionPolicy Bypass -File verify-db-deep.ps1
+# Usage: $env:MYSQL_ROOT_PASSWORD='...'; powershell -NoProfile -ExecutionPolicy Bypass -File verify-db-deep.ps1
+#   (legacy var name $env:DB_PASSWORD still works, but prefer MYSQL_ROOT_PASSWORD:
+#    DB_PASSWORD is ALSO interpolated by Spring in application-dev/prod.yml as the
+#    campusswap_dev password -- mixing the two caused a real 6-test failure on 2026-09-23.)
 # Angles NOT covered by verify-m2.ps1:
 #   D1 schema.sql (DDL file) vs live database, column by column
 #   D2 logical foreign keys: orphan-row detection (we deliberately have no DB FKs)
@@ -11,7 +14,7 @@
 param(
   [string]$Mysql    = 'D:\DevEnv\03_MySQL\bin\mysql.exe',
   [string]$User     = 'root',
-  [string]$Password = $env:DB_PASSWORD,
+  [string]$Password = $(if ($env:MYSQL_ROOT_PASSWORD) { $env:MYSQL_ROOT_PASSWORD } else { $env:DB_PASSWORD }),
   [string]$Database = 'campusswap_db',
   [string]$Repo     = 'D:\DevEnv\projects\campusswap'
 )

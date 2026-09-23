@@ -315,6 +315,13 @@ public class DocumentServiceImpl implements DocumentService {
         if (doc.getStatus() == DocumentStatus.TRASH) {
             throw new BusinessException(ErrorCode.CONFLICT_STATUS, "文档已在回收站中，请先恢复");
         }
+        // 陈旧表单防覆盖（课件 4.1「Web 全链路防覆盖」的应用层那一层）：
+        // 请求体带的是"前端打开编辑页时读到的那一版"，与库中当前版本不一致说明中途已被改过，
+        // 直接 409 让用户刷新，绝不静默覆盖别人的改动。见 ARCHITECTURE §17 ADR-07。
+        if (!java.util.Objects.equals(req.versionNum(), doc.getVersionNum())) {
+            throw new BusinessException(ErrorCode.CONFLICT_STATUS,
+                    "该文档已被他人修改（当前版本 v" + doc.getVersionNum() + "），请刷新后重试");
+        }
 
         Long categoryId = resolveCategoryId(req.categoryId(), false);
         List<Long> newTagIds = req.tagIds() == null ? null : validateTagIds(req.tagIds());

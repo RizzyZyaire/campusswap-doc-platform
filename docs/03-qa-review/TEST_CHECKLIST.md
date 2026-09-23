@@ -45,11 +45,12 @@
 
 | 脚本 | 项数 | 结果 |
 |---|---|---|
-| `verify-m4-http.ps1`（接口验收，含 17 项 SQL 预算） | **218** | 全绿（2026-09-23 实测 PASS=218 / FAIL=0） |
+| `verify-m4-http.ps1`（接口验收，含 17 项 SQL 预算 + 3 项陈旧表单断言） | **221** | 全绿（2026-09-23 晚实测 PASS=221 / FAIL=0） |
 | `verify-m4.ps1`（静态自检） | **30** | 全绿 |
 | `verify-m3-http.ps1`（复跑，AC-08.1/08.3 证据 + §8b 自助改密） | **142** | 全绿（2026-09-23 实测 PASS=142 / FAIL=0） |
 | `verify-m0/m1/api-spec/m2/db-deep`（回归复跑） | 13 / 15 / 24 / **17** / 9 | 全绿 |
-| `ui-preview.smoke.mjs`（预览稿自检，非产品机检） | **200** | 全绿（v6 视觉复核后 +39） |
+| `mvnw test`（JUnit 白盒，课件 4.1/5.1 的 DoD 项，非产品机检） | **4 类 / 6 用例** | 全绿（2026-09-23 实测 Tests run: 6, Failures: 0, Errors: 0） |
+| `ui-preview.smoke.mjs`（预览稿自检，非产品机检） | **211** | 全绿（v8.2 契约登记后 +2） |
 
 > **2026-09-23 新增覆盖（M5 前置三项变更）**：`verify-m4-http.ps1` 的 **§US-04b**（全文检索：正文only 关键词、
 > `matchedIn=content/title/summary`、`highlight` 的 `<em>` 包裹、布尔符号注入不报错、`sort=relevance` 行为、
@@ -59,7 +60,24 @@
 > 新密码登录 200、跑完自动还原种子密码）；`verify-m2.ps1` **C13b**（`ft_doc_search` 存在且列序
 > = `title,summary,content_md` 且带 ngram 解析器）。
 >
-> 全量合计：**产品机检 504 项**（原 420 → +84：m2 +1、m3-http +17、m4-http +66）+ 预览稿自检 **200** 项（v6 视觉复核后 +39）= **704 项，全部 0 失败**。
+> 全量合计：**产品机检 507 项**（504 → +3）+ **JUnit 白盒 6 用例** + 预览稿自检 **211** 项（200 → +2 后为 211）= **724 项，全部 0 失败**。
+
+> **2026-09-23 晚间新增覆盖（课件 4.1 / 5.1 对齐，详见 `COURSEWARE-CLOSURE.md`）**：
+>
+> ① `verify-m4-http.ps1` 新增 **3 条陈旧表单断言**：过期 `versionNum` → 409、冲突后标题分毫不动、缺 `versionNum` → 400
+> （6 处编辑调用同步补 `versionNum`，故脚本项数 218 → **221**）；
+>
+> ② 新增 **JUnit 白盒通道**（`mvnw test`，4 类 6 用例）：
+> `ViewCountConcurrencyTest`（100 线程并发自增 = 恰好 +100，课件 4.1 DoD④）、
+> `BulkUpdateStalenessTest`（同一事务"读→批量自增→再读"的对照实验，证明 `clearAutomatically` 不是装饰）、
+> `TagBindingConsistencyTest`（证明 `flushAutomatically` 不是装饰，锁死本轮被机检抓到的"关联行被丢掉"缺陷）、
+> `PasswordHashCompatTest`（官方 `BCryptPasswordEncoder` 能校验库里既有的 `$2b$10$` 哈希，且双向兼容）。
+> 运行需要 MySQL 与 Redis 在跑；`src/test/resources/application-test.yml` 把连接池放大到 120 以保证真并发；
+> **口令走专属变量** `CAMPUSSWAP_TEST_DB_USER` / `CAMPUSSWAP_TEST_DB_PASSWORD`（默认 `campusswap_dev` / 见配置），
+> **不要**在同一个终端里 export `DB_PASSWORD` 再跑测试 —— 那个名字是**机检脚本要的 root 口令**，
+> Spring 会把同名变量插进测试数据源，导致 6 个用例全报 `Access denied ... (using password: YES)`（2026-09-23 实测踩到，见 `COURSEWARE-CLOSURE.md §3.6`）；
+>
+> ③ 预览稿自检 200 → **211**：v8.2 增加"409 版本冲突提示与 toast"、"落地接口对照登记必填 `versionNum`"两条断言。
 
 ## 状态机覆盖（PRD §4.2 的 T1~T11 与本文件的 T11 登记）
 

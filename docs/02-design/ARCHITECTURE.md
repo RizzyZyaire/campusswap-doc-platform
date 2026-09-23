@@ -539,6 +539,28 @@ public interface DocumentRepository extends JpaRepository<Document, Long>,
 > ① `findById` 取用户（BCrypt 校验旧密码）② `UPDATE sys_user` 写新哈希；踢会话是 Redis 操作
 > （`user:tokens:{userId}`，走 `TxUtil.afterCommit`），**不计入** SQL 条数。
 
+### 10.6 `@Modifying` 的两个参数必须成对出现（2026-09-23 加固 + 实测踩坑）
+
+全工程 **19 处** `@Modifying`（8 个仓储）统一写成
+**`@Modifying(clearAutomatically = true, flushAutomatically = true)`**。
+
+| 参数 | 解决什么 | 不写会怎样（均为实测） |
+|---|---|---|
+| `clearAutomatically = true` | 批量 SQL **绕过**持久化上下文，执行后不清就会留下旧对象：同一事务里"先读 → 批量自增 → 再读"读到的是旧值 | 课件《4.1》称之为"一级缓存脏读"，其 DoD 明文要求带这个参数。白盒对照用例见 `BulkUpdateStalenessTest`：用原生 `em.createQuery(...).executeUpdate()`（等价于没加参数的 `@Modifying`）时，第二次读**仍是旧值**，而库里其实已经 +1 |
+| `flushAutomatically = true` | 执行批量语句**之前**先把挂起改动刷下去 | **只加 clear 会丢数据**：`doc_document_tag_rel` 用 `@EmbeddedId` 复合主键，`saveAll` 的新行**不会立即 INSERT**；紧跟其后的标签计数批量更新查的是 `doc_tag`（查询空间不含关联表），Hibernate 的自动 flush 因此**不刷**这批行，而随后的 `clear()` 把它们**直接丢掉** —— 现象是"标签计数 +1、关联表却 0 行、详情 `tags` 为空" |
+
+> **本轮现场记录**：只加 `clearAutomatically` 的版本被 `verify-m4-http.ps1` 的
+> `US02.create.tags.count` / `US06.edit.tags.count` 两条断言当场抓住（**216/218**）；
+> 定位到根因后补上 `flushAutomatically`，复验 **221/221** 全绿，并新增回归测试
+> `TagBindingConsistencyTest`（Service 层真实走一遍"建文档 + 打 2 个标签"，
+> 同时断言响应 tags=2、关联表 2 行、两个标签计数各 +1、版本留痕 1 条）。
+>
+> **19 处逐个复核结论**：每处在批量语句执行点之前都已 `saveAndFlush` 或本来就没有挂起改动，
+> 因此补 `flushAutomatically` 不改变原有 SQL 条数预算（实测 17 项预算断言全部不变）。
+> 其中 4 处是**预留方法**（`TagRepository#updateUseCount`、`DeptRoleRepository#deleteByRoleId`、
+> `UserRoleRepository#deleteByRoleId`、`RolePermissionRepository#deleteByPermissionId`，当前无调用方），
+> 统一加参数只为规则一致、不留"下次忘了"的坑。
+
 ---
 
 ## 11. 文件上传与静态资源
@@ -561,7 +583,8 @@ public interface DocumentRepository extends JpaRepository<Document, Long>,
 |---|---|---|
 | 收藏 / 取消收藏 | 复合主键 `(user_id, document_id)` + 先查后插；重复收藏视为**幂等成功** | `BR-10` |
 | 重复提交发布 | Service 先校验 `status == DRAFT`，否则 409 | 状态机 `T2` |
-| 并发编辑同一文档 | 不做乐观锁（`@Version`）；以 `version_num` 单调递增 + 后写覆盖 | 单机课程项目，业务上"最后保存者生效"可接受，避免 `ObjectOptimisticLockingFailureException` 噪声 |
+| 并发编辑同一文档 | **应用层版本比对**：`PUT /api/documents/{id}` 必填 `versionNum`，与库中当前 `version_num` 不一致即 **409**；不做 JPA `@Version` 乐观锁 | 2026-09-23 变更（原为"后写覆盖"）：课件 4.1 的"陈旧表单校验"要求拦住"两人同时编辑、后保存者静默覆盖先保存者"，见 §17 **ADR-07** |
+| 高频计数（阅读量 / 收藏数 / 标签引用数） | 单条原子 SQL（`SET x = x + n`）+ `@Modifying(clearAutomatically = true, flushAutomatically = true)` | 课件 4.1"第二类丢失更新"的正解；两个参数**必须成对出现**，只加 clear 会丢掉未 flush 的挂起写入（2026-09-23 实测踩到，见 §10.6） |
 | 阅读量并发 | Redis `SETNX view:doc:{docId}:{userId}` 成功才 `UPDATE ... SET view_count = view_count + 1` | `BR-09` + 原子自增 |
 | 权限缓存与授权变更 | 事务提交后再 `DEL` 缓存 | 避免"缓存已删、事务回滚"导致读到旧权限的窗口 |
 | 分类删除 | 先校验无子分类且分类下无文档，再软删除 | `BR-13` |
@@ -651,10 +674,11 @@ graph LR
 | ADR-04 | 认证方案 | JWT / 随机 token + Redis | **随机 token**：可主动失效（登出、停用、改密），实现更短更可控 |
 | ADR-05 | 权限模型 | 仅角色 / 角色 + 部门 + 直授 | **三者合并**：覆盖"岗位继承"与"个别补权"两个真实场景，且课件表清单含 `sys_user_permission` |
 | ADR-06 | 中间表形态 | 各带自增 `id` / 复合主键 | **复合主键**：天然去重，少一列少一个索引，与课件示例一致 |
-| ADR-07 | 并发控制 | `@Version` 乐观锁 / 状态机 + 后写覆盖 | **不做乐观锁**：单机课程项目，`version_num` 已能表达业务版本；乐观锁会给前端增加 `409` 噪声 |
+| ADR-07 | 并发控制 | ① JPA `@Version` 乐观锁 ② **应用层版本比对（现）** ③ 状态机 + 后写覆盖（原决策） | **2026-09-23 变更为 ②**（原为 ③"不做乐观锁、后写覆盖"）：`PUT /api/documents/{id}` **必填** `versionNum`，与库中当前 `version_num` 不一致即 **409**「该文档已被他人修改（当前版本 v3），请刷新后重试」。<br>**为什么不选 ①**：`version_num` 本身就是业务版本号（每次正文写入或状态流转 +1，BR-06），复用它就能拿到课件《4.1》"陈旧表单校验 + 409 结构化 JSON"的全部语义；而新增 `lock_version` 列 + `@Version` 会让"状态流转"与"并发冲突检测"两套语义互相污染（提交/审核/归档/回收都 +1，挂上 `@Version` 后这些正常操作会在并发下开始抛冲突），还要给 14 条保存路径逐一评估重试语义 —— 收益只是"能在日志里看到一条 `WHERE id=? AND version=?`"。<br>**触发**：老师课件《4.1 高并发与一致性进阶：乐观锁与 SQL 原子操作》把"Web 全链路防覆盖"列为 DoD。<br>**回退**：若日后确实需要数据库级兜底，再加独立列 `lock_version` 即可，`versionNum` 这一层契约不受影响。<br>**记录**：`docs/03-qa-review/COURSEWARE-CLOSURE.md` §2、`API_SPECIFICATION §9.5` |
 | ADR-08 | 接口文档 | Swagger/OpenAPI 注解 / Markdown 契约 + Apifox | **Markdown + Apifox**：契约先于代码（M1 产出），不被注解牵着走 |
 | ADR-09 | 表结构管理 | `ddl-auto: update` / `schema.sql` | **`schema.sql`**：结构可评审、可版本化，老师红线明确禁止 `update` |
 | ADR-10 | 数据库名 | `docs_db`（旧计划）/ `campusswap_db` | **`campusswap_db`**：按老师"项目名_db"约定（如 `dochub_db`），并与练习项目的 `docs_db` 隔离 |
+| ADR-11 | 验收通道 | 只用外部 PowerShell 机检 / 只用 JUnit / **两者并存（现）** | **2026-09-23 新增**：外部机检（504 项，黑盒、可复跑、覆盖 HTTP 契约与 SQL 预算）+ **JUnit 白盒测试 4 类 6 用例**（并发计数 100 线程、一级缓存脏读对照、标签绑定一致性、密码哈希兼容）。<br>**为什么必须补 JUnit**：课件 6 份里有 4 份的 DoD 点名"单元与集成测试绿灯"，而 PowerShell 只能串行压 HTTP —— **"100 线程并发 = 恰好 +100"这类断言黑盒做不到**；且本轮 `@Modifying` 只加 `clearAutomatically` 造成的"关联行被丢"缺陷，白盒测试能在几秒内定位。<br>**分工**：白盒管并发/持久化语义，黑盒管接口契约与端到端。测试 profile 把 Hikari 连接池放大到 120 以保证真并发（`src/test/resources/application-test.yml`） |
 
 ---
 
@@ -683,7 +707,8 @@ graph LR
 | 统一响应/异常/错误码与 GLOSSARY v2.1 一致 | ✅ | §9 / GLOSSARY §4.2 |
 | JPA 规约与老师七戒律一致 | ✅ | §10 |
 | 每个机制都说明了"解决什么问题、不做会怎样" | ✅ | §16 |
-| 与课件示例的口径差异均有 ADR 记录 | ✅ | §17 |
+| 与课件示例的口径差异均有 ADR 记录 | ✅ | §17（ADR-07 已于 2026-09-23 变更、ADR-11 新增） |
+| 并发计数与陈旧表单有可复跑证据 | ✅ | §10.6 / §12 / ADR-07；JUnit 4 类 6 用例 + `verify-m4-http.ps1` 3 条新断言 |
 
 ---
 

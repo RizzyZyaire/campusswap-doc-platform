@@ -16,6 +16,15 @@ import org.springframework.transaction.annotation.Transactional;
  * <p>写入纪律（ARCHITECTURE §10.1 A3）：标签增删<b>只走本仓储</b>（清空重插），
  * 禁止对 {@code Document.tags} 只读集合调用 {@code add/remove}。</p>
  *
+ * <p><b>实测踩坑（2026-09-23，A1 加固时被机检抓到）</b>：本表用 {@code @EmbeddedId} 复合主键，
+ * {@code saveAll} 的新行<b>不会立即 INSERT</b>，而是挂在持久化上下文里等 flush。
+ * 若其后调用的 {@code @Modifying} 批量语句只带 {@code clearAutomatically} 而没有
+ * {@code flushAutomatically}，Hibernate 的自动 flush 会按「查询空间」判断——批量语句查的是
+ * {@code doc_tag}，与待插入的 {@code doc_document_tag_rel} 无关，于是**不 flush**，
+ * 紧接着的 {@code clear()} 会把这批待插入的行直接丢掉：表现为"标签计数 +1 了、关联表却是 0 行"。
+ * 因此本工程 19 处 {@code @Modifying} 一律写成
+ * {@code clearAutomatically = true, flushAutomatically = true}（先 flush 再执行、执行后清缓存）。</p>
+ *
  * @author Zyaire
  */
 public interface DocumentTagRelRepository extends JpaRepository<DocumentTagRel, DocumentTagRelId> {
@@ -33,13 +42,13 @@ public interface DocumentTagRelRepository extends JpaRepository<DocumentTagRel, 
     long countByTagId(Long tagId);
 
     /** 清空某文档的标签（重新打标签前先清空）。 */
-    @Modifying
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Transactional
     @Query("delete from DocumentTagRel r where r.documentId = :documentId")
     int deleteByDocumentId(@Param("documentId") Long documentId);
 
     /** 删除某标签的全部关系（删除标签时先清理关系）。 */
-    @Modifying
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Transactional
     @Query("delete from DocumentTagRel r where r.tagId = :tagId")
     int deleteByTagId(@Param("tagId") Long tagId);

@@ -32,7 +32,7 @@ public interface FavoriteRepository extends JpaRepository<Favorite, FavoriteId> 
     long countByDocumentId(Long documentId);
 
     /** 取消收藏（幂等：不存在则影响 0 行）。 */
-    @Modifying
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Transactional
     @Query("delete from Favorite f where f.userId = :userId and f.documentId = :documentId")
     int deleteByUserIdAndDocumentId(@Param("userId") Long userId, @Param("documentId") Long documentId);
@@ -49,7 +49,7 @@ public interface FavoriteRepository extends JpaRepository<Favorite, FavoriteId> 
      * @param documentId 文档 ID
      * @return 删除行数
      */
-    @Modifying
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Transactional
     @Query(value = "DELETE FROM doc_favorite WHERE document_id = :documentId", nativeQuery = true)
     int deleteByDocumentIdPhysically(@Param("documentId") Long documentId);

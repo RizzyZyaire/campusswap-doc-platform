@@ -4476,6 +4476,7 @@
                                                                 },
                                        "DocumentUpdateDtoReq":  {
                                                                     "properties":  {
+                                                                                       "versionNum":  {"type":  "integer", "minimum":  1, "description":  "versionNum（必填）：带详情接口返回的那一版；与库中当前版本不一致返回 409（陈旧表单防覆盖，ARCHITECTURE 17 ADR-07）"},
                                                                                        "id":  {
                                                                                                   "type":  "string",
                                                                                                   "description":  "必须与路径 {id} 一致"
@@ -4510,7 +4511,8 @@
                                                                     "type":  "object",
                                                                     "required":  [
                                                                                      "id",
-                                                                                     "title"
+                                                                                     "title",
+                                                                                     "versionNum"
                                                                                  ]
                                                                 },
                                        "DocumentAuditDtoReq":  {

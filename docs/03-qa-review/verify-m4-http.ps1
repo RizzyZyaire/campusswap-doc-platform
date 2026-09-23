@@ -284,26 +284,32 @@ Check 'US05.view-count.dedup' $view2.Data.data.viewCount $view1.Data.data.viewCo
 Write-Host ''
 Write-Host '[US-06] edit + version'
 # -----------------------------------------------------------------------------
-Check 'US06.id-mismatch.http' (Api -Method PUT -Path ('/api/documents/' + $docA) -Token $admin -Body @{ id = '999999'; title = 'x'; contentMd = 'y' }).Status 400
+Check 'US06.id-mismatch.http' (Api -Method PUT -Path ('/api/documents/' + $docA) -Token $admin -Body @{ id = '999999'; versionNum = 2; title = 'x'; contentMd = 'y' }).Status 400
 $edit = Api -Method PUT -Path ('/api/documents/' + $docA) -Token $admin -Body @{
-    id = $docA; title = ($titleA + ' v2'); summary = 'edited'; contentMd = "# M4`nbody edited"
+    id = $docA; versionNum = 2; title = ($titleA + ' v2'); summary = 'edited'; contentMd = "# M4`nbody edited"
     categoryId = '1'; tagIds = @('1'); priceCents = 123
 }
 Check 'US06.edit.http' $edit.Status 200
 Check 'US06.edit.versionNum' $edit.Data.data.versionNum 3
 Check 'US06.edit.priceCents' $edit.Data.data.priceCents 123
 Check 'US06.edit.tags.count' ($edit.Data.data.tags.Count) 1
+# v2.6 (B1-1 stale-form guard): stale versionNum must 409 and content must stay untouched; missing versionNum must 400
+Check 'US06.edit-stale-version.http' (Api -Method PUT -Path ('/api/documents/' + $docA) -Token $admin -Body @{
+    id = $docA; versionNum = 2; title = ($titleA + ' stale'); contentMd = 'stale write' }).Status 409
+Check 'US06.edit-stale-content-unchanged' (Api -Method GET -Path ('/api/documents/' + $docA) -Token $admin).Data.data.title ($titleA + ' v2')
+Check 'US06.edit-no-version.http' (Api -Method PUT -Path ('/api/documents/' + $docA) -Token $admin -Body @{
+    id = $docA; title = 'no version'; contentMd = 'no version' }).Status 400
 $editVersions = Api -Method GET -Path ('/api/documents/' + $docA + '/versions?pageSize=10') -Token $admin
 Check 'US06.version-record-added' $editVersions.Data.data.total 3
 Check 'US06.version.newest-is-edit' $editVersions.Data.data.list[0].changeType 'EDIT'
-Check 'US06.edit-others-doc.http' (Api -Method PUT -Path ('/api/documents/' + $docA) -Token $staff -Body @{ id = $docA; title = 'hacked'; contentMd = 'hacked' }).Status 403
+Check 'US06.edit-others-doc.http' (Api -Method PUT -Path ('/api/documents/' + $docA) -Token $staff -Body @{ id = $docA; versionNum = 3; title = 'hacked'; contentMd = 'hacked' }).Status 403
 Check 'US06.content-unchanged-after-403' (Api -Method GET -Path ('/api/documents/' + $docA) -Token $admin).Data.data.title ($titleA + ' v2')
 Check 'US06.versions-others.http' (Api -Method GET -Path ('/api/documents/' + $docA + '/versions') -Token $staff).Status 403
 
 $archived = Api -Method POST -Path ('/api/documents/' + $docA + '/archive') -Token $docAdmin -Body @{ remark = 'archive for read-only check' }
 Check 'US06.archive.http' $archived.Status 200
 Check 'US06.archive.status' $archived.Data.data.status 'ARCHIVED'
-Check 'US06.edit-archived.http' (Api -Method PUT -Path ('/api/documents/' + $docA) -Token $admin -Body @{ id = $docA; title = 'cannot'; contentMd = 'cannot' }).Status 409
+Check 'US06.edit-archived.http' (Api -Method PUT -Path ('/api/documents/' + $docA) -Token $admin -Body @{ id = $docA; versionNum = 4; title = 'cannot'; contentMd = 'cannot' }).Status 409
 Check 'US06.republish.http' (Api -Method POST -Path ('/api/documents/' + $docA + '/republish') -Token $docAdmin).Status 200
 Check 'US06.republish.status' (Api -Method GET -Path ('/api/documents/' + $docA) -Token $admin).Data.data.status 'PUBLISHED'
 

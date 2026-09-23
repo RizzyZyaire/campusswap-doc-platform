@@ -1,13 +1,15 @@
 # verify-m2.ps1 -- M2 database self-check (pure ASCII output only!)
 # Usage:
-#   $env:DB_PASSWORD='123456'; powershell -NoProfile -ExecutionPolicy Bypass -File verify-m2.ps1
+#   $env:MYSQL_ROOT_PASSWORD='123456'; powershell -NoProfile -ExecutionPolicy Bypass -File verify-m2.ps1
+#   (legacy $env:DB_PASSWORD still works; prefer MYSQL_ROOT_PASSWORD -- DB_PASSWORD is also
+#    interpolated by Spring as the campusswap_dev password in application-dev/prod.yml)
 # Re-runnable. Requires the campusswap_db schema to be loaded.
 # NOTE: keep this file pure ASCII -- PS 5.1 reads BOM-less UTF-8 as ANSI and CJK literals break the parser.
 
 param(
   [string]$Mysql    = 'D:\DevEnv\03_MySQL\bin\mysql.exe',
   [string]$User     = 'root',
-  [string]$Password = $env:DB_PASSWORD,
+  [string]$Password = $(if ($env:MYSQL_ROOT_PASSWORD) { $env:MYSQL_ROOT_PASSWORD } else { $env:DB_PASSWORD }),
   [string]$Database = 'campusswap_db'
 )
 

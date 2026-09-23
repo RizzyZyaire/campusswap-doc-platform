@@ -1,0 +1,41 @@
+# 自动化测试专用 profile（由 @ActiveProfiles("test") 激活，也可 `mvnw test -Dspring.profiles.active=test`）
+#
+# 为什么需要它：dev 的 Hikari 连接池是 maximum-pool-size=10，而「100 线程并发自增」这类
+# 测试需要 100 个线程真的同时打到数据库上。池子只有 10 的话，100 个线程会全部堵在池子上
+# 排队执行，断言照样通过，但那是**假并发**（等于串行验证）。这里把池子放大到 120。
+#
+# 库与 Redis 与 dev 完全一致（campusswap_db），测试只碰自己插入的临时行并在 @AfterEach 清理，
+# 不动种子数据。详见 docs/03-qa-review/COURSEWARE-CLOSURE.md。
+spring:
+  datasource:
+    url: jdbc:mysql://localhost:3306/campusswap_db?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true
+    # 注意：这里刻意不叫 DB_USERNAME / DB_PASSWORD。
+    # 机检脚本 verify-m2.ps1 / verify-db-deep.ps1 要求 $env:DB_PASSWORD = root 的口令（123456），
+    # 而 Spring 会把同名环境变量插值进来 —— 2026-09-23 实测踩到：
+    # 先跑机检再跑 mvnw test，测试 JVM 会拿 root 口令去连 campusswap_dev，6 个用例全部
+    # "Access denied ... (using password: YES)" 报错（而 dev 应用靠已建好的连接池照常工作，
+    # 所以三个 HTTP 机检仍然全绿，极具迷惑性）。改用专属变量名后彻底解耦。
+    username: ${CAMPUSSWAP_TEST_DB_USER:campusswap_dev}
+    password: ${CAMPUSSWAP_TEST_DB_PASSWORD:CampusSwap@2026}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    hikari:
+      maximum-pool-size: 120
+      minimum-idle: 2
+      connection-timeout: 30000
+  jpa:
+    hibernate:
+      # 表结构只来自 backend/sql/schema.sql，测试同样不允许 Hibernate 改表
+      ddl-auto: none
+    # 并发测试会打 100 条 SQL；关掉 show-sql，输出留给断言结果
+    show-sql: false
+    open-in-view: false
+  data:
+    redis:
+      host: localhost
+      port: 6379
+      database: 0
+      timeout: 3000ms
+
+logging:
+  level:
+    com.campusswap: warn
