@@ -23,6 +23,19 @@ public final class DocumentColumns {
                     + " d.price_cents, d.view_count, d.favorite_count, d.created_at, d.updated_at,"
                     + " d.updated_by, d.content_md, d.derived_from_id, d.reject_reason";
 
+    /**
+     * 列表投影列清单（13 列，<b>不含 {@code content_md}</b>）。
+     *
+     * <p>下标与 {@link #COLUMNS} 的<b>前 13 列完全一致</b>，因此可直接交给
+     * {@link DocumentListRow#of(Object[])} 按下标映射。全文检索链路用它替换 {@link #COLUMNS}：
+     * 命中片段由 MySQL 侧 {@code SUBSTRING} 截断后单独返回（见 {@code DocumentQueryRepositoryImpl}），
+     * 整篇正文（MEDIUMTEXT）绝不进应用（课件 3.1 红线三）。</p>
+     */
+    public static final String LIST_COLUMNS =
+            "d.id, d.title, d.summary, d.category_id, d.created_by, d.status, d.version_num,"
+                    + " d.price_cents, d.view_count, d.favorite_count, d.created_at, d.updated_at,"
+                    + " d.updated_by";
+
     /** 下标：主键。 */
     public static final int ID = 0;
     /** 下标：标题。 */

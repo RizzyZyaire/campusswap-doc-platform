@@ -7,6 +7,7 @@ import com.campusswap.common.security.RequiresPermission;
 import com.campusswap.document.dto.DocumentCreateDtoReq;
 import com.campusswap.document.dto.DocumentDeriveDtoReq;
 import com.campusswap.document.dto.DocumentDestroyDtoReq;
+import com.campusswap.document.dto.DocumentManageDtoReq;
 import com.campusswap.document.dto.DocumentMineDtoReq;
 import com.campusswap.document.dto.DocumentSearchDtoReq;
 import com.campusswap.document.dto.DocumentTrashDtoReq;
@@ -64,6 +65,18 @@ public class DocumentController {
     @RequiresPermission("doc:mine")
     public ResponseResult<PageVo<DocumentVo>> mine(@Valid @ModelAttribute DocumentMineDtoReq req) {
         return ResponseResult.ok(documentService.mine(req));
+    }
+
+    /**
+     * 治理用全状态列表（含回收站行，权限 {@code doc:manage}，API_SPECIFICATION §9.2）。
+     *
+     * @param req 查询条件
+     * @return 分页结果
+     */
+    @GetMapping("/api/documents/manage")
+    @RequiresPermission("doc:manage")
+    public ResponseResult<PageVo<DocumentVo>> manage(@Valid @ModelAttribute DocumentManageDtoReq req) {
+        return ResponseResult.ok(documentService.manage(req));
     }
 
     /**

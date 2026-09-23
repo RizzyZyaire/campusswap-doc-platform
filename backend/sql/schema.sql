@@ -170,6 +170,10 @@ CREATE TABLE `sys_dept_role` (
 --      · idx_doc_cat_status_updated(category_id, status, updated_at, deleted) → 命中「分类+状态+时间倒序」
 --      · idx_doc_status_updated(status, updated_at, deleted)                  → 命中「仅状态+时间倒序」（审核队列/我的文档）
 --        两者不可互相替代：仅按 status 查询无法使用前者（跳过最左列 category_id）
+--    全文检索索引（UI_UX_SPECIFICATION §10.4，实测 MySQL 8.0.46 / ngram_token_size=2）:
+--      · ft_doc_search(title, summary, content_md) WITH PARSER ngram → 中文按 2-gram 切分，2 字及以上关键词可用
+--      · 只允许 MATCH(title, summary, content_md) 这一种列组合（子集 MATCH 会报 ERROR 1191）
+--      · perf-fixture.sql 造数后必须 ANALYZE TABLE doc_document（全文索引统计可见性）
 -- -----------------------------------------------------------------------------
 DROP TABLE IF EXISTS `doc_document`;
 CREATE TABLE `doc_document` (
@@ -197,7 +201,9 @@ CREATE TABLE `doc_document` (
     -- updated_at 必须进索引且紧随等值列之后，否则 ORDER BY updated_at DESC 会退化成内存排序
     -- （实测：旧写法 (created_by, deleted) 需读 10003 行 + filesort = 28.4ms；改为本写法后无排序）
     INDEX `idx_doc_created_by_updated` (`created_by`, `updated_at`, `deleted`),
-    INDEX `idx_doc_derived_from` (`derived_from_id`)
+    INDEX `idx_doc_derived_from` (`derived_from_id`),
+    -- 全文检索（ngram 解析器）：中文按 2-gram 切分，供 MATCH(...) AGAINST(? IN BOOLEAN MODE) 使用
+    FULLTEXT KEY `ft_doc_search` (`title`, `summary`, `content_md`) WITH PARSER ngram
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='文档核心业务主表';
 
 -- -----------------------------------------------------------------------------

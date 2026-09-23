@@ -156,8 +156,8 @@ foreach ($f in $ctrlFiles) {
     }
 }
 Check 'C11a 5 controllers' ($ctrlFiles.Count -eq 5) ('count=' + $ctrlFiles.Count)
-Check 'C11b 25 endpoints (auth3/user6/role6/perm4/dept6)' ($endpoints.Count -eq 25) ('count=' + $endpoints.Count)
-Check 'C11c 22 guarded endpoints (@RequiresPermission), auth trio unguarded' ($permCount -eq 22) ('count=' + $permCount)
+Check 'C11b 26 endpoints (auth4/user6/role6/perm4/dept6)' ($endpoints.Count -eq 26) ('count=' + $endpoints.Count)
+Check 'C11c 22 guarded endpoints (@RequiresPermission); auth login/logout/me/password unguarded' ($permCount -eq 22) ('count=' + $permCount)
 
 # --- C12: permission codes used by controllers exist in seed data -----------
 $data = Read-All (Join-Path $sqlDir 'data.sql')
@@ -173,7 +173,7 @@ foreach ($e in $endpoints) {
     $path = $e.Substring($e.IndexOf(' ') + 1)
     if ($spec -notlike ('*' + $path + '*')) { $notInSpec += $e }
 }
-Check 'C13 all 25 endpoints documented in API_SPECIFICATION.md' ($notInSpec.Count -eq 0) ('missing=' + ($notInSpec -join ','))
+Check 'C13 all 26 endpoints documented in API_SPECIFICATION.md' ($notInSpec.Count -eq 0) ('missing=' + ($notInSpec -join ','))
 
 # --- C14: the four auth gates -----------------------------------------------
 $gates = @('common\security\LoginInterceptor.java', 'common\security\SecurityContext.java',

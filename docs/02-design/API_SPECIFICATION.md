@@ -127,7 +127,7 @@ public record ResponseResult<T>(int code, String message, T data) { }
 | `deptId` | string | 可空 | 部门筛选 |
 | `startTime` | string | 可空，`yyyy-MM-dd HH:mm:ss` | 起始时间（闭区间），按 `created_at` 过滤 |
 | `endTime` | string | 可空，`yyyy-MM-dd HH:mm:ss` | 结束时间；与 `startTime` 成对使用，`startTime > endTime` 返回 400「开始时间不能晚于结束时间」 |
-| `sort` | `DocumentSort` | 可空，默认 `updatedAt_desc` | 列表排序方式，取值 `updatedAt_desc` / `publishAt_desc` / `viewCount_desc` |
+| `sort` | `DocumentSort` | 可空，默认 `updatedAt_desc` | 列表排序方式，取值 `updatedAt_desc` / `publishAt_desc` / `viewCount_desc` / `relevance`（相关度倒序，**仅当 `keyword` ≥ 2 字走全文检索时可用**，否则 400） |
 
 > **排序与命名说明（与前端规范对齐）**：列表排序统一用**单个** `sort` 字段（类型 `DocumentSort`，取值 `updatedAt_desc` / `publishAt_desc` / `viewCount_desc`，默认 `updatedAt_desc`）。`sortOrder` 在本文件中**只有一个语义**——角色 / 权限 / 分类 / 部门 / 标签等实体 VO 的**排序号**（数据库列 `sort_order`，数字），与列表排序无关，二者不得混用。
 > 本节字段清单与 `GLOSSARY.md` §3.6 逐行一致；出参 VO 与 DTO 的字段级真源是 `GLOSSARY.md` **§3.7**（含 `authorId` / `operatorId` 等展示层命名 ↔ 数据库列的映射表）。
@@ -241,6 +241,8 @@ public record ResponseResult<T>(int code, String message, T data) { }
 | | `viewCount` | number | 阅读量 |
 | | `favoriteCount` | number | 收藏数 |
 | | `canEdit` | boolean | 当前用户是否可编辑（Service 计算：属主且状态为 `DRAFT`/`PUBLISHED`） |
+| | `highlight` | string \| null | **仅全文检索分支**（§9.3）：命中的正文片段，命中词两侧各 30 字、命中词以 `<em>` 包裹；命中的是标题/摘要而非正文时为 `null` |
+| | `matchedIn` | string \| null | **仅全文检索分支**（§9.3）：命中字段 `title` / `summary` / `content`；其余列表接口恒为 `null` |
 | `DocumentDetailVo` | **继承 `DocumentVo` 全部字段** | — | 详情页专用，额外字段如下 |
 | | `contentMd` | string | Markdown 正文 |
 | | `derivedFromId` | string \| null | 派生来源文档 ID，原创为 `null` |
@@ -571,7 +573,7 @@ Content-Type: application/json;charset=UTF-8
 | 400 `BAD_REQUEST` | 新密码不合规（长度或字符集） | 新密码需为 8–32 位且包含字母和数字 |
 | 401 `UNAUTHORIZED` | 未登录 | 登录状态已失效，请重新登录 |
 
-- 成功后清理该用户的会话集合 `user:tokens:{userId}`（其它设备强制下线）；前端提示「密码已修改，其它设备需重新登录」。
+- 成功后清理该用户的会话集合 `user:tokens:{userId}` —— **全部会话立即失效（含当前设备）**；前端收到 200 后提示「密码已修改，请重新登录」并跳 `/login`。
 - 与管理员重置 `PUT /api/users/{id}/password`（`sys:user:reset`）并存：前者本人操作，后者管理员代操作，两者共用同一密码强度规则。
 
 ### 4.2 模块 M-02：用户管理（6 条）
@@ -1379,17 +1381,17 @@ Content-Type: application/json;charset=UTF-8
 |---|---|---|---|---|
 | `pageNum` | number | 否 | ≥ 1，默认 1 | 页码必须大于等于1 |
 | `pageSize` | number | 否 | 1–100，默认 10 | 每页条数必须在1到100之间 |
-| `keyword` | string | 否 | ≤ 64 字符；对 `title`、`summary` 做 `LIKE` 模糊匹配 | 关键词长度不能超过64个字符 |
+| `keyword` | string | 否 | ≤ 64 字符；**≥ 2 字走全文检索**（ngram 全文索引覆盖 `title` / `summary` / `content_md`，**能命中正文**，出参带 `highlight` / `matchedIn`）；**不足 2 字**回落 `title`、`summary` 的 `LIKE` 模糊匹配（此时 `highlight` / `matchedIn` 为 `null`） | 关键词长度不能超过64个字符 |
 | `categoryId` | string | 否 | 分类 ID；传父分类 = 含全部子孙分类 | 分类ID格式不正确 |
 | `tagIds` | string[] | 否 | 标签 ID 数组；**AND 命中**（文档需同时包含全部所选标签） | 标签ID格式不正确 |
 | `status` | string | 否 | 本接口只查已发布：可空或 `PUBLISHED`，传其它值返回 400 | 本接口仅支持查询已发布文档 |
 | `startTime` | string | 否 | `yyyy-MM-dd HH:mm:ss`，闭区间；与 `endTime` 成对使用 | 时间格式不正确，应为 yyyy-MM-dd HH:mm:ss |
 | `endTime` | string | 否 | 同上；`startTime > endTime` 报错 | 开始时间不能晚于结束时间 |
-| `sort` | string | 否 | `DocumentSort`：`updatedAt_desc`（默认）/ `publishAt_desc` / `viewCount_desc` | 排序方式仅支持 updatedAt_desc、publishAt_desc、viewCount_desc |
+| `sort` | string | 否 | `DocumentSort`：`updatedAt_desc`（默认）/ `publishAt_desc` / `viewCount_desc` / `relevance`（相关度倒序，**仅全文检索时可用**） | 非法值：排序方式仅支持 updatedAt_desc、publishAt_desc、viewCount_desc、relevance；无关键词（或不足 2 字）时传 `relevance`：排序方式 relevance 仅在关键词检索（2个字及以上）时可用 |
 
 **出参** `PageVo<DocumentVo>`
 
-`DocumentVo` 字段（完整定义见 §2.7.3）：`id`、`title`、`summary`、`categoryId`、`categoryName`、`authorId`、`authorName`、`status`、`versionNum`、`priceCents`、`viewCount`、`favoriteCount`、`canEdit`，另含继承自 `AuditVo` 的 `createdAt`、`createdBy`、`updatedAt`、`updatedBy`。
+`DocumentVo` 字段（完整定义见 §2.7.3）：`id`、`title`、`summary`、`categoryId`、`categoryName`、`authorId`、`authorName`、`status`、`versionNum`、`priceCents`、`viewCount`、`favoriteCount`、`canEdit`、`highlight`、`matchedIn`（后两个**仅全文检索分支**非空），另含继承自 `AuditVo` 的 `createdAt`、`createdBy`、`updatedAt`、`updatedBy`。
 
 **业务规则与错误码**
 
@@ -2077,10 +2079,10 @@ Content-Type: application/json;charset=UTF-8
 | 字段 | 类型 | 必填 | 说明 |
 |---|---|---|---|
 | `status` | string | 否 | `DRAFT` / `PUBLISHED` / `ARCHIVED` / `TRASH`；空 = 全部 |
-| `keyword` | string | 否 | 标题 / 摘要模糊匹配，≤64 字符 |
+| `keyword` | string | 否 | ≤ 64 字符；与检索页**同一套口径**：≥ 2 字走全文检索（能命中正文，出参带 `highlight` / `matchedIn`），不足 2 字回落 `title` / `summary` 模糊匹配 |
 | `categoryId` | string | 否 | 分类 ID；传父分类 = 含全部子孙 |
 | `authorId` | string | 否 | 拟稿人用户 ID（等价 `created_by`；**数据模型没有「发文单位」列，故按拟稿人筛选**） |
-| `startTime` / `endTime` | string | 否 | 更新时间闭区间（`yyyy-MM-dd HH:mm:ss`） |
+| `startTime` / `endTime` | string | 否 | **创建时间**（`created_at`）闭区间（`yyyy-MM-dd HH:mm:ss`），与检索页口径一致 |
 | `sort` | string | 否 | 排序方式，取值同 `DocumentSort` |
 | `pageNum` / `pageSize` | number | 否 | 分页，默认 1 / 10，`pageSize` ≤ 100 |
 
@@ -2095,7 +2097,7 @@ Content-Type: application/json;charset=UTF-8
 | 403 `NO_PERMISSION` | 缺少 `doc:manage` | 无权限执行该操作 |
 
 - **回收站行必须可见**：`status = TRASH` 时数据带 `deleted = 1`，必须走原生 SQL 绕过 `@SQLRestriction`；列序与类型转换复用 `DocumentColumns`，避免治理链路与检索链路出现两套字段口径。
-- SQL 预算：分页 2~3 条（末页免 count），实测值登记在 `ARCHITECTURE §10.5`。
+- SQL 预算：**3~5** 条常数（① 原生分页 ② 作者名批量 ③ 分类名批量；满页多一条分页 count，带 `categoryId` 时再多一条「分类 + 子孙」查询）。实测 **3（末页）/ 4（满页）/ 5（带分类）**，与 `pageSize` 和总行数无关；原始记录见 `ARCHITECTURE §10.5`。
 
 ### 4.8 模块 M-08：分类与标签（8 条）
 
@@ -2545,7 +2547,7 @@ Content-Type: image/png
 | 入参 | `PasswordChangeDtoReq`：`oldPassword`（必填）、`newPassword`（必填，8–32 位且含字母与数字，与 F1-08 同规则） |
 | 出参 | `Void` |
 | 主要错误码 | 400（原密码不正确 / 新密码不合规，中文提示）、401 |
-| 行为 | 校验旧密码 → 更新 `password_hash` → **清空 `user:tokens:{userId}`（踢掉其它会话）** → 200 |
+| 行为 | 校验旧密码 → 更新 `password_hash` → **清空 `user:tokens:{userId}`**（全部会话失效，含当前设备）→ 200 |
 | 与既有接口边界 | 管理员重置 `PUT /api/users/{id}/password`（`sys:user:reset`）保持不变；前端「我的账号」页调用本接口 |
 | 机检增补 | 改密成功后旧 token 请求 401；旧密码错误 400；新密码不合规 400 且提示为中文 |
 
@@ -2559,7 +2561,7 @@ Content-Type: image/png
 | 出参 | `PageVo<DocumentVo>`（含 `status`；回收站行 `deleted=1`，需原生 SQL 绕过 `@SQLRestriction`，列序与类型转换复用 `DocumentColumns`） |
 | 主要错误码 | 400 / 401 / 403 |
 | 与既有接口边界 | `GET /api/documents` 语义**不变**（只返回 `PUBLISHED`，权限 `doc:search`）；治理页只调新接口 |
-| 机检增补 | 含 `TRASH` 返回 200 且行数 ≥1；`staff`/`docadmin` 调用 403；SQL 条数 ≤3（`ARCHITECTURE §10.5` 预算表同步登记） |
+| 机检增补 | 含 `TRASH` 返回 200 且行数 ≥1；`status=DRAFT` 只返回草稿；非法 `status` 400 且提示为中文；`staff` 调用 403（**`docadmin` / `admin` 均可调用** —— `doc:manage` 由 DOC_ADMIN 与 SYS_ADMIN 两个角色持有）；SQL 条数 ≤3（`ARCHITECTURE §10.5` 预算表同步登记） |
 
 ### 9.3 `GET /api/documents` 检索能力增强（全文检索）
 

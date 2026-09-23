@@ -58,8 +58,8 @@ foreach ($f in $ctrlFiles) {
     }
 }
 Check 'D1a 6 document controllers' ($ctrlFiles.Count -eq 6) ('count=' + $ctrlFiles.Count)
-Check 'D1b 30 document endpoints' ($endpoints.Count -eq 30) ('count=' + $endpoints.Count)
-Check 'D1c 30 guarded endpoints (@RequiresPermission)' ($permCount -eq 30) ('count=' + $permCount)
+Check 'D1b 31 document endpoints' ($endpoints.Count -eq 31) ('count=' + $endpoints.Count)
+Check 'D1c 31 guarded endpoints (@RequiresPermission)' ($permCount -eq 31) ('count=' + $permCount)
 
 $spec = Read-All (Join-Path $docsDir '02-design\API_SPECIFICATION.md')
 $notInSpec = @()

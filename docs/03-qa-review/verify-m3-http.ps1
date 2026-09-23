@@ -402,6 +402,47 @@ Check 'grant-effect.reverted.http' (Api -Method GET -Path '/api/users?pageSize=1
 
 # -----------------------------------------------------------------------------
 Write-Host ''
+Write-Host '[8b] Self-service password change (API_SPECIFICATION 9.1)'
+# -----------------------------------------------------------------------------
+# Contract: PUT /api/auth/password (login-only, self). Old password wrong -> 400; new password
+# must be 8-32 chars with letters AND digits -> 400 in Chinese; success clears user:tokens:{id}
+# so every previously issued token turns 401. This section runs LAST on purpose: it changes the
+# seeded staff password and changes it back at the end (zero residue), so nothing below can be
+# affected by an interrupted run.
+$pwdT1 = (Api -Method POST -Path '/api/auth/login' -Body @{ username = $StaffUser; password = $StaffPass }).Data.data.token
+$pwdT2 = (Api -Method POST -Path '/api/auth/login' -Body @{ username = $StaffUser; password = $StaffPass }).Data.data.token
+Check-True 'pwd.setup.two-sessions' (($pwdT1.Length -eq 32) -and ($pwdT2.Length -eq 32)) ('len=' + $pwdT1.Length + '/' + $pwdT2.Length)
+
+Check 'pwd.no-token.http' (Api -Method PUT -Path '/api/auth/password' -Body @{ oldPassword = $StaffPass; newPassword = 'NewStaff@456' }).Status 401
+
+$pwdWrong = Api -Method PUT -Path '/api/auth/password' -Token $pwdT1 -Body @{ oldPassword = 'WrongOld@999'; newPassword = 'NewStaff@456' }
+Check 'pwd.wrong-old.http' $pwdWrong.Status 400
+$pwdWrongMsg = Cn '539F,5BC6,7801,4E0D,6B63,786E'
+Check 'pwd.wrong-old.message' $pwdWrong.Data.message $pwdWrongMsg
+# ... and the password really did not change
+Check 'pwd.wrong-old.no-effect' (Api -Method POST -Path '/api/auth/login' -Body @{ username = $StaffUser; password = $StaffPass }).Status 200
+
+$pwdRuleMsg = Cn '65B0,5BC6,7801,9700,0038,5230,0033,0032,4F4D,4E14,540C,65F6,5305,542B,5B57,6BCD,548C,6570,5B57'
+$pwdNoDigit = Api -Method PUT -Path '/api/auth/password' -Token $pwdT1 -Body @{ oldPassword = $StaffPass; newPassword = 'abcdefgh' }
+Check 'pwd.rule.no-digit.http' $pwdNoDigit.Status 400
+Check 'pwd.rule.no-digit.message' $pwdNoDigit.Data.message $pwdRuleMsg
+Check 'pwd.rule.too-short.http' (Api -Method PUT -Path '/api/auth/password' -Token $pwdT1 -Body @{ oldPassword = $StaffPass; newPassword = 'abc1' }).Status 400
+Check 'pwd.rule.too-long.http' (Api -Method PUT -Path '/api/auth/password' -Token $pwdT1 -Body @{ oldPassword = $StaffPass; newPassword = ('a1' + ('x' * 31)) }).Status 400
+Check 'pwd.rule.blank-old.http' (Api -Method PUT -Path '/api/auth/password' -Token $pwdT1 -Body @{ oldPassword = ''; newPassword = 'NewStaff@456' }).Status 400
+
+Check 'pwd.change.http' (Api -Method PUT -Path '/api/auth/password' -Token $pwdT1 -Body @{ oldPassword = $StaffPass; newPassword = 'NewStaff@456' }).Status 200
+Check 'pwd.old-token-1.kicked' (Api -Method GET -Path '/api/auth/me' -Token $pwdT1).Status 401
+Check 'pwd.old-token-2.kicked' (Api -Method GET -Path '/api/auth/me' -Token $pwdT2).Status 401
+Check 'pwd.login.old-secret.http' (Api -Method POST -Path '/api/auth/login' -Body @{ username = $StaffUser; password = $StaffPass }).Status 401
+
+$pwdNew = Api -Method POST -Path '/api/auth/login' -Body @{ username = $StaffUser; password = 'NewStaff@456' }
+Check 'pwd.login.new-secret.http' $pwdNew.Status 200
+# restore the seeded password so the rest of the suite (and the next run) sees the documented secret
+Check 'pwd.restore.http' (Api -Method PUT -Path '/api/auth/password' -Token $pwdNew.Data.data.token -Body @{ oldPassword = 'NewStaff@456'; newPassword = $StaffPass }).Status 200
+Check 'pwd.restore.login.http' (Api -Method POST -Path '/api/auth/login' -Body @{ username = $StaffUser; password = $StaffPass }).Status 200
+
+# -----------------------------------------------------------------------------
+Write-Host ''
 Write-Host '[9] Cleanup test data'
 # -----------------------------------------------------------------------------
 $cleanupUser = Api -Method PUT -Path ('/api/users/' + $newUserId + '/status') -Token $adminToken -Body @{ status = 'DISABLED' }

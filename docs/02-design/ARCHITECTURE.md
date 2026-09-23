@@ -476,6 +476,13 @@ public interface DocumentRepository extends JpaRepository<Document, Long>,
 - 条件用 `criteriaBuilder.and(...)` 组合，空值自动跳过（**无 `1=1` 拼接、无字符串 SQL**）。
 - 固定条件（按 ID 查详情、按用户名查用户）仍用派生查询，不要为动态而动态。
 
+> **全文检索分支（M5 前落地，API_SPECIFICATION §9.3）**：`GET /api/documents` 的 `keyword` **去空格后 ≥ 2 字**时不再走
+> Criteria 的 `LIKE title/summary`，而是走原生 SQL 的 `MATCH(title, summary, content_md) AGAINST(:expr IN BOOLEAN MODE)`
+> （ngram 全文索引，见 §10.4）。SQL 形态是**固定片段 + 绑定参数**：词值一律 `:tN` / `:expr`，拼进语句的只有
+> `AND ...` / `EXISTS (...)` / `ORDER BY <白名单列>` 这类常量片段，**没有**把用户输入拼进 SQL 的路径
+> （布尔符号在 Service 层已剥离，见 `DocumentFullTextQuery`）。`keyword` 为空或不足 2 字时**保持原 Criteria 分支不变**，
+> 既有 SQL 预算不受影响。
+
 ### 10.4 索引与执行计划（3.1 §4）
 
 | 高频查询 | 目标索引 | 验证方式 |
@@ -483,8 +490,17 @@ public interface DocumentRepository extends JpaRepository<Document, Long>,
 | 分类 + 状态 + 更新时间倒序（检索主路径） | `idx_doc_cat_status_updated(category_id, status, updated_at, deleted)` | `EXPLAIN ANALYZE` 显示 `Index Scan`，无 `Rows Removed by Filter` |
 | **仅状态 + 更新时间**（审核队列、我的文档） | `idx_doc_status_updated(status, updated_at, deleted)` | **最左前缀**：`status` 单独筛选走不了上一个索引，必须单独建 |
 | 作者维度（我的文档） | `idx_doc_created_by_updated(created_by, updated_at, deleted)` | **排序键必须进索引**：实测 `(created_by, deleted)` 写法会退化为 filesort（20 000 行时 28.4 ms），改后 0.135 ms |
+| **全文检索**（关键词 ≥2 字，正文可搜） | `ft_doc_search(title, summary, content_md)` **WITH PARSER ngram** | `EXPLAIN` 显示 `type=fulltext` + `key=ft_doc_search`（M5 前实测：`type=fulltext`，`Ft_hints: no_ranking`（默认按 `updated_at` 排序）/ 带排序键时为 ranking）；对照实验：同一关键词 `LIKE title/summary` 命中 **0**、`MATCH` 命中 **1** |
 | 收藏列表 | 主键 `(user_id, document_id)` + `idx_fav_doc(document_id)` | |
 | 登录名查用户 | `uk_sys_user_username(username)` | |
+
+**全文索引的三条硬约束**（实测 MySQL 8.0.46，`ngram_token_size = 2`）：
+
+1. **列组合必须与索引完全一致**：`MATCH(title, summary)` 这类子集写法直接报 `ERROR 1191 (Can't find FULLTEXT index matching the column list)`，
+   所以「命中标题还是摘要」用 `LOCATE` 判定，不走子集 MATCH。
+2. **1 字词进不了 ngram 索引**，且会把整个布尔 AND 拉成 0 命中（实测 `+M4* +A* +123456*` = 0 行；去掉 1 字的 `A` 后 = 1 行），
+   因此拼表达式前丢弃长度 < `ngram_token_size` 的词（`DocumentFullTextQuery#terms`）。
+3. **批量造数后必须 `ANALYZE TABLE doc_document;`**（`perf-fixture.sql` 之后），否则全文索引统计不新鲜。
 
 **流程要求**：M2 建表时索引一次到位；**M6 用 DBeaver 对 3 条高频 SQL 执行 `EXPLAIN ANALYZE`，把原始输出与结论写入 `docs/03-qa-review/EXPLAIN-NOTES.md`**（命中哪个索引、是否出现 `Seq Scan` / `Using filesort`、最左前缀是否被满足）。M2 首测已完成，见该文件（Q1 0.149 ms / Q2 0.221 ms / Q3 修复后 0.135 ms / 对照组全表扫描 18.2 ms）。
 
@@ -494,7 +510,9 @@ public interface DocumentRepository extends JpaRepository<Document, Long>,
 
 | 接口 | SQL 预算 | 步骤 | 明令禁止 |
 |---|---|---|---|
-| `GET /api/documents`（检索列表） | **3~5** | ① Criteria 分页（**DTO 构造器投影**，SQL 实测无 `content_md`）② `findAllById` 批量取作者名 ③ 批量取分类名（`doc_category` IN …）；**满页**时多一条分页 count（`PageableExecutionUtils` 末页自动跳过），**带 `categoryId` 筛选**时再多一条「分类 + 子孙」查询（完整路径段匹配） | ❌ 循环里 `doc.getCategory().getName()`；❌ `Page<Document>` 配集合型 `JOIN FETCH tags`（Hibernate 会先查全部 ID 再分页，报 `HHH000104`） |
+| `GET /api/documents`（检索列表，**关键词为空或 < 2 字**） | **3~5** | ① Criteria 分页（**DTO 构造器投影**，SQL 实测无 `content_md`）② `findAllById` 批量取作者名 ③ 批量取分类名（`doc_category` IN …）；**满页**时多一条分页 count（`PageableExecutionUtils` 末页自动跳过），**带 `categoryId` 筛选**时再多一条「分类 + 子孙」查询（完整路径段匹配） | ❌ 循环里 `doc.getCategory().getName()`；❌ `Page<Document>` 配集合型 `JOIN FETCH tags`（Hibernate 会先查全部 ID 再分页，报 `HHH000104`） |
+| `GET /api/documents`（**全文检索分支**，`keyword` 去空格 ≥2 字，M5 前落地） | **3~5** | ① 原生 SQL 分页：`MATCH(...) AGAINST(:expr IN BOOLEAN MODE)` + 13 个展示列 + **服务端 `SUBSTRING` 截出的 160 字高亮窗口**（实测 1 条 SQL，整篇 `content_md` 不出库）② `findAllById` 批量取作者名 ③ 批量取分类名；满页多一条 count；带 `categoryId` 时 +1（实测：3 末页 / 4 满页 / 5 带分类） | ❌ 查出 `content_md` 整列后在内存里截断（等于把 MEDIUMTEXT 拉进应用）；❌ 子集 `MATCH(title, summary)`（`ERROR 1191`）；❌ 把关键词拼进 SQL 字符串 |
+| `GET /api/documents/manage`（治理全状态列表，M5 前落地） | **3~5** | ① 原生 SQL 分页（**全状态含 `deleted = 1` 回收站行**；关键词 ≥2 字同样走 `MATCH` 分支）② `findAllById` 批量取作者名 ③ 批量取分类名；满页多一条 count（实测：3 末页 / 4 满页 / 5 带 `categoryId`） | ❌ 用 JPQL/Criteria 查治理列表（`@SQLRestriction("deleted = 0")` 会把回收站行全部藏掉，`status=TRASH` 永远 0 行）；❌ 循环补名称 |
 | `GET /api/documents/{id}`（详情） | **5** | ① 主表 + `left join fetch d.category`（**单条** to-one 抓取，无分页风险）② 作者名 ③ 标签：`doc_tag` JOIN `doc_document_tag_rel` WHERE document_id=?（一条 SQL）④ 当前用户是否已收藏 ⑤ 命中已发布且首次访问时 `view_count` 原子自增 | ❌ 遍历 `tags` 再逐个查 `doc_tag` |
 | `GET /api/documents/mine` | **3** | 同检索列表（作者条件由后端强制注入） | 同上 |
 | `GET /api/review/documents` | **3** | 同检索列表（外加状态条件；`canEdit` 恒为 false） | 同上 |
@@ -502,7 +520,7 @@ public interface DocumentRepository extends JpaRepository<Document, Long>,
 | `GET /api/users` | **4** | ① 用户分页 ② 部门名批量 ③ `sys_user_role` 批量 ④ `sys_role` 批量取角色码 | ❌ 每个用户查一次角色 |
 | `GET /api/roles` | **1** | ① 角色分页（`RoleVo` 不含权限规模，API_SPECIFICATION §4.3.1 明确不返回） | ❌ 为显示一个权限数而对每个角色查一次 `sys_role_permission` |
 | `GET /api/permissions/tree` | **1** | **一次查全表 + 内存按 `parent_id` 组树** | ❌ **递归查子节点**（树形结构最容易被忽略的隐藏 N+1） |
-| `GET /api/documents/trash` | **1** | 原生 SQL 分页（显式 `deleted = 1`，自带 count，末页跳过） |
+| `GET /api/documents/trash` | **1~3** | 原生 SQL 分页（显式 `deleted = 1`，自带 count，末页跳过）；**回收站为空时 1 条**（`buildPage` 早返回），**有行时 3 条**（+作者名批量 +分类名批量），满页再 +1 count | ❌ 循环补名称 |
 | `GET /api/tags` | **1** | 标签分页（`use_count` 倒序 → id 升序） |
 | `GET /api/depts/tree`、`GET /api/categories/tree` | **1** | 同上 | 同上 |
 | `GET /api/roles/{id}/permissions`、`GET /api/depts/{id}/roles` | **2** | ① 关联表一次查全 ② 名称批量取 | ❌ 循环取名称 |
@@ -516,6 +534,10 @@ public interface DocumentRepository extends JpaRepository<Document, Long>,
 > **分页 count 查询的说明（M3 实测）**：上表预算不含 Spring Data 的分页 `count` 查询。`PageableExecutionUtils` 在
 > **末页（返回条数 < pageSize）会跳过 count**，满页才发一次 —— 所以 `GET /api/users` 实测是 **4 条（末页）/ 5 条（满页）**，
 > 两者都与数据量和 `pageSize` 无关，仍是常数预算。M6 逐接口点数时按"≤ 预算 + 1"判读，且**必须用满页数据**验证（否则会误判为达标）。
+>
+> **写接口参考（不属本表口径，仅登记实测值）**：`PUT /api/auth/password`（自助改密，M5 前落地）实测 **2** 条 SQL ——
+> ① `findById` 取用户（BCrypt 校验旧密码）② `UPDATE sys_user` 写新哈希；踢会话是 Redis 操作
+> （`user:tokens:{userId}`，走 `TxUtil.afterCommit`），**不计入** SQL 条数。
 
 ---
 

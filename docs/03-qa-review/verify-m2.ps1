@@ -102,7 +102,8 @@ $needIdx = @(
   'uk_sys_permission_code','idx_sys_perm_parent','idx_user_role_role','idx_user_perm_perm',
   'idx_role_perm_perm','idx_dept_role_role',
   'idx_doc_cat_status_updated','idx_doc_status_updated','idx_doc_created_by_updated',
-  'uk_doc_version','idx_doc_category_parent','uk_doc_tag_name','idx_rel_tag_doc','idx_fav_doc'
+  'uk_doc_version','idx_doc_category_parent','uk_doc_tag_name','idx_rel_tag_doc','idx_fav_doc',
+  'ft_doc_search'
 )
 $missIdx = @(); foreach ($i in $needIdx) { if ($indexes -notcontains $i) { $missIdx += $i } }
 Check 'C12 expected-indexes' ($missIdx.Count -eq 0) ("indexes=" + $indexes.Count + " missing=" + $(if ($missIdx.Count) { $missIdx -join ',' } else { '0' }))
@@ -111,6 +112,14 @@ Check 'C12 expected-indexes' ($missIdx.Count -eq 0) ("indexes=" + $indexes.Count
 $catIdx = (@(Query "SELECT GROUP_CONCAT(COLUMN_NAME ORDER BY SEQ_IN_INDEX) FROM information_schema.STATISTICS WHERE TABLE_SCHEMA=$Q AND INDEX_NAME='idx_doc_cat_status_updated';"))[0]
 $staIdx = (@(Query "SELECT GROUP_CONCAT(COLUMN_NAME ORDER BY SEQ_IN_INDEX) FROM information_schema.STATISTICS WHERE TABLE_SCHEMA=$Q AND INDEX_NAME='idx_doc_status_updated';"))[0]
 Check 'C13 leftmost-prefix-pair' (($catIdx -eq 'category_id,status,updated_at,deleted') -and ($staIdx -eq 'status,updated_at,deleted')) "cat=[$catIdx] status=[$staIdx]"
+
+# --- C13b: full-text index exists with the ngram parser and the exact 3 columns
+# MATCH() only accepts the FULL column list of a FULLTEXT index: a subset MATCH
+# (e.g. MATCH(title,summary)) fails with ERROR 1191, so the column list is pinned here.
+$ftIdx = (@(Query "SELECT GROUP_CONCAT(COLUMN_NAME ORDER BY SEQ_IN_INDEX) FROM information_schema.STATISTICS WHERE TABLE_SCHEMA=$Q AND INDEX_NAME='ft_doc_search';"))[0]
+$ftSql = (@(Query "SHOW CREATE TABLE doc_document;")) -join ''
+$ftNgram = ($ftSql -like '*ngram*')
+Check 'C13b fulltext-ngram-index' (($ftIdx -eq 'title,summary,content_md') -and $ftNgram) "ft_doc_search=[$ftIdx] ngram_parser=$ftNgram"
 
 # --- C14: seed data counts ---------------------------------------------------
 $seeds = @(

@@ -2,11 +2,15 @@
 
 > 里程碑：M4 文档业务　｜　日期：2026-09-22　｜　**21/21 断言全部有通过记录**
 >
+> **2026-09-23 复跑（M5 前置三项变更 + 校园口径重种子化之后）**：本表结论不变，脚本项数已增长，
+> 新覆盖见下方「汇总」表脚注与 `M5PREP-CLOSURE.md`。
+>
 > 执行方式（可重跑）：
 > ```powershell
-> # 起服务（dev 10087）
-> cd backend; $env:JAVA_HOME='D:\DevEnv\02_JDK\jdk-17.0.5'; .\mvnw.cmd spring-boot:run
-> # 接口验收（152 项，含 SQL 条数预算）
+> # 起服务（dev 10087；重种子后建议带 validate 起一次，验证实体↔实库逐列对齐）
+> cd backend; $env:JAVA_HOME='D:\DevEnv\02_JDK\jdk-17.0.5'
+> .\mvnw.cmd spring-boot:run "-Dspring-boot.run.arguments=--spring.jpa.hibernate.ddl-auto=validate"
+> # 接口验收（218 项，含 17 项 SQL 条数预算）
 > powershell -NoProfile -ExecutionPolicy Bypass -File docs/03-qa-review/verify-m4-http.ps1 -AppLog "$env:TEMP\campusswap-app.log"
 > # 静态自检
 > powershell -NoProfile -ExecutionPolicy Bypass -File docs/03-qa-review/verify-m4.ps1
@@ -41,10 +45,21 @@
 
 | 脚本 | 项数 | 结果 |
 |---|---|---|
-| `verify-m4-http.ps1`（接口验收，含 SQL 预算） | **152** | 全绿 |
+| `verify-m4-http.ps1`（接口验收，含 17 项 SQL 预算） | **218** | 全绿（2026-09-23 实测 PASS=218 / FAIL=0） |
 | `verify-m4.ps1`（静态自检） | **30** | 全绿 |
-| `verify-m3-http.ps1`（复跑，AC-08.1/08.3 证据） | 125 | 全绿 |
-| `verify-m0/m1/m2/db-deep`（回归复跑） | 13 / 15 / 16 / 9 | 全绿 |
+| `verify-m3-http.ps1`（复跑，AC-08.1/08.3 证据 + §8b 自助改密） | **142** | 全绿（2026-09-23 实测 PASS=142 / FAIL=0） |
+| `verify-m0/m1/api-spec/m2/db-deep`（回归复跑） | 13 / 15 / 24 / **17** / 9 | 全绿 |
+| `ui-preview.smoke.mjs`（预览稿自检，非产品机检） | **161** | 全绿 |
+
+> **2026-09-23 新增覆盖（M5 前置三项变更）**：`verify-m4-http.ps1` 的 **§US-04b**（全文检索：正文only 关键词、
+> `matchedIn=content/title/summary`、`highlight` 的 `<em>` 包裹、布尔符号注入不报错、`sort=relevance` 行为、
+> 1 字关键词回落 LIKE）与 **§US-07b**（治理全状态列表：全状态/回收站软删行可见、检索接口看不见该行、
+> 关键词与拟稿人/分类/时间筛选、staff 403、docadmin 200）；`verify-m3-http.ps1` 的 **§8b**（自助改密：
+> 旧密码错 400「原密码不正确」、强度四档 400 中文提示、成功后**两路旧 token 全 401**、旧密码登录 401、
+> 新密码登录 200、跑完自动还原种子密码）；`verify-m2.ps1` **C13b**（`ft_doc_search` 存在且列序
+> = `title,summary,content_md` 且带 ngram 解析器）。
+>
+> 全量合计：**产品机检 504 项**（原 420 → +84：m2 +1、m3-http +17、m4-http +66）+ 预览稿自检 161 项 = **665 项，全部 0 失败**。
 
 ## 状态机覆盖（PRD §4.2 的 T1~T11 与本文件的 T11 登记）
 

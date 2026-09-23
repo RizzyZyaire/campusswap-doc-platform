@@ -1112,7 +1112,7 @@
                                                                                        }
                                                                         },
                                                                         {
-                                                                            "description":  "标题/摘要模糊匹配",
+                                                                            "description":  "≥2 字走全文检索（覆盖 title/summary/content_md，可命中正文，返回 highlight/matchedIn）；不足 2 字回落标题/摘要模糊匹配",
                                                                             "name":  "keyword",
                                                                             "in":  "query",
                                                                             "schema":  {
@@ -1160,7 +1160,7 @@
                                                                                        }
                                                                         },
                                                                         {
-                                                                            "description":  "updatedAt_desc（默认）/publishAt_desc/viewCount_desc",
+                                                                            "description":  "updatedAt_desc（默认）/publishAt_desc/viewCount_desc/relevance（relevance 仅全文检索时可用）",
                                                                             "name":  "sort",
                                                                             "in":  "query",
                                                                             "schema":  {
@@ -3039,7 +3039,7 @@
                                                                                               }
                                                                                },
                                                                                {
-                                                                                   "description":  "标题/摘要模糊匹配",
+                                                                                   "description":  "≥2 字走全文检索（覆盖 title/summary/content_md，可命中正文，返回 highlight/matchedIn）；不足 2 字回落标题/摘要模糊匹配",
                                                                                    "name":  "keyword",
                                                                                    "in":  "query",
                                                                                    "schema":  {
@@ -3097,7 +3097,7 @@
                                                                                               }
                                                                                },
                                                                                {
-                                                                                   "description":  "updatedAt_desc（默认）/publishAt_desc/viewCount_desc",
+                                                                                   "description":  "updatedAt_desc（默认）/publishAt_desc/viewCount_desc/relevance（relevance 仅全文检索时可用）",
                                                                                    "name":  "sort",
                                                                                    "in":  "query",
                                                                                    "schema":  {

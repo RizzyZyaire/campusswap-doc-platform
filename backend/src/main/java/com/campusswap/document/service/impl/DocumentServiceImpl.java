@@ -10,6 +10,7 @@ import com.campusswap.common.util.TimeUtil;
 import com.campusswap.document.dto.DocumentCreateDtoReq;
 import com.campusswap.document.dto.DocumentDeriveDtoReq;
 import com.campusswap.document.dto.DocumentDestroyDtoReq;
+import com.campusswap.document.dto.DocumentManageDtoReq;
 import com.campusswap.document.dto.DocumentMineDtoReq;
 import com.campusswap.document.dto.DocumentSearchDtoReq;
 import com.campusswap.document.dto.DocumentSort;
@@ -18,9 +19,12 @@ import com.campusswap.document.dto.DocumentUpdateDtoReq;
 import com.campusswap.document.dto.FavoritePageDtoReq;
 import com.campusswap.document.repository.CategoryRepository;
 import com.campusswap.document.repository.DocumentColumns;
+import com.campusswap.document.repository.DocumentFullTextQuery;
 import com.campusswap.document.repository.DocumentListQuery;
 import com.campusswap.document.repository.DocumentListRow;
+import com.campusswap.document.repository.DocumentManageQuery;
 import com.campusswap.document.repository.DocumentRepository;
+import com.campusswap.document.repository.DocumentSearchRow;
 import com.campusswap.document.repository.DocumentTagRelRepository;
 import com.campusswap.document.repository.DocumentVersionRepository;
 import com.campusswap.document.repository.FavoriteRepository;
@@ -99,6 +103,14 @@ public class DocumentServiceImpl implements DocumentService {
     /**
      * 检索已发布文档。
      *
+     * <p><b>关键词分支（API_SPECIFICATION §9.3）</b>：</p>
+     * <ul>
+     *   <li>关键词非空且去空格后长度 ≥ 2 → 走全文检索分支（{@code MATCH(...) AGAINST(... IN BOOLEAN MODE)}，
+     *       原生 SQL + ngram 索引 {@code ft_doc_search}），出参带 {@code highlight} / {@code matchedIn}；</li>
+     *   <li>关键词为空（或不足 2 字、剥离后无可用词）→ 保持既有 Criteria 分支<b>完全不变</b>
+     *       （SQL 预算 3~5 条不因此变化）。</li>
+     * </ul>
+     *
      * @param req 查询条件
      * @return 分页结果
      */
@@ -117,10 +129,71 @@ public class DocumentServiceImpl implements DocumentService {
         TimeUtil.assertRange(start, end);
         DocumentSort sort = DocumentSort.from(req.getSort());
 
+        if (DocumentFullTextQuery.supports(req.getKeyword())) {
+            DocumentFullTextQuery fullTextQuery = DocumentFullTextQuery.of(req.getKeyword(), categoryIds, tagIds,
+                    start, end);
+            // 排序由原生 SQL 负责（相关度 / 更新时间 / 发布时间 / 阅读量），Pageable 只承载分页
+            Page<DocumentSearchRow> page = documentRepository.searchFullText(fullTextQuery,
+                    req.toPageable(sort.sort()));
+            return buildSearchPage(page, me, true);
+        }
+        if (sort.isRelevance()) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "排序方式 relevance 仅在关键词检索（2个字及以上）时可用");
+        }
         DocumentListQuery query = new DocumentListQuery(req.getKeyword(), List.of(DocumentStatus.PUBLISHED),
                 null, categoryIds, tagIds, start, end);
         Page<DocumentListRow> page = documentRepository.search(query, req.toPageable(sort.sort()));
         return toPageVo(page, me);
+    }
+
+    /**
+     * 治理用全状态列表（权限 {@code doc:manage}，API_SPECIFICATION §9.2）。
+     *
+     * <p>与检索接口的差别：</p>
+     * <ul>
+     *   <li>不加「仅已发布」限制；{@code status=TRASH} 与「空 = 全部」都能看见 {@code deleted = 1} 的回收站行
+     *       —— 因此整条链路走原生 SQL 绕过 {@code @SQLRestriction("deleted = 0")}；</li>
+     *   <li>筛选维度是 状态 + 关键词 + 分类（含子孙）+ <b>拟稿人</b>（{@code created_by}）+ 时间区间 + 排序
+     *       （契约原文的 {@code unitId}「发文单位」已由作者更正：本表没有单位列，改为 {@code authorId}）。</li>
+     * </ul>
+     *
+     * <p>关键词沿用检索页同一套口径：≥2 字走 ngram 全文检索（能搜正文，出参带 {@code highlight} /
+     * {@code matchedIn}）；不足 2 字或剥离后无可用词时回落 {@code title/summary} 的 LIKE。</p>
+     *
+     * <p>SQL 预算：1（原生分页）+ 1（作者名批量）+ 1（分类名批量）= 3 条，与 {@code ARCHITECTURE §10.5} 一致；
+     * {@code pageSize} 变化不影响条数。</p>
+     *
+     * @param req 查询条件
+     * @return 分页结果
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public PageVo<DocumentVo> manage(DocumentManageDtoReq req) {
+        Long me = SecurityContext.requireUserId();
+        // 空 = 全部状态（含回收站）；非法取值沿用既有 400 文案
+        String status = StringUtils.hasText(req.getStatus()) ? parseStatus(req.getStatus()).name()
+                : DocumentManageQuery.ALL_STATUSES;
+        Long categoryId = IdUtil.toLongOrNull(req.getCategoryId(), "分类ID");
+        Collection<Long> categoryIds = categoryIdsIncludingDescendants(categoryId);
+        Long authorId = IdUtil.toLongOrNull(req.getAuthorId(), "拟稿人ID");
+        LocalDateTime start = TimeUtil.parse(req.getStartTime(), "开始时间");
+        LocalDateTime end = TimeUtil.parse(req.getEndTime(), "结束时间");
+        TimeUtil.assertRange(start, end);
+        DocumentSort sort = DocumentSort.from(req.getSort());
+
+        boolean fullText = DocumentFullTextQuery.supports(req.getKeyword());
+        if (sort.isRelevance() && !fullText) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "排序方式 relevance 仅在关键词检索（2个字及以上）时可用");
+        }
+        String keyword = req.getKeyword() == null ? "" : req.getKeyword().trim();
+        DocumentManageQuery query = new DocumentManageQuery(status,
+                fullText ? DocumentFullTextQuery.expression(DocumentFullTextQuery.terms(keyword)) : "",
+                fullText ? DocumentFullTextQuery.terms(keyword) : List.of(),
+                fullText ? "" : keyword, categoryIds, authorId, start, end);
+        Page<DocumentSearchRow> page = documentRepository.searchManage(query, req.toPageable(sort.sort()));
+        // canEdit 恒为 false：治理列表是全平台视角，管理员治理他人文档走审核/归档接口（§4.7.1），
+        // 行内「编辑」入口由「我的文档」页承担（作者更正稿明确要求 canEdit 恒 false）
+        return buildSearchPage(page, me, false);
     }
 
     /**
@@ -713,6 +786,31 @@ public class DocumentServiceImpl implements DocumentService {
      */
     private PageVo<DocumentVo> toPageVo(Page<DocumentListRow> page, Long me) {
         return buildPage(page.getContent(), page.getTotalElements(), page.getNumber() + 1, page.getSize(), me, true);
+    }
+
+    /**
+     * 全文检索 / 治理列表分页 → PageVo。
+     *
+     * <p>在 {@link #buildPage} 的结果上按行序回填 {@code highlight} / {@code matchedIn}
+     * （{@link #buildPage} 是逐行 1:1 组装的，因此下标对齐可靠）；这样批量补名（作者/分类）只需一份实现。</p>
+     *
+     * @param page               原生分页（投影行 + 高亮 + 命中字段）
+     * @param me                 当前用户
+     * @param allowOwnershipEdit 是否允许按归属计算可编辑
+     * @return 分页结果
+     */
+    private PageVo<DocumentVo> buildSearchPage(Page<DocumentSearchRow> page, Long me, boolean allowOwnershipEdit) {
+        List<DocumentSearchRow> searchRows = page.getContent();
+        List<DocumentListRow> rows = searchRows.stream().map(DocumentSearchRow::row).toList();
+        PageVo<DocumentVo> result = buildPage(rows, page.getTotalElements(), page.getNumber() + 1,
+                page.getSize(), me, allowOwnershipEdit);
+        List<DocumentVo> list = result.list();
+        for (int i = 0; i < list.size(); i++) {
+            DocumentVo vo = list.get(i);
+            vo.setHighlight(searchRows.get(i).highlight());
+            vo.setMatchedIn(searchRows.get(i).matchedIn());
+        }
+        return result;
     }
 
     /**

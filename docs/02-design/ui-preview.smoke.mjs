@@ -1,5 +1,5 @@
 // =============================================================================
-//  UI-PREVIEW.html（v2 · 河北师范大学口径）冒烟自检
+//  UI-PREVIEW.html（v5 · 河北师范大学口径）冒烟自检
 //
 //  覆盖四类最容易写错的东西：
 //   ① Markdown 渲染（代码块/表格/引用/列表 —— v2 就栽在跨行正则上）
@@ -139,8 +139,20 @@ const bizViews = views.filter((v) => v !== 'kit')
 const all = bizViews.map((v) => (v === 'e403' ? api.renderRaw(v, 'review') : api.render(v))).join('')
 t('公司口径残留清零（业务页 + 数据层）', !/前端开发|后端开发|JPA 实体建模规范|技术部|产品部|接口规范（v1）/.test(all + JSON.stringify(api.DATA)))
 t('检索页只出现已发布文档', !/badge draft|badge trash|badge archived/.test(api.render('search')))
-t('内容治理页标注接口缺口', /接口缺口/.test(api.render('governance')))
-t('我的资料页标注自助改密缺口', /自助改密|PUT \/api\/auth\/password/.test(api.render('me')))
+/* v5：三处「待办/缺口」标注已随后端三项变更清零，页面改为「已落地」表述 */
+t('内容治理页标注接口已就位（编号 57）', /端点编号 57/.test(api.render('governance')) && /GET \/api\/documents\/manage/.test(api.render('governance')))
+t('内容治理页不再出现「接口缺口」', !/接口缺口/.test(api.render('governance')))
+t('我的资料页标注自助改密已落地（编号 56）', /端点编号 56/.test(api.render('me')) && /PUT \/api\/auth\/password/.test(api.render('me')))
+t('我的资料页说明改密后全部会话失效', /全部会话立即失效/.test(api.render('me')))
+t('设计系统页三条待办已打勾', (api.render('kit').match(/<span class="n">✓<\/span>/g) || []).length >= 4)
+t('全文检索出参在检索页可见（highlight / matchedIn）', /class="hl"/.test(api.render('search')) && /<em>复制比<\/em>/.test(api.render('search')) && /matchedIn = content/.test(api.render('search')))
+t('检索页排序含「相关度」（全文检索时可用）', /相关度 ↓（全文检索时）/.test(api.render('search')))
+t('检索页筛选按 created_at 口径（创建时间，不再是更新时间）', /<label class="label">创建时间<\/label>/.test(api.render('search')))
+t('预览不再出现「发文单位 / 提交单位」字样', !/发文单位|提交单位/.test(all + api.render('kit')))
+t('数据层不再带 unit 字段（doc_document 无单位列）', !/unit:/.test(html))
+t('登录下拉的所属单位与用户数据一致', ['赵慕辰 · 信息化中心', '王砚秋 · 信息化中心', '李承霖 · 软件学院（网络教育学院）'].every((s) => html.includes(s)))
+t('版本号三处一致（标题 / 文件头 / 预览条 = v5）', (html.match(/界面预览稿 v5/g) || []).length === 3 && !/界面预览稿 v[234]/.test(html))
+t('我的文档页不再有「单位」筛选', !/<label class="label">单位<\/label>/.test(api.render('mine')))
 t('设计系统页列出后端差异清单', /演示数据已按校园口径重新种子化/.test(api.render('kit')) && /分类体系：设计 10 类 41 子类/.test(api.render('kit')))
 t('预览数据与新版种子同口径', /驻县教师职责/.test(api.render('detail')) && api.DATA.users.every((u) => !/技术部|产品部|教务处/.test(u.dept)))
 

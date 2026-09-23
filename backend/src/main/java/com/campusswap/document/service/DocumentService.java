@@ -4,6 +4,7 @@ import com.campusswap.common.api.PageVo;
 import com.campusswap.document.dto.DocumentCreateDtoReq;
 import com.campusswap.document.dto.DocumentDeriveDtoReq;
 import com.campusswap.document.dto.DocumentDestroyDtoReq;
+import com.campusswap.document.dto.DocumentManageDtoReq;
 import com.campusswap.document.dto.DocumentMineDtoReq;
 import com.campusswap.document.dto.DocumentSearchDtoReq;
 import com.campusswap.document.dto.DocumentTrashDtoReq;
@@ -34,6 +35,14 @@ public interface DocumentService {
      * @return 分页结果
      */
     PageVo<DocumentVo> search(DocumentSearchDtoReq req);
+
+    /**
+     * 治理用全状态列表（权限 {@code doc:manage}，含回收站行）。
+     *
+     * @param req 查询条件
+     * @return 分页结果（含状态；回收站行 {@code deleted = 1}）
+     */
+    PageVo<DocumentVo> manage(DocumentManageDtoReq req);
 
     /**
      * 我的文档（作者条件由后端强制注入）。

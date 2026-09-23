@@ -1,5 +1,5 @@
 # =============================================================================
-#  CampusSwap M4 HTTP acceptance check (document domain, 30 endpoints)
+#  CampusSwap M4 HTTP acceptance check (document domain, 31 endpoints)
 #  - pure ASCII source (PowerShell 5.1 reads BOM-less UTF-8 as ANSI)
 #  - Chinese expectations are built from code points via Cn()
 #  - requires the dev server: mvnw spring-boot:run   (port 10087)
@@ -76,10 +76,19 @@ function Count-Sql {
     if (-not $AppLog -or -not (Test-Path -LiteralPath $AppLog)) { return }
     $before = @(Get-Content -LiteralPath $AppLog).Count
     & curl.exe -s -o NUL -H ('Authorization: Bearer ' + $Token) ($BaseUrl + $Path) | Out-Null
-    Start-Sleep -Milliseconds 600
-    $lines = Get-Content -LiteralPath $AppLog
-    $new = @($lines[$before..($lines.Count - 1)])
-    $sql = @($new | Where-Object { $_ -like 'Hibernate:*' })
+    # Read only after the log settles (two consecutive identical reads): the app's stdout goes
+    # through PowerShell redirection, so a fixed sleep can catch a half-flushed batch and count
+    # the previous request's statements again (seen once as sql.manage-trash = 12 instead of 3).
+    $sql = @()
+    $stable = 0
+    for ($i = 0; $i -lt 15; $i++) {
+        Start-Sleep -Milliseconds 400
+        $lines = Get-Content -LiteralPath $AppLog
+        $new = @($lines[$before..($lines.Count - 1)])
+        $now = @($new | Where-Object { $_ -like 'Hibernate:*' })
+        if ($now.Count -eq $sql.Count) { $stable++; if ($stable -ge 2) { break } } else { $stable = 0 }
+        $sql = $now
+    }
     Check ('sql.' + $Label) $sql.Count $Expected
 }
 
@@ -197,6 +206,56 @@ Check 'US04.mine-bad-status.http' (Api -Method GET -Path '/api/documents/mine?st
 
 # -----------------------------------------------------------------------------
 Write-Host ''
+Write-Host '[US-04b] full-text search (API_SPECIFICATION 9.3)'
+# -----------------------------------------------------------------------------
+# Seed-independent by design: the probe document is created here, carries its keyword ONLY in the
+# body (title/summary never contain it), and is destroyed after the SQL budget section. That is
+# exactly the gap the old LIKE title/summary branch could not see (contrast is proven at SQL level
+# in the report: LIKE title/summary = 0 rows, MATCH = 1 row).
+# CJK keywords are percent-encoded so this script stays pure ASCII.
+$kwFull = '%E7%9C%9F%E7%A9%BA%E6%B3%B5'                 # 3 CJK chars: body-only probe keyword
+$kwFull2 = '%E9%80%92%E5%BD%92'                        # 2 CJK chars: seed keyword (both seed revisions)
+$ftDoc = Api -Method POST -Path '/api/documents' -Token $admin -Body @{
+    title = ('M4-FT-' + $stamp); summary = 'acceptance summary without the probe word'
+    contentMd = ("# full text probe`n`nbody only marker: " + (Cn '771F,7A7A,6CF5') + " maintenance log.`n")
+    categoryId = '1'; priceCents = 0
+}
+$ftId = $ftDoc.Data.data.id
+Check 'US04b.probe.create.http' $ftDoc.Status 200
+Check 'US04b.probe.publish.http' (Api -Method POST -Path ('/api/documents/' + $ftId + '/publish') -Token $admin).Status 200
+
+$ft = Api -Method GET -Path ('/api/documents?keyword=' + $kwFull + '&pageSize=100') -Token $staff
+Check 'US04b.body-keyword.http' $ft.Status 200
+Check-True 'US04b.body-keyword.total' ($ft.Data.data.total -ge 1) ('total=' + $ft.Data.data.total)
+$ftRow = @($ft.Data.data.list | Where-Object { $_.id -eq $ftId })
+Check 'US04b.probe.row-present' $ftRow.Count 1
+Check 'US04b.matchedIn.is-content' $ftRow[0].matchedIn 'content'
+Check-True 'US04b.highlight.not-empty' (($ftRow[0].highlight -ne $null) -and ($ftRow[0].highlight.Length -gt 0)) ('highlight=' + $ftRow[0].highlight)
+Check-True 'US04b.highlight.has-em-tag' ($ftRow[0].highlight -like '*<em>*</em>*') ''
+Check-True 'US04b.highlight.wraps-body-word' ($ftRow[0].highlight.Contains((Cn '771F,7A7A,6CF5'))) ''
+Check-True 'US04b.no-contentMd-in-response' (($ft.Body -like '*contentMd*') -eq $false) ''
+Check-True 'US04b.matchedIn.all-legal' ((@($ft.Data.data.list | Where-Object { @('title', 'summary', 'content') -notcontains $_.matchedIn })).Count -eq 0) ''
+
+# boolean symbols must be stripped, never injected (both requests must succeed)
+$ftSym1 = Api -Method GET -Path ('/api/documents?keyword=%2B' + $kwFull + '%2A&pageSize=100') -Token $staff
+Check 'US04b.symbols.plus-star.http' $ftSym1.Status 200
+Check-True 'US04b.symbols.plus-star.total' ($ftSym1.Data.data.total -ge 1) ('total=' + $ftSym1.Data.data.total)
+$ftSym2 = Api -Method GET -Path ('/api/documents?keyword=%22' + $kwFull + '%22%28%7E%3C%3E%40%29&pageSize=100') -Token $staff
+Check 'US04b.symbols.all.http' $ftSym2.Status 200
+Check-True 'US04b.symbols.all.total' ($ftSym2.Data.data.total -ge 1) ('total=' + $ftSym2.Data.data.total)
+Check 'US04b.symbols.invalid-sort.http' (Api -Method GET -Path '/api/documents?sort=relevance_wrong' -Token $staff).Status 400
+
+# relevance ordering is only meaningful together with a keyword
+$ftRel = Api -Method GET -Path ('/api/documents?keyword=' + $kwFull + '&sort=relevance&pageSize=100') -Token $staff
+Check 'US04b.relevance.http' $ftRel.Status 200
+Check-True 'US04b.relevance.total' ($ftRel.Data.data.total -ge 1) ('total=' + $ftRel.Data.data.total)
+Check 'US04b.relevance-without-keyword.http' (Api -Method GET -Path '/api/documents?sort=relevance' -Token $staff).Status 400
+Check 'US04b.seed-keyword.http' (Api -Method GET -Path ('/api/documents?keyword=' + $kwFull2 + '&pageSize=100') -Token $staff).Status 200
+# short keyword (< 2 chars) still uses the original LIKE branch: 200 + no highlight (documented fallback)
+Check 'US04b.short-keyword.http' (Api -Method GET -Path '/api/documents?keyword=F&pageSize=100' -Token $staff).Status 200
+
+# -----------------------------------------------------------------------------
+Write-Host ''
 Write-Host '[US-05] derive + favorite + view count'
 # -----------------------------------------------------------------------------
 $derived = Api -Method POST -Path ('/api/documents/' + $docA + '/derive') -Token $admin -Body @{}
@@ -299,6 +358,71 @@ Check 'US07.destroy-cascade.versions404' (Api -Method GET -Path ('/api/documents
 
 # -----------------------------------------------------------------------------
 Write-Host ''
+Write-Host '[US-07b] governance list GET /api/documents/manage (API_SPECIFICATION 9.2)'
+# -----------------------------------------------------------------------------
+# The governance list is the ONLY list endpoint that must see deleted = 1 rows: @SQLRestriction
+# would hide them from every JPQL/Criteria query, so this path is native SQL.
+$mgAll = Api -Method GET -Path '/api/documents/manage?pageSize=100' -Token $admin
+Check 'US07b.all.http' $mgAll.Status 200
+Check-True 'US07b.all.total' ($mgAll.Data.data.total -ge 1) ('total=' + $mgAll.Data.data.total)
+Check-True 'US07b.all.canEdit-always-false' ((@($mgAll.Data.data.list | Where-Object { $_.canEdit -ne $false })).Count -eq 0) ''
+
+$mgTrash = Api -Method GET -Path '/api/documents/manage?status=TRASH&pageSize=100' -Token $admin
+Check 'US07b.trash.http' $mgTrash.Status 200
+Check-True 'US07b.trash.total' ($mgTrash.Data.data.total -ge 1) ('total=' + $mgTrash.Data.data.total)
+Check-True 'US07b.trash.status-echoed' ((@($mgTrash.Data.data.list | Where-Object { $_.status -ne 'TRASH' })).Count -eq 0) ''
+
+# Direct proof that a soft-deleted row (deleted = 1) is visible here and NOWHERE else:
+# create -> publish -> delete one throw-away document, then require that (a) manage?status=TRASH
+# lists it while (b) the search endpoint (Criteria + LIKE/MATCH, both filtered by deleted = 0)
+# can no longer see it.
+$tmDoc = Api -Method POST -Path '/api/documents' -Token $admin -Body @{
+    title = ('M4-TRASHMEM-' + $stamp); summary = 'soft delete visibility probe'; contentMd = '# trash probe'
+}
+$tmId = $tmDoc.Data.data.id
+Api -Method POST -Path ('/api/documents/' + $tmId + '/publish') -Token $admin | Out-Null
+Check 'US07b.trashmem.delete.http' (Api -Method DELETE -Path ('/api/documents/' + $tmId) -Token $admin).Status 200
+$mgTrash2 = Api -Method GET -Path '/api/documents/manage?status=TRASH&pageSize=100' -Token $admin
+Check-True 'US07b.trash.sees-soft-deleted-row' ((@($mgTrash2.Data.data.list | Where-Object { $_.id -eq $tmId })).Count -eq 1) ('id=' + $tmId)
+$tmGone = Api -Method GET -Path ('/api/documents?keyword=M4-TRASHMEM-' + $stamp + '&pageSize=100') -Token $admin
+Check 'US07b.trashmem.search-cannot-see-it.total' $tmGone.Data.data.total 0
+Check 'US07b.trashmem.cleanup.http' (Api -Method DELETE -Path ('/api/documents/' + $tmId + '/destroy') -Token $admin -Body @{ confirm = $true }).Status 200
+Check-True 'US07b.trashmem.gone-after-destroy' ((@((Api -Method GET -Path '/api/documents/manage?status=TRASH&pageSize=100' -Token $admin).Data.data.list | Where-Object { $_.id -eq $tmId })).Count -eq 0) ('id=' + $tmId)
+
+Check 'US07b.draft.http' (Api -Method GET -Path '/api/documents/manage?status=DRAFT&pageSize=100' -Token $admin).Status 200
+$mgPub = Api -Method GET -Path '/api/documents/manage?status=PUBLISHED&pageSize=100' -Token $admin
+Check 'US07b.published.http' $mgPub.Status 200
+Check-True 'US07b.published.status-echoed' ((@($mgPub.Data.data.list | Where-Object { $_.status -ne 'PUBLISHED' })).Count -eq 0) ''
+Check 'US07b.archived.http' (Api -Method GET -Path '/api/documents/manage?status=ARCHIVED&pageSize=100' -Token $admin).Status 200
+Check 'US07b.bad-status.http' (Api -Method GET -Path '/api/documents/manage?status=WRONG' -Token $admin).Status 400
+Check 'US07b.bad-author.http' (Api -Method GET -Path '/api/documents/manage?authorId=abc' -Token $admin).Status 400
+Check 'US07b.bad-page-size.http' (Api -Method GET -Path '/api/documents/manage?pageSize=101' -Token $admin).Status 400
+# keyword: < 2 chars falls back to LIKE title/summary, >= 2 chars goes to the ngram branch
+$mgLike = Api -Method GET -Path '/api/documents/manage?keyword=F&pageSize=100' -Token $admin
+Check 'US07b.like-keyword.http' $mgLike.Status 200
+Check-True 'US07b.like-keyword.total' ($mgLike.Data.data.total -ge 1) ('total=' + $mgLike.Data.data.total)
+$mgFt = Api -Method GET -Path ('/api/documents/manage?keyword=' + $kwFull + '&pageSize=100') -Token $admin
+Check 'US07b.fulltext-keyword.http' $mgFt.Status 200
+Check-True 'US07b.fulltext-keyword.total' ($mgFt.Data.data.total -ge 1) ('total=' + $mgFt.Data.data.total)
+Check 'US07b.fulltext-keyword.matchedIn' (@($mgFt.Data.data.list | Where-Object { $_.id -eq $ftId })[0].matchedIn) 'content'
+$mgAuthor = Api -Method GET -Path '/api/documents/manage?authorId=2&pageSize=100' -Token $admin
+Check 'US07b.author-filter.http' $mgAuthor.Status 200
+Check-True 'US07b.author-filter.total' ($mgAuthor.Data.data.total -ge 1) ('total=' + $mgAuthor.Data.data.total)
+Check 'US07b.category-filter.http' (Api -Method GET -Path '/api/documents/manage?categoryId=1&pageSize=100' -Token $admin).Status 200
+Check 'US07b.time-filter.http' (Api -Method GET -Path '/api/documents/manage?startTime=2020-01-01%2000:00:00&endTime=2030-01-01%2000:00:00&pageSize=100' -Token $admin).Status 200
+Check 'US07b.sort-relevance.http' (Api -Method GET -Path ('/api/documents/manage?keyword=' + $kwFull + '&sort=relevance') -Token $admin).Status 200
+Check 'US07b.sort-publishAt.http' (Api -Method GET -Path '/api/documents/manage?sort=publishAt_desc' -Token $admin).Status 200
+Check 'US07b.sort-invalid.http' (Api -Method GET -Path '/api/documents/manage?sort=nope' -Token $admin).Status 400
+Check 'US07b.no-token.http' (Api -Method GET -Path '/api/documents/manage').Status 401
+Check 'US07b.staff.http' (Api -Method GET -Path '/api/documents/manage' -Token $staff).Status 403
+# NOTE: API_SPECIFICATION 9.2 / UI_UX_SPECIFICATION 10.1 claim "docadmin -> 403", but DOC_ADMIN
+# holds doc:manage in the seed (verify-db-deep.ps1 D4b pins that 20-code set, and the permission
+# tree has doc:manage = the /admin/docs governance MENU). doc:manage therefore means 200 for
+# docadmin; the claim is a contract inconsistency reported to the docs owner, not a code bug.
+Check 'US07b.docadmin.http' (Api -Method GET -Path '/api/documents/manage' -Token $docAdmin).Status 200
+
+# -----------------------------------------------------------------------------
+Write-Host ''
 Write-Host '[category / tag write paths]'
 # -----------------------------------------------------------------------------
 $cat = Api -Method POST -Path '/api/categories' -Token $docAdmin -Body @{ name = ('m4cat-' + $stamp); parentId = '0'; sortOrder = 90 }
@@ -325,12 +449,18 @@ $tagId = $tag.Data.data.id
 Check 'tag.create.useCount' $tag.Data.data.useCount 0
 Check 'tag.create.duplicate.http' (Api -Method POST -Path '/api/tags' -Token $docAdmin -Body @{ name = ('m4tag' + $stamp) }).Status 409
 Check 'tag.create-too-long.http' (Api -Method POST -Path '/api/tags' -Token $docAdmin -Body @{ name = 'x' * 17 }).Status 400
+# second tag created by the test itself: the duplicate-name check below must not depend on any
+# seed tag name (the campus seed renamed every tag, so a literal like 'SpringBoot' would rot)
+$tagB = Api -Method POST -Path '/api/tags' -Token $docAdmin -Body @{ name = ('m4tagB' + $stamp) }
+Check 'tag.createB.http' $tagB.Status 200
+$tagBId = $tagB.Data.data.id
 Check 'tag.update.http' (Api -Method PUT -Path ('/api/tags/' + $tagId) -Token $docAdmin -Body @{ name = ('m4tag2-' + $stamp) }).Status 200
-Check 'tag.update.duplicate.http' (Api -Method PUT -Path ('/api/tags/' + $tagId) -Token $docAdmin -Body @{ name = 'SpringBoot' }).Status 409
+Check 'tag.update.duplicate.http' (Api -Method PUT -Path ('/api/tags/' + $tagId) -Token $docAdmin -Body @{ name = ('m4tagB' + $stamp) }).Status 409
 Check 'tag.staff-create.http' (Api -Method POST -Path '/api/tags' -Token $staff -Body @{ name = 'nope' }).Status 403
 Check 'tag.delete.http' (Api -Method DELETE -Path ('/api/templates/' + $tagId) -Token $docAdmin).Status 404
 Check 'tag.delete.real.http' (Api -Method DELETE -Path ('/api/tags/' + $tagId) -Token $docAdmin).Status 200
 Check 'tag.delete.again.http' (Api -Method DELETE -Path ('/api/tags/' + $tagId) -Token $docAdmin).Status 404
+Check 'tag.deleteB.http' (Api -Method DELETE -Path ('/api/tags/' + $tagBId) -Token $docAdmin).Status 200
 # soft delete must release the unique key: the same tag name can be created again (ARCHITECTURE rule 18)
 Check 'tag.recreate-after-delete.http' (Api -Method POST -Path '/api/tags' -Token $docAdmin -Body @{ name = ('m4tag2-' + $stamp) }).Status 200
 
@@ -369,8 +499,20 @@ if ($AppLog -and (Test-Path -LiteralPath $AppLog)) {
     Count-Sql 'documents-lastpage' '/api/documents?pageSize=100' $admin 3
     Count-Sql 'documents-fullpage' '/api/documents?pageSize=1&pageNum=1' $admin 4
     Count-Sql 'documents-category' '/api/documents?categoryId=1&pageSize=100' $admin 5
+    # full-text branch (API_SPECIFICATION 9.3): same constant budget as the Criteria branch
+    Count-Sql 'documents-fulltext-lastpage' ('/api/documents?keyword=' + $kwFull + '&pageSize=100') $admin 3
+    Count-Sql 'documents-fulltext-fullpage' ('/api/documents?keyword=' + $kwFull + '&pageSize=1&pageNum=1') $admin 4
+    Count-Sql 'documents-fulltext-relevance' ('/api/documents?keyword=' + $kwFull + '&sort=relevance&pageSize=100') $admin 3
+    # governance list (API_SPECIFICATION 9.2): 3 constants (page + author names + category names)
+    Count-Sql 'manage-all-lastpage' '/api/documents/manage?pageSize=100' $admin 3
+    Count-Sql 'manage-all-fullpage' '/api/documents/manage?pageSize=1&pageNum=1' $admin 4
+    Count-Sql 'manage-trash' '/api/documents/manage?status=TRASH&pageSize=100' $admin 3
+    Count-Sql 'manage-fulltext' ('/api/documents/manage?keyword=' + $kwFull + '&pageSize=100') $admin 3
     Count-Sql 'mine' '/api/documents/mine?pageSize=100' $admin 3
-    Count-Sql 'trash' '/api/documents/trash?pageSize=100' $admin 1
+    # 3 = data + author names + category names. It reads 1 only while the recycle bin is EMPTY
+    # (buildPage returns early) -- the earlier "1" measurement was an artifact of a seed defect:
+    # data.sql wrote status='TRASH' without deleted=1, so the bin was empty. Fixed 2026-09-23.
+    Count-Sql 'trash' '/api/documents/trash?pageSize=100' $admin 3
     Count-Sql 'favorites' '/api/favorites?pageSize=100' $admin 3
     Count-Sql 'review' '/api/review/documents?pageSize=100' $docAdmin 3
     Count-Sql 'category-tree' '/api/categories/tree' $admin 1
@@ -378,6 +520,18 @@ if ($AppLog -and (Test-Path -LiteralPath $AppLog)) {
     Count-Sql 'stats' '/api/stats/overview' $admin 1
 } else {
     Write-Host '  [INFO] -AppLog not given: SQL budget checks skipped'
+}
+
+# -----------------------------------------------------------------------------
+Write-Host ''
+Write-Host '[cleanup] full-text probe document'
+# -----------------------------------------------------------------------------
+# Destroyed only now: the SQL budget section above needs it to stay published, otherwise the
+# full-text branch would return an empty page and the budget numbers would not be comparable.
+if ($ftId) {
+    Check 'cleanup.ftprobe.delete.http' (Api -Method DELETE -Path ('/api/documents/' + $ftId) -Token $admin).Status 200
+    Check 'cleanup.ftprobe.destroy.http' (Api -Method DELETE -Path ('/api/documents/' + $ftId + '/destroy') -Token $admin -Body @{ confirm = $true }).Status 200
+    Check 'cleanup.ftprobe.gone.http' (Api -Method GET -Path ('/api/documents/' + $ftId) -Token $admin).Status 404
 }
 
 Write-Host ''

@@ -14,7 +14,7 @@
 | 仓储 | `document/repository/` 新增：`DocumentColumns`（列清单 + 类型容错）、`DocumentListRow`（构造器投影行）、`DocumentListQuery`、`DocumentQueryRepository(+Impl)`（Criteria 定制片段）、`TagSpecifications`；扩展 `DocumentRepository`（回收站/收藏原生查询 + 恢复/彻底删除）、`DocumentVersionRepository`、`FavoriteRepository`、`TagRepository`、`CategoryRepository` | 11 |
 | 服务 | `DocumentService(+Impl)`、`ReviewService(+Impl)`、`CategoryService(+Impl)`、`TagService(+Impl)`、`FileStorageService` | 9 |
 | 接口 | `document/controller/`：Document(15)、Review(5)、Category(4)、Tag(4)、File(1)、Stat(1) | 6 类 / **30 端点** |
-| 机检 | `docs/03-qa-review/verify-m4.ps1`（静态 30 项）、`verify-m4-http.ps1`（接口 152 项 + SQL 预算 10 项） | 2 |
+| 机检 | `docs/03-qa-review/verify-m4.ps1`（静态 30 项）、`verify-m4-http.ps1`（接口 **218** 项 + SQL 预算 **17** 项） | 2 |
 | 清单 | `docs/03-qa-review/TEST_CHECKLIST.md`（US-02~US-08 共 21 条 BDD 断言逐条对账） | 1 |
 
 ---
@@ -24,10 +24,10 @@
 | # | 检查 | 结果 |
 |---|---|---|
 | 1 | `mvnw -B clean compile` | `BUILD SUCCESS` |
-| 2 | `verify-m4-http.ps1`（接口验收 + 状态机 + 越权） | **PASS=152 / FAIL=0** |
+| 2 | `verify-m4-http.ps1`（接口验收 + 状态机 + 越权 + M5 前置的 §US-04b/§US-07b） | **PASS=218 / FAIL=0**（2026-09-23 重种子后复跑） |
 | 3 | `verify-m4.ps1`（静态自检） | **PASS=30 / FAIL=0** |
-| 4 | `verify-m3-http.ps1`（回归，含 AC-08.1/08.3 证据） | **PASS=125 / FAIL=0** |
-| 5 | `verify-m3.ps1` / `verify-m2.ps1` / `verify-db-deep.ps1` / `verify-m1.ps1` / `verify-m0.ps1`（回归） | 36 / 16 / 9 / 15 / 13，全绿 |
+| 4 | `verify-m3-http.ps1`（回归，含 AC-08.1/08.3 证据 + §8b 自助改密） | **PASS=142 / FAIL=0** |
+| 5 | `verify-m3.ps1` / `verify-m2.ps1` / `verify-db-deep.ps1` / `verify-m1.ps1` / `verify-m0.ps1` / `verify-api-spec.ps1`（回归） | 36 / 17 / 9 / 15 / 13 / 24，全绿 |
 | 6 | `TEST_CHECKLIST.md` | 21/21 断言有通过记录 |
 
 覆盖到的状态机边：`T2`（发布）、`T3/T6/T8`（进回收站）、`T5`（归档）、`T7`（恢复上架）、`T9`（回收站恢复）、`T10`（彻底删除 + 级联清理）、`T11`（驳回），以及"审核通过不改状态只留痕"。
@@ -36,7 +36,7 @@
 
 ## 3. SQL 条数实测（T4.11 零 N+1 验收）
 
-方法：dev 开 `show-sql`，请求前记录日志行数，请求后统计窗口内 `Hibernate:` 语句条数（脚本 `verify-m4-http.ps1 -AppLog <路径>` 自动跑这 10 项）。
+方法：dev 开 `show-sql`，请求前记录日志行数，请求后统计窗口内 `Hibernate:` 语句条数（脚本 `verify-m4-http.ps1 -AppLog <路径>` 自动跑这 17 项；计数前会等日志读数稳定，避免把上一批 SQL 重复计入）。
 
 | 接口 | 实测 | 说明 |
 |---|---|---|
@@ -44,7 +44,7 @@
 | `GET /api/documents`（满页，`pageSize=1`） | **4** | 多一条分页 count（`PageableExecutionUtils` 只在满页时发） |
 | `GET /api/documents?categoryId=1` | **5** | 再多一条「分类 + 子孙」查询 |
 | `GET /api/documents/mine` | **3** | 同上三件套 |
-| `GET /api/documents/trash` | **1** | 原生分页查询自带 count（末页跳过） |
+| `GET /api/documents/trash` | **3**（回收站为空时 1） | 原生分页自带 count（末页跳过）；**有行时还要 +作者名 +分类名** —— 早先记的「1」是种子缺陷（`status='TRASH'` 但 `deleted=0`，回收站恒空）造成的假象，2026-09-23 修种子后复测为 3 |
 | `GET /api/favorites` | **3** | 原生 JOIN 分页 + 作者名 + 分类名 |
 | `GET /api/review/documents` | **3** | 与检索同一套 Criteria 投影 |
 | `GET /api/categories/tree` | **1** | 一次查全 + 内存组树 |
@@ -159,9 +159,10 @@ powershell -NoProfile -ExecutionPolicy Bypass -File ..\docs\03-qa-review\verify-
 # 2. 起服务（另开窗口；日志写 %TEMP% 避免占用 target）
 .\mvnw.cmd spring-boot:run
 
-# 3. 接口验收（152 项 + SQL 预算 10 项）
+# 3. 接口验收（218 项 + SQL 预算 17 项）
 powershell -NoProfile -ExecutionPolicy Bypass -File ..\docs\03-qa-review\verify-m4-http.ps1 -AppLog "$env:TEMP\campusswap-app.log"
 ```
 
 > 验收会写入测试数据（文档 / 分类 / 标签 / 上传的图片）。收口后已用 `schema.sql` + `data.sql` 重建 `campusswap_db`，
-> `verify-m2.ps1`（16）与 `verify-db-deep.ps1`（9）复绿；`backend/uploads/` 下的验收图片已清理。
+> `verify-m2.ps1`（17）与 `verify-db-deep.ps1`（9）复绿；`backend/uploads/` 下的验收图片已清理。
+> **2026-09-23 再次重建（校园口径种子）后全量复跑：504 项产品机检 + 161 项预览稿自检，0 失败**（明细见 `TEST_CHECKLIST.md` 汇总与 `M5PREP-CLOSURE.md §5`）。

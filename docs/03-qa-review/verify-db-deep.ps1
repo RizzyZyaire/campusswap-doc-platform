@@ -143,15 +143,15 @@ Check 'D6a prd-table-names-exist' ($prdMissing.Count -eq 0) ("PRD tokens=" + $pr
 
 $arc = [IO.File]::ReadAllText((Join-Path $Repo 'docs\02-design\ARCHITECTURE.md'), [Text.Encoding]::UTF8)
 $arcBad = @()
-foreach ($n in @('idx_doc_cat_status_updated','idx_doc_status_updated','idx_doc_created_by_updated','idx_fav_doc')) {
+foreach ($n in @('idx_doc_cat_status_updated','idx_doc_status_updated','idx_doc_created_by_updated','idx_fav_doc','ft_doc_search')) {
   if ($arc -notmatch $n) { $arcBad += "not-mentioned:$n" }
 }
 if ($arc -match 'idx_doc_created_by[^_]') { $arcBad += 'stale-name:idx_doc_created_by' }
 $dbIdx = (Rows "SELECT DISTINCT INDEX_NAME FROM information_schema.STATISTICS WHERE TABLE_SCHEMA='$Database'") | ForEach-Object { $_.Trim() }
-foreach ($n in @('idx_doc_cat_status_updated','idx_doc_status_updated','idx_doc_created_by_updated')) {
+foreach ($n in @('idx_doc_cat_status_updated','idx_doc_status_updated','idx_doc_created_by_updated','ft_doc_search')) {
   if ($dbIdx -notcontains $n) { $arcBad += "missing-in-db:$n" }
 }
-Check 'D6b architecture-index-names' ($arcBad.Count -eq 0) $(if ($arcBad.Count) { $arcBad -join ',' } else { 'ARCH & DB agree on the 3 document indexes' })
+Check 'D6b architecture-index-names' ($arcBad.Count -eq 0) $(if ($arcBad.Count) { $arcBad -join ',' } else { 'ARCH & DB agree on the 3 document indexes + ft_doc_search' })
 
 # ---------- summary ----------------------------------------------------------
 if (Test-Path -LiteralPath $cnf) { Remove-Item -LiteralPath $cnf -Force }

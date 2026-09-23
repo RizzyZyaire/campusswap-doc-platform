@@ -219,27 +219,47 @@ D:\DevEnv\04_Redis\redis-cli.exe -p 6379 KEYS 'perm:*'
 
 ---
 
-## 9 欠账与 M5 开工前的两个待拍板点
+## 9 欠账：已结清 / 未结清（2026-09-23 更新）
 
-**欠账**：M5 前端未开工（`frontend/` 只有骨架目录）。**UI 规格 v2 重写已完成（2026-09-23）**：`docs/02-design/UI_UX_SPECIFICATION.md` 升到 v2.0（13 条功能路由 + 六套主题 + 视觉资源规范 + 逐页四态 + §10 三处缺口处置决定与全文检索契约 + §11 落地检查清单），视觉以 `docs/02-design/UI-PREVIEW.html`（**v4**：七张校园照片按显示比例裁剪、六套主题各配一张横幅照片、侧栏统一主题色、右上角可视化选色器）为准，配套自检 `docs/02-design/ui-preview.smoke.mjs`（149 项）。
+### 9.1 已结清（M5 开工前的五个待拍板点，全部有落地物）
 
-**后端三项变更（进行中，2026-09-23 起）**：契约见 `API_SPECIFICATION.md §9`（改密接口 / 治理全状态列表 / 全文检索 ngram + highlight/matchedIn）与 `UI_UX_SPECIFICATION.md §10`；落地后需回写 API 文档总表与 `openapi-campusswap.json`、更新 `ARCHITECTURE §10.5` 预算表，然后做 `data.sql` 校园口径重种子化，最后全量重跑 9 个产品机检（420 项，其中 m3/m4 静态与 HTTP 项会因新接口而增加）。
+| # | 事项 | 结论 | 落地物 |
+|---|---|---|---|
+| 1 | 分类 / 标签的 6 个写接口要不要给界面入口 | **渲染入口**（院系与业务条线会变，管理员必须能自助维护） | `UI_UX_SPECIFICATION §10.3` + §8.9；预览稿已渲染「新增/改名/删除」 |
+| 2 | 治理页拿不到全状态列表（实锤的规格-后端不一致） | **补接口**：新增 `GET /api/documents/manage`（端点编号 **57**，权限 `doc:manage`），`GET /api/documents` 语义不变 | `DocumentManageDtoReq` / `DocumentManageQuery` / `DocumentQueryRepositoryImpl.searchManage` / `DocumentController#manage`；预览稿治理页的红色缺口提示改成「接口已就位（编号 57）」 |
+| 3 | 「我的资料 → 修改密码」缺自助改密接口 | **补接口**：新增 `PUT /api/auth/password`（端点编号 **56**，登录即可、仅本人）；改密成功后**全部会话失效**（含当前设备） | `PasswordChangeDtoReq` / `AuthController#changePassword` / `AuthServiceImpl#changePassword`；预览稿「我的资料」页同步 |
+| 4 | 演示数据公司口径 → 校园口径 | **已重种子化**：单位＝信息化中心 / 软件学院（网络教育学院）/ 网络运行科；分类＝教务教学 / 党政公文 / 实习支教（子类）/ 科研学术；文档 5 篇覆盖四状态 | `backend/sql/data.sql`（表数/行数形状不变，靠 scratch 库 `campusswap_seedcheck` 全量导入校验） |
+| 5 | `sys_user_permission`（用户级直授权）要不要给界面入口 | **不渲染**（维持 M3 决定）：权限树按角色授权已覆盖业务需要，直授权是接口能力，不做界面 | `UI_UX_SPECIFICATION §10.7`（本次新增决定记录）+ §2 一致性提示 |
 
-其余欠账：M6 测试与评审、M7 交付未做；Apifox 手动导入 + 发请求待你操作；防火墙 3306/6379 的入站放行规则未按建议收窄。
+### 9.2 仍未结清
 
-**待拍板（M5 前）**：
+M5 前端未开工（`frontend/` 只有骨架目录）；M6 测试与评审、M7 交付未做；Apifox 手动导入 + 发请求待你操作；防火墙 3306/6379 的入站放行规则未按建议收窄。
 
-1. **分类 / 标签的 6 个写接口要不要给界面入口？** 后端已实现 `POST/PUT/DELETE /api/categories/**` 与 `/api/tags/**`，权限点 `doc:category:edit` / `doc:tag:edit` 也在权限树里；但 `UI_UX_SPECIFICATION §5.3` 把它们判为"路径清单缺位 → 不渲染入口"（§8.7 的"分类与标签"tab 因此是只读的）。两条路：① 补入口（需修订 §5.3 与 §8.7，加 4 个按钮）；② 保持只读（在 M5 收口记录里写明理由）。
-2. **`sys_user_permission`（用户级直授权）要不要给界面入口？** 中间表与权限合并逻辑都在，M3 已实测"直授权立即生效"，但接口清单里没有写接口 → 界面上没有入口。当前默认：不渲染，只在文档里说明。
-3. **「文档治理」页拿不到全状态列表 —— 规格与后端不一致（实锤，M5 前必须解决）。** `UI_UX_SPECIFICATION §8.7` 的依赖清单写的是 `GET /api/documents`（权限 `doc:manage`、含状态筛选、能看到全平台 `DRAFT`/`ARCHIVED`/`TRASH`）；但后端事实是：
-   - `GET /api/documents` 的权限点是 **`doc:search`**，且 `DocumentServiceImpl.search()` 第 109–111 行把状态**硬编码**为 `PUBLISHED`，传其他状态直接 400「本接口仅支持查询已发布文档」；
-   - `GET /api/review/documents`（`doc:review`）在 `ReviewServiceImpl` 第 55–66 行**只允许** `PUBLISHED` / `ARCHIVED`；
-   - 结论：**当前没有任何接口**能返回「全平台含草稿与回收站」的列表。
+**UI 规格 v2 重写已完成（2026-09-23）**：`docs/02-design/UI_UX_SPECIFICATION.md` 升到 v2.0（13 条功能路由 + 六套主题 + 视觉资源规范 + 逐页四态 + §10 三处缺口处置决定与全文检索契约 + §11 落地检查清单），视觉以 `docs/02-design/UI-PREVIEW.html`（**v5**：三项后端变更已落地、检索页带正文命中高亮；此前 v4 把七张校园照片按显示比例裁剪、六套主题各配一张横幅照片、侧栏统一主题色、右上角可视化选色器）为准，配套自检 `docs/02-design/ui-preview.smoke.mjs`（**161 项**）。
 
-   两条路：① M5 前补一个 `doc:manage` 的全状态列表接口（治理语义才完整，**推荐**）；② 治理页只治理「已发布 / 已归档」，草稿与回收站仍归「我的文档」。
-   *发现路径（留痕）*：做静态预览稿时按 §8.7 摆了「草稿/已归档/回收站」三行 → 复核后端才发现这几行拿不到数据 → 已把事实写进预览稿治理页的红色提示，并删掉检索页里同类越权的三行（§8.2 本就规定检索只出现 `PUBLISHED`）。
-4. **演示数据要按「校园口径」重新种子化（v2 预览稿暴露出来的连带工作）。** 现在 `backend/sql/data.sql` 是公司口径（技术部/产品部/后端组、前端开发/后端开发分类、JPA 实体建模规范等文档），而产品定位是**河北师范大学校内文档平台**。要换成校园口径需改三处并同步断言：
-   - `data.sql`：部门 → 校内机构（党政管理机构/教学单位/直属单位/附属单位，院系清单取自官网「机构设置」27 个院系）；分类 → 党政公文/教务教学/科研学术/学生工作/人事人才/财务资产/后勤保障/图书档案/学院文档/模板表单；示例文档 → 校内公文题材；
-   - `verify-m2.ps1` / `verify-db-deep.ps1` 里引用旧单位名与分类名的断言；
-   - `verify-m4-http.ps1` / `TEST_CHECKLIST.md` 里引用旧文档标题与分类的用例（当前 m4-http 用「US02/US06」等编号断言，改标题影响面已初步评估为可控，但**必须重跑**）。
-5. **「我的资料 → 修改密码」缺自助改密接口。** 现状只有管理员重置（`PUT /api/users/{id}/password`，权限点 `sys:user:reset`）；v2 预览稿把入口占位置灰并写明缺口。要落地需新增 `PUT /api/auth/password`（本人改密 + 旧密码校验 + 改完清 `user:tokens:` 踢掉其它会话）。
+### 9.3 三项后端变更的读码路线（老师问「这代码你懂吗」时按这个顺序讲）
+
+**A. 全文检索（`MATCH ... AGAINST ... IN BOOLEAN MODE` + ngram）**
+
+1. 入口分支：`DocumentServiceImpl#search` —— `DocumentFullTextQuery.supports(keyword)` 为真走全文分支，否则走**原封不动**的 Criteria 分支（老口径的 SQL 预算不受影响，这是刻意的兼容设计）。
+2. 关键词翻译成布尔表达式：`DocumentFullTextQuery#expression` —— 先**剥离**布尔符号 `+ - * " ( ) ~ < > @`（防布尔注入），再按空格切词，每个词拼成 `+词*`；**1 个字的词会被丢掉**（`MIN_TERM_LENGTH = 2`，因为 `ngram_token_size = 2`，1 字词会让整个 AND 表达式命中 0 行）。
+3. SQL 形态：`DocumentQueryRepositoryImpl#searchFullText` + `dataSql` —— 一条原生 SQL 同时取「13 个展示列 + 正文高亮窗口 + 命中字段」：
+   `SUBSTRING(d.content_md, GREATEST(1, LOCATE(:t0, d.content_md) - 30), 160)` 取窗口（**正文整列不出库**，对应课件 3.1 红线三「列表不查大文本」）；
+   `CASE WHEN LOCATE(...) > 0 THEN 'title' ... ELSE 'content' END` 判断命中字段（为什么不用子集 `MATCH(title, summary)`：列组合必须与全文索引完全一致，否则 MySQL 报 **ERROR 1191**）。
+4. Java 侧补 `<em>`：`#highlight` —— 在窗口内定位命中词并包裹；**窗口里没有命中词就返回 `null`**（所以「命中标题」的行不会把正文前 160 字当高亮返回）。
+5. 分页 count：`#executeNativePage` 用 `PageableExecutionUtils`，**末页不发 count**；数据查询与 count 查询的命名参数集**不同**（count 的 SELECT 里没有 `LOCATE(:tN)`），所以绑定器分成两个 —— 这是最容易踩的 `UnknownParameterException` 来源。
+6. 排序：`DocumentSort#RELEVANCE`（`sort=relevance`）映射到原生 `MATCH ... AGAINST` 表达式；没有关键词（或不足 2 字）时传 `relevance` 直接 400。排序属性名走**白名单 switch**（`#orderBy`），永不把入参拼进 SQL。
+
+**B. 治理用全状态列表（原生 SQL 绕过软删除过滤）**
+
+1. 为什么必须原生 SQL：实体上有 `@SQLRestriction("deleted = 0")`，治理列表要看见 `deleted = 1` 的回收站行，JPQL/Criteria 一律查不到。
+2. `DocumentQueryRepositoryImpl#searchManage` —— `status` 为空 = **全状态且不加 `deleted` 条件**；`status = TRASH` 用 `(d.status = 'TRASH' OR d.deleted = 1)`（状态机与种子数据可能只置其一，两种都要能看见）；其他状态才加 `deleted = 0 AND d.status = :status`。
+3. 列序与类型转换复用 `DocumentColumns`（治理链路与检索链路共用一份列口径，避免两套字段定义漂移）。
+4. `canEdit` 恒为 `false`（全平台视角；管理员治理他人文档走归档 / 恢复上架 / 彻底删除，不直接改正文）。
+5. 端点编号**只追加不改号**（56/57 追加在总表末尾）：总表行号被 §5/§6/§7 大量引用，插在中间会让所有编号引用错位。
+
+**C. 自助改密（旧密码校验 + 全量踢下线）**
+
+1. `AuthServiceImpl#changePassword` —— `BCrypt.checkpw` 校验旧密码，不符返回 400「原密码不正确」；新密码 8–32 位且同时含字母数字（与管理员重置同一强度规则）。
+2. 踢下线放在 `TxUtil.afterCommit`：事务提交后才清 Redis（`user:tokens:{userId}` 集合 + 逐个 `login:token:*`），**避免回滚后再也登不回来**；该次改密**包含当前设备**，前端要引导重新登录。
+3. 与管理员重置的边界：重置走 `PUT /api/users/{id}/password`（`sys:user:reset`），自助走 `PUT /api/auth/password`（无权限点，用户 ID 取自 `SecurityContext`，请求体不含用户 ID → 天然防越权）。

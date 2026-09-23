@@ -63,6 +63,21 @@ public class DocumentVo extends AuditVo {
     private Boolean canEdit;
 
     /**
+     * 命中的正文片段（API_SPECIFICATION §9.3 新增）。
+     *
+     * <p>命中词两侧各 30 字，命中词以 {@code <em>} 包裹；由全文检索分支填充，
+     * 正文里没有命中词（或未走全文检索）时为 {@code null}。</p>
+     */
+    private String highlight;
+
+    /**
+     * 命中字段（API_SPECIFICATION §9.3 新增）：{@code title} / {@code summary} / {@code content}。
+     *
+     * <p>仅全文检索分支填充，其余列表接口为 {@code null}。</p>
+     */
+    private String matchedIn;
+
+    /**
      * 由列表行（DTO 投影）组装。
      *
      * @param row          列表投影行
@@ -72,6 +87,22 @@ public class DocumentVo extends AuditVo {
      * @return 文档列表出参
      */
     public static DocumentVo of(DocumentListRow row, String categoryName, String authorName, boolean canEdit) {
+        return of(row, categoryName, authorName, canEdit, null, null);
+    }
+
+    /**
+     * 由列表行（DTO 投影）组装，并带上全文检索的高亮信息。
+     *
+     * @param row          列表投影行
+     * @param categoryName 分类名（批量补齐，未分类传「未分类」）
+     * @param authorName   作者姓名（批量补齐）
+     * @param canEdit      当前用户是否可编辑
+     * @param highlight    命中的正文片段（可空）
+     * @param matchedIn    命中字段 title / summary / content（可空）
+     * @return 文档列表出参
+     */
+    public static DocumentVo of(DocumentListRow row, String categoryName, String authorName, boolean canEdit,
+                                String highlight, String matchedIn) {
         DocumentVo vo = new DocumentVo();
         vo.setCreatedAt(TimeUtil.format(row.createdAt()));
         vo.setCreatedBy(IdUtil.toStr(row.authorId()));
@@ -90,6 +121,8 @@ public class DocumentVo extends AuditVo {
         vo.viewCount = row.viewCount();
         vo.favoriteCount = row.favoriteCount();
         vo.canEdit = canEdit;
+        vo.highlight = highlight;
+        vo.matchedIn = matchedIn;
         return vo;
     }
 }

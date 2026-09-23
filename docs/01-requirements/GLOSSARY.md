@@ -3,8 +3,8 @@
 | 项 | 值 |
 |---|---|
 | 文件 | `docs/01-requirements/GLOSSARY.md` |
-| 版本 | **v2.1（对齐老师《1.2 数据库物理建模》示例口径）** |
-| 日期 | 2026-09-21 |
+| 版本 | **v2.2（M5 前置：登记全文检索出参、治理列表与自助改密三项接口变更；v2.1 主体口径不变）** |
+| 日期 | 2026-09-23 |
 | 状态 | **Frozen（已冻结）** |
 | 地位 | **命名唯一真源**。数据库列名、Java 类名与字段、TS 接口、接口出入参、UI 文案，全部以此文件为准 |
 | 上游依据 | 老师课件《1.2 示例-数据库物理建表脚本(MySQL版)》《1.2 项目案例介绍》《2.1 专题指南》 |
@@ -16,6 +16,7 @@
 |---|---|
 | v1.0（M0） | 首版 |
 | **v2.1（M1）** | ① 主键 `BIGINT AUTO_INCREMENT`（原：雪花禁用自增）；② 审计列统一 `created_at/created_by/updated_at/updated_by/deleted`（原：create_at/create_by/update_at/update_by/deleted）；③ 中间表改复合主键、无 `id` 列；④ `name`/`code`/`type` 泛用命名；⑤ 排序列 `sort_order`；⑥ `sys_user.status` 字符串枚举取代 `is_enabled`；⑦ `sys_login_log` → `sys_user_permission`（对齐课件 P5 表清单与权限合并算法）；⑧ 取消 `sys_user.role_code` 列，角色走中间表。理由：与老师课件示例同风格，降低评分口径风险 |
+| **v2.2（M5 前置）** | ① §3.6 `keyword` 口径升级为「≥ 2 字全文检索（`FULLTEXT` 含 `content_md`）/ 不足 2 字回落标题摘要模糊匹配」，`sort` 增加 `relevance`；② §3.7 登记 `DocumentVo.highlight` / `DocumentVo.matchedIn`、`DocumentManageDtoReq`、`PasswordChangeDtoReq`；③ §7 TS 类型同步。理由：M5 前端要渲染命中高亮与全状态治理列表，按红线 R1「新字段先登记再写代码」补登记 |
 
 > **红线 R1**：Entity 字段、DTO 字段、VO 字段、TS interface 字段、数据库列，必须能在本文件中找到对应行。找不到 = 命名非法，必须改代码而不是改本文件。
 
@@ -199,14 +200,14 @@
 |---|---|---|---|
 | 页码 | `pageNum` | number | ≥ 1，默认 1 |
 | 每页条数 | `pageSize` | number | 1–100，默认 10 |
-| 关键词 | `keyword` | string | 可空，≤ 64 字符，匹配标题/摘要 |
+| 关键词 | `keyword` | string | 可空，≤ 64 字符；**≥ 2 字走全文检索**（`FULLTEXT` 覆盖 `title` / `summary` / `content_md`，**能命中正文**），**不足 2 字**回落标题/摘要模糊匹配；命中高亮出参见 `highlight` / `matchedIn` |
 | 状态筛选 | `status` | string | 可空，取值同对应枚举 |
 | 分类筛选 | `categoryId` | string | 可空 |
 | 标签筛选 | `tagIds` | string[] | 可空，多标签 AND 命中 |
 | 部门筛选 | `deptId` | string | 可空 |
 | 起始时间 | `startTime` | string | 可空，`yyyy-MM-dd HH:mm:ss`，按 `created_at` 过滤（闭区间） |
 | 结束时间 | `endTime` | string | 可空，`yyyy-MM-dd HH:mm:ss`，与 `startTime` 成对使用；`startTime > endTime` 返回 400「开始时间不能晚于结束时间」 |
-| 排序 | `sort` | `DocumentSort` | 可空，默认 `updatedAt_desc`；取值 `updatedAt_desc` / `publishAt_desc` / `viewCount_desc` |
+| 排序 | `sort` | `DocumentSort` | 可空，默认 `updatedAt_desc`；取值 `updatedAt_desc` / `publishAt_desc` / `viewCount_desc` / `relevance`（`relevance` = 全文检索相关度倒序，**仅当** `keyword` ≥ 2 字走全文检索时可用，否则 400） |
 
 **分页出参**：`PageVo<T>` = `{ list: T[], total: number, pageNum: number, pageSize: number }`。
 
@@ -244,7 +245,7 @@
 
 | 类名 | 字段 |
 |---|---|
-| `DocumentVo` extends `AuditVo` | `id, title, summary, categoryId, categoryName, authorId, authorName, status:DocumentStatus, versionNum:number, priceCents:number, viewCount:number, favoriteCount:number, canEdit:boolean` |
+| `DocumentVo` extends `AuditVo` | `id, title, summary, categoryId, categoryName, authorId, authorName, status:DocumentStatus, versionNum:number, priceCents:number, viewCount:number, favoriteCount:number, canEdit:boolean, highlight?:string\|null, matchedIn?:'title'\|'summary'\|'content'\|null`（后两个字段**只有全文检索分支**填充，其余列表接口为 `null`） |
 | `DocumentDetailVo` extends `DocumentVo` | `contentMd, derivedFromId:string\|null, rejectReason:string\|null, favorited:boolean, tags:TagVo[]` |
 | `DocumentCreateDtoReq` | `title, summary, contentMd, categoryId, tagIds:string[], priceCents:number` |
 | `DocumentUpdateDtoReq` extends `DocumentCreateDtoReq` | `id`（必填，必须与路径 `{id}` 一致；业务字段按 create 同规则**全量提交**，不是"只传改动字段"） |
@@ -267,9 +268,11 @@
 | `ReviewPageDtoReq` | `pageNum?, pageSize?, keyword?, status?:DocumentStatus`（仅 `PUBLISHED` / `ARCHIVED`，默认 `PUBLISHED`） |
 | `FavoritePageDtoReq` | `pageNum?, pageSize?, keyword?` |
 | `TagPageDtoReq` | `pageNum?, pageSize?, keyword?` |
+| `DocumentManageDtoReq` | `pageNum?, pageSize?, status?:DocumentStatus, keyword?, categoryId?, authorId?, startTime?, endTime?, sort?:DocumentSort`（**全状态治理列表**：`status` 四值均可用且 `TRASH` 命中 `deleted = 1` 的行，权限 `doc:manage`；`authorId` 即拟稿人，本表无「发文单位」列） |
 
-> 以上 8 个 `*PageDtoReq` 省略 `pageNum` / `pageSize` 时按 §3.6 取默认值 1 / 10，语义等价于 `extends PageDtoReq`。
-> `DocumentSearchDtoReq` / `DocumentMineDtoReq` / `DocumentTrashDtoReq` 是 M4 实现文档域时补齐的登记项（此前只有 5 个）。
+> 以上 9 个 `*PageDtoReq` 省略 `pageNum` / `pageSize` 时按 §3.6 取默认值 1 / 10，语义等价于 `extends PageDtoReq`。
+> `DocumentSearchDtoReq` / `DocumentMineDtoReq` / `DocumentTrashDtoReq` 是 M4 实现文档域时补齐的登记项（此前只有 5 个）；
+> `DocumentManageDtoReq` 是 M5 前置补登记项（此前治理列表没有独立入参类型）。
 
 **系统域补充（新建 / 更新 / 关联）**
 
@@ -284,6 +287,7 @@
 | `RolePermissionVo` | `roleId, permissionIds:string[]` |
 | `DeptRoleVo` | `deptId, roleIds:string[]` |
 | `UserPasswordDtoReq` | `newPassword`（重置密码专用；≥8 位且同时含字母与数字，重置成功后该用户全部 token 失效） |
+| `PasswordChangeDtoReq` | `oldPassword, newPassword`（**自助**改密专用，登录即可、仅本人；新密码 8–32 位且同时含字母与数字；旧密码不符返回 400「原密码不正确」；成功后**该用户全部 token 失效**，含当前设备） |
 
 > ⚠️ 易错点：`UserCreateDtoReq.roles` / `UserUpdateDtoReq.roles` 是**角色编码**数组（如 `['STAFF']`），而 `DeptRoleDtoReq.roleIds` / `RolePermissionDtoReq.permissionIds` 是**主键 ID** 数组。两者不可互换。
 > **不在本字典登记的类型**：① 前端上传工具的非 VO 辅助类型 `UploadEntry`（`blob:Blob, name:string`）；② 第三方库配置字段（axios 的 `baseURL` / `headers` / `timeout`，markdown-it 的 `html` / `linkify` / `breaks` / `typographer` / `plugins`）。它们不是领域字段，不受 R1 红线约束。
@@ -306,7 +310,7 @@
 | `UserStatus` | `'ACTIVE' \| 'LOCKED' \| 'DISABLED'` |
 | `PermType` | `'DIR' \| 'MENU' \| 'BUTTON'` |
 | `RoleCode` | `'STAFF' \| 'DOC_ADMIN' \| 'SYS_ADMIN'` |
-| `DocumentSort` | `'updatedAt_desc' \| 'publishAt_desc' \| 'viewCount_desc'` |
+| `DocumentSort` | `'updatedAt_desc' \| 'publishAt_desc' \| 'viewCount_desc' \| 'relevance'` |
 | 分页别名 | `DocumentPageVo = PageVo<DocumentVo>`、`UserPageVo = PageVo<UserVo>`、`RolePageVo = PageVo<RoleVo>` |
 | 列表/树别名 | `DocumentVersionListVo`、`CategoryTreeVo`、`TagListVo`、`PermissionTreeVo`、`DeptTreeVo` |
 
@@ -417,7 +421,8 @@ export type DocumentStatus = 'DRAFT' | 'PUBLISHED' | 'ARCHIVED' | 'TRASH'
 export type UserStatus = 'ACTIVE' | 'LOCKED' | 'DISABLED'
 export type RoleCode = 'STAFF' | 'DOC_ADMIN' | 'SYS_ADMIN'
 export type PermType = 'DIR' | 'MENU' | 'BUTTON'
-export type DocumentSort = 'updatedAt_desc' | 'publishAt_desc' | 'viewCount_desc'
+export type DocumentSort = 'updatedAt_desc' | 'publishAt_desc' | 'viewCount_desc' | 'relevance'
+export type MatchedIn = 'title' | 'summary' | 'content'
 
 export interface AuditVo {
   createdAt: string
@@ -440,6 +445,8 @@ export interface DocumentVo extends AuditVo {
   viewCount: number
   favoriteCount: number
   canEdit: boolean
+  highlight?: string | null   // 命中的正文片段（命中词两侧各 30 字，命中词以 <em> 包裹）；仅全文检索分支
+  matchedIn?: MatchedIn | null // 命中字段；非全文检索分支为 null
 }
 
 export interface DocumentDetailVo extends DocumentVo {
@@ -474,7 +481,8 @@ export interface PageVo<T> {
 | 权限码与 `PRD.md` §3.2 的 39 个权限点一致 | ✅ | §5 动词表逐条引用 |
 | 禁用别名明确列出（M5 代码走查检查表） | ✅ | §6 |
 | TS 类型与后端 VO 字段逐字对齐 | ✅ | §7 |
+| v2.2 三项接口变更的新字段/新类型全部登记 | ✅ | §3.6（`keyword` 全文口径、`relevance`）、§3.7（`highlight` / `matchedIn` / `DocumentManageDtoReq` / `PasswordChangeDtoReq`）、§7（`MatchedIn`） |
 
 ---
 
-**冻结签署**：本文件 v2.1 自 2026-09-21 起冻结。任何新字段必须先在此登记，再写代码。
+**冻结签署**：本文件 v2.1 自 2026-09-21 起冻结；**v2.2（2026-09-23）为 M5 前置的登记性增补，v2.1 的命名口径未变**。任何新字段必须先在此登记，再写代码。

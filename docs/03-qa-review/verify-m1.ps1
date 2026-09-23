@@ -186,7 +186,9 @@ $voNeeds = @('LoginVo', 'UserInfoVo', 'UserVo', 'UserCreateDtoReq', 'UserStatusD
              'DeptCreateDtoReq', 'DeptUpdateDtoReq', 'CategoryCreateDtoReq', 'CategoryUpdateDtoReq',
              'TagCreateDtoReq', 'TagUpdateDtoReq', 'PermissionCreateDtoReq', 'DocumentAuditDtoReq',
              'DocumentRejectDtoReq', 'DocumentDeriveDtoReq', 'DocumentDestroyDtoReq',
-             'RolePermissionVo', 'DeptRoleVo', 'FavoriteVo', 'RolePermissionDtoReq', 'DeptRoleDtoReq')
+             'RolePermissionVo', 'DeptRoleVo', 'FavoriteVo', 'RolePermissionDtoReq', 'DeptRoleDtoReq',
+             'UserPasswordDtoReq', 'DocumentMineDtoReq', 'DocumentTrashDtoReq',
+             'DocumentManageDtoReq', 'PasswordChangeDtoReq', 'MatchedIn')
 $voMissing = @()
 foreach ($v in $voNeeds) { if ($glo -notlike "*$v*") { $voMissing += $v } }
 Check 'C14 vo-dictionary-registered' ($voMissing.Count -eq 0) ("registered=" + ($voNeeds.Count - $voMissing.Count) + "/" + $voNeeds.Count + " missing=" + $(if ($voMissing.Count) { $voMissing -join ',' } else { '0' }))

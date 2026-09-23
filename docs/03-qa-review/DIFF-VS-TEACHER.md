@@ -33,7 +33,7 @@
 | `sys_user` 列 | 16 列；`phone varchar(20) NULL`、**非唯一**；**无** `login_failure_count` / `lock_time` / `token_version`；有 `status`(默认 ACTIVE)、`last_login_at` | `information_schema.COLUMNS` |
 | 种子账号手机号 | admin `13800000001`、docadmin `13800000002`、staff `13800000003` —— **短信登录有现成测试数据** | `SELECT id,username,phone` |
 | 本地 Maven 仓库 | `spring-boot-starter-security` **已缓存**、`jose4j` **已缓存**（`jjwt` 未缓存） | 扫 `D:\DevEnv\05_Maven\repository` |
-| 机检规模 | m3-http 125 项 / m4-http 152 项；两个脚本中 **与 401/403 直接相关的取值点各 11 处** | 正则统计 |
+| 机检规模 | m3-http **142** 项 / m4-http **218** 项（2026-09-23 M5 前置增补后）；两个脚本中 **与 401/403 直接相关的取值点各 11 处** | 正则统计 |
 
 ### 1.2 老师那边（读源码得到的事实，**含其工程自身的缺陷**）
 
@@ -100,7 +100,7 @@
 加 `SecurityConstant.WHITE_LIST` 常量 + 失败计数锁定 + 短信登录（接在现有拦截器体系上）。
 
 - 新增 ~8 类 / 改 ~6 类 / 停用 0；DB +2 列（`login_failure_count`、`lock_time`）+ 1 个唯一索引
-- 机检：新增用例 ~30 条，**已有 420 项几乎不受影响**
+- 机检：新增用例 ~30 条，**已有 504 项几乎不受影响**
 - 代价：**不满足你"框架也想对齐老师"的诉求**
 - **1~1.5 人天**
 
@@ -112,7 +112,7 @@ Spring Security 过滤链 + jose4j 双令牌（access 2h / refresh 7d）+ UA 绑
 - 停用 **2 类**（`LoginInterceptor`、`WebMvcConfig` 里的拦截器注册；`BearerToken` 保留给静态资源）
 - DB：+2 列（`login_failure_count`、`lock_time`）、`phone` 加**唯一索引**、`data.sql`/`schema.sql`/`perf-fixture.sql` 同步
 - 文档：`ARCHITECTURE §5.2`（现文明文**否决 JWT**，必须改写并留决策记录）、`API_SPECIFICATION`（认证章节 + 新增 3 接口）、`PRD §8`（O5 措辞 + 新增"短信登录"范围）、`GLOSSARY`（新增 DTO/VO）、`UI_UX_SPECIFICATION`（登录页加短信 Tab）、`openapi-campusswap.json`（55 → ~58 端点）
-- 机检：两个 HTTP 脚本的 401/403 取值点各 11 处要重新对口径；新增短信/锁定/刷新/白名单用例 ~40 条；**必须重跑全部 420 项**
+- 机检：两个 HTTP 脚本的 401/403 取值点各 11 处要重新对口径；新增短信/锁定/刷新/白名单用例 ~40 条；**必须重跑全部 504 项**
 - 风险：M3/M4 踩过的 6 个坑（登出幂等、Redis 抖动误判失效、错误响应中文与枚举、软删除唯一索引、IDOR…）要在新链路上**重新验一遍**，不能假定"框架会处理"
 - **2~3 人天 ≈ 我这边 10~13 个回合**
 
@@ -152,11 +152,11 @@ Spring Security 过滤链 + jose4j 双令牌（access 2h / refresh 7d）+ UA 绑
 | 阶段 | 内容 | 出口（可复跑的验收） | 回滚点 |
 |---|---|---|---|
 | **S0 文档**（~1 回合） | 改 `ARCHITECTURE §5.2`（认证方案）、`API_SPECIFICATION`（认证章节 + 3 新接口）、`PRD §8`（范围）、`GLOSSARY`、`UI_UX_SPECIFICATION`（登录页）；`verify-api-spec.ps1` 24 项复绿 | 文档机检全绿 + 你确认 | 不进代码，随时弃 |
-| **S1 骨架**（2~3 回合） | +security 依赖、`SecurityConfig`、`WHITE_LIST` 常量、`CampusUserDetailsService`、JSON 401/403 出口；拦截器退役；`@PreAuthorize` 机械替换 53 处 | 密码登录可用；**m3-http 125 / m4-http 152 复绿（口径同步后）**；`ddl-auto=validate` 通过 | `git reset --hard pre-security-baseline` |
+| **S1 骨架**（2~3 回合） | +security 依赖、`SecurityConfig`、`WHITE_LIST` 常量、`CampusUserDetailsService`、JSON 401/403 出口；拦截器退役；`@PreAuthorize` 机械替换 53 处 | 密码登录可用；**m3-http 142 / m4-http 218 复绿（口径同步后）**；`ddl-auto=validate` 通过 | `git reset --hard pre-security-baseline` |
 | **S2 JWT**（2~3 回合） | jose4j `JwtUtil`/`JwtFilter`、双令牌、`token_version` 撤销、UA 绑定、refresh 接口、改密踢人 | 新增 JWT 用例全绿；撤销/过期/篡改三类反例逐个验；M3 的"踢人即时生效"复验 | tag `pre-jwt` |
 | **S3 短信登录**（2 回合） | `SmsCodeService`（Redis TTL + 频率限制）、`SmsAuthenticationProvider`、`/api/auth/sms/send`、`/api/auth/sms/login`、`SmsSender` 接口 + 开发模式实现 | 三账号手机号登录成功；错码/过期/限流/未注册手机号四类反例 | tag `pre-sms` |
 | **S4 风控**（1~2 回合） | 失败计数 + `lock_time` 锁定 + 解锁路径 + 登录记录 | 连错 5 次锁定实测；锁定中正确密码也 403；`status=LOCKED` 与自动锁定不打架 | tag `pre-lockout` |
-| **S5 回归与收口**（1~2 回合） | 全量重跑 **420 项**（m0 13 / m1 15 / api-spec 24 / m2 16 / db-deep 9 / m3 36 / m3-http 125 / m4 30 / m4-http 152）+ 新增用例；`TEST_CHECKLIST.md` 扩展；`SECURITY-CLOSURE.md`；OpenAPI 补 3 接口 + 桌面副本；提交推送 | 全绿 + 桌面副本 SHA256 一致 + 远端 = 本机 | 全部保留 tag |
+| **S5 回归与收口**（1~2 回合） | 全量重跑 **504 项**（m0 13 / m1 15 / api-spec 24 / m2 17 / db-deep 9 / m3 36 / m3-http 142 / m4 30 / m4-http 218）+ 新增用例；`TEST_CHECKLIST.md` 扩展；`SECURITY-CLOSURE.md`；OpenAPI 补 3 接口 + 桌面副本；提交推送 | 全绿 + 桌面副本 SHA256 一致 + 远端 = 本机 | 全部保留 tag |
 
 **回滚语义**：S1~S4 每阶段结束打一个 tag；任何一步自验失败且 30 分钟内修不掉 → 回到上一个 tag，因此**不会出现"改了一半不动了"的状态**。
 
@@ -166,7 +166,7 @@ Spring Security 过滤链 + jose4j 双令牌（access 2h / refresh 7d）+ UA 绑
 
 1. **"换成 JWT 更简单"是假象**。JWT 不可撤销，老师那套照样要 Redis 存 `token_version` 才能踢人/改密失效 —— 也就是说 S2 做完，"要 Redis" 这件事一点没少，只是令牌形态变了。**换 JWT 的收益是"与老师形态一致 + 可以横向扩展无状态"**，不是"代码更少"。
 2. **权限体系有缩水风险**。老师那边 `authorities` 是空集，等于没有授权层；我们的 39 权限点是 M3 的核心资产。**迁移时若把 `@RequiresPermission` 直接删掉换成"登录即可访问"，是实质退步**——所以 D3 我建议走机械替换而不是删。
-3. **420 项回归必须重跑，且我预期会有失败**。M3/M4 的 6 个坑都长在鉴权链路上（登出幂等、Redis 抖动、中文错误提示），换链路就是重新踩一遍。**我会把每一次失败都写进收口记录**（复现 → 根因 → 修法 → 复验），不隐藏。
+3. **504 项回归必须重跑，且我预期会有失败**。M3/M4 的 6 个坑都长在鉴权链路上（登出幂等、Redis 抖动、中文错误提示），换链路就是重新踩一遍。**我会把每一次失败都写进收口记录**（复现 → 根因 → 修法 → 复验），不隐藏。
 4. **响应体契约不能变**。前端（M5）和 Apifox 依赖 `{code,message,data}` + `ErrorCode` 的 401/403 语义；Spring Security 默认返回的是空体 401/403 + `WWW-Authenticate` 头。**必须写自定义入口点，否则前端要改** —— 这是 S1 的第一条验收。
 5. **一个不能碰的既有约定**：`/api/auth/logout` 重复调用必须幂等 200（API 规范 §4.1.2）。Spring Security 的 `logout` 默认是 302/204，**必须保留我们"放行进 Controller"的写法**，否则又是一次"修了 A 坏了 B"。
 6. **范围变更会被记录**。`PRD §8 O5`（邮件/短信通知）与"短信登录"是两回事，但没有你的明确同意我不动 §5.2 的冻结决策；S0 就是把这句同意**变成文档里的决策记录**（谁、何时、为什么）。

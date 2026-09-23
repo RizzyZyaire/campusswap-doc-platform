@@ -94,6 +94,67 @@
 | C3 | **排序键必须进索引**：`(created_by, deleted)` 会让 `ORDER BY updated_at` 退化为 filesort（28.4 ms） | 已改为 `idx_doc_created_by_updated(created_by, updated_at, deleted)`；M6 回归时复核 |
 | C4 | 无索引时 20 000 行即产生 18.2 ms + 全表扫描；数据量再涨 10 倍将线性恶化 | Q4 仅作对照，不进入任何生产查询路径 |
 | C5 | 所有列表接口的排序字段（`updatedAt` / `publishAt` / `viewCount`）必须与索引列对应 | `DocumentSort` 三档与索引列对照表见 `ARCHITECTURE.md` §10.4 |
+| **C6** | **全文检索确实走 `ft_doc_search`**（`type=fulltext`），且同一关键词在旧 `LIKE title/summary` 分支命中 **0** 行、`MATCH ... IN BOOLEAN MODE` 命中 **1** 行 —— 这就是 M5 前置加全文索引的实证依据 | 见 §2 的 **Q5**；`verify-m2.ps1` C12/C13b 断言索引存在且列序 = `title,summary,content_md` + ngram 解析器 |
+
+---
+
+## 2b. Q5 全文检索（M5 前置，2026-09-23 实测）
+
+**被测 SQL**（`DocumentQueryRepositoryImpl#searchFullText` 的原生分页片段，此处去掉高亮窗口只留过滤条件）：
+
+```sql
+SELECT d.id FROM doc_document d
+ WHERE d.deleted = 0 AND d.status = 'PUBLISHED'
+   AND MATCH(d.title, d.summary, d.content_md) AGAINST('+复制比*' IN BOOLEAN MODE);
+```
+
+**实测输出**（重灌校园口径种子 + `ANALYZE TABLE doc_document` 之后，MySQL 8.0.46）：
+
+```
+           id: 1
+  select_type: SIMPLE
+        table: d
+         type: fulltext                    <-- 走全文索引，不是 ref/ALL
+possible_keys: ft_doc_search
+          key: ft_doc_search               <-- 命中的就是它
+      key_len: 0
+          ref: const
+         rows: 1
+     filtered: 20.00
+        Extra: Using where; Ft_hints: no_ranking
+```
+
+**同一关键词的三路对照**（`backend/sql/data.sql` 的校园种子，关键词「复制比」只出现在正文里）：
+
+| 查询 | 命中行数 |
+|---|---|
+| `WHERE title LIKE '%复制比%' OR summary LIKE '%复制比%'`（**旧口径**） | **0** |
+| `WHERE content_md LIKE '%复制比%'`（正文确实有这个词） | **1** |
+| `WHERE MATCH(title,summary,content_md) AGAINST('+复制比*' IN BOOLEAN MODE)`（**新口径**） | **1** |
+| 新口径 + `deleted = 0 AND status = 'PUBLISHED'`（检索接口的真实口径） | **1** |
+
+**「简报」同理 0 → 1**；反向用例「危化品」只在**草稿**（doc3）正文里：全状态 `MATCH` = 1，加上 `status='PUBLISHED'` 后 = **0** —— 证明全文分支没有把草稿泄漏进检索页。
+
+**三条硬约束（实测踩到，已写进 `ARCHITECTURE.md` §10.4）**：
+
+1. **列组合必须与索引完全一致**：`MATCH(title, summary)` 这类子集写法直接 `ERROR 1191 (Can't find FULLTEXT index matching the column list)` —— 所以「命中标题还是摘要」用 `LOCATE` 判定。
+2. **1 字词会让整个布尔 AND 归零**（`ngram_token_size = 2`）：`+M4* +A* +123456*` = 0 行，去掉 1 字的 `A` 后 = 1 行 → 表达式生成时丢弃长度 < 2 的词。
+3. **批量造数后必须 `ANALYZE TABLE doc_document;`**（跑 `perf-fixture.sql` 之后），否则全文索引统计不新鲜。
+
+**复现命令**（可直接粘）：
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File D:\DevEnv\logs\oapi\reseed-campus.ps1   # 重灌种子 + ANALYZE + 探针
+```
+
+```sql
+USE campusswap_db;
+ANALYZE TABLE doc_document;
+SELECT COUNT(*) FROM doc_document WHERE title LIKE '%复制比%' OR summary LIKE '%复制比%';                       -- 期望 0
+SELECT COUNT(*) FROM doc_document WHERE MATCH(title,summary,content_md) AGAINST('+复制比*' IN BOOLEAN MODE);  -- 期望 1
+EXPLAIN SELECT d.id FROM doc_document d WHERE d.deleted=0 AND d.status='PUBLISHED'
+  AND MATCH(d.title,d.summary,d.content_md) AGAINST('+复制比*' IN BOOLEAN MODE)\G                                -- 期望 type=fulltext
+```
 
 ---
 
@@ -103,3 +164,4 @@
 - [ ] 按 `DocumentSort` 的三档排序各跑一次 `EXPLAIN ANALYZE`：`updatedAt_desc`（已测）、`publishAt_desc`、`viewCount_desc` → 后两档若无索引支撑需补索引或降级排序选项
 - [ ] 核对列表接口的 Hibernate 生成 SQL 与本文件 Q1~Q3b 一致（避免 JPA 生成额外的 `COUNT` 全表查询）
 - [ ] 把本文件与 `TEST_CHECKLIST.md` 的 N+1 记录交叉引用，形成"查询性能"完整证据链
+- [x] ~~全文检索分支的 `EXPLAIN`~~ → 已在 §2b Q5 完成（2026-09-23，M5 前置）

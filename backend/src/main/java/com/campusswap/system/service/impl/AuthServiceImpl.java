@@ -4,9 +4,11 @@ import cn.hutool.crypto.digest.BCrypt;
 import com.campusswap.common.api.ErrorCode;
 import com.campusswap.common.exception.BusinessException;
 import com.campusswap.common.security.SecurityContext;
+import com.campusswap.common.util.TxUtil;
 import com.campusswap.entity.User;
 import com.campusswap.entity.enums.UserStatus;
 import com.campusswap.system.dto.LoginDtoReq;
+import com.campusswap.system.dto.PasswordChangeDtoReq;
 import com.campusswap.system.repository.UserRepository;
 import com.campusswap.system.service.AuthService;
 import com.campusswap.system.service.PermissionCacheService;
@@ -17,6 +19,7 @@ import com.campusswap.system.vo.UserInfoVo;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 /**
  * 认证服务实现。
@@ -26,7 +29,8 @@ import org.springframework.stereotype.Service;
  *
  * <p>事务口径：本类<b>不</b>加类级事务 —— 登录流程里既有 DB 写（{@code last_login_at}，由
  * {@link UserService#touchLastLogin(Long)} 的独立事务负责）又有 Redis 写（token、权限缓存），
- * 按 ARCHITECTURE §8「事务内不写 Redis」把它们拆开。</p>
+ * 按 ARCHITECTURE §8「事务内不写 Redis」把它们拆开；自助改密是本类唯一<b>方法级</b>事务
+ * （DB 写 + 提交后清 token，见 {@link #changePassword(PasswordChangeDtoReq)}）。</p>
  *
  * @author Zyaire
  */
@@ -34,6 +38,9 @@ import org.springframework.stereotype.Service;
 @Service
 @RequiredArgsConstructor
 public class AuthServiceImpl implements AuthService {
+
+    /** BCrypt 强度（BR-20，与 {@code UserServiceImpl} 一致）。 */
+    private static final int BCRYPT_STRENGTH = 10;
 
     private final UserRepository userRepository;
     private final UserService userService;
@@ -93,5 +100,30 @@ public class AuthServiceImpl implements AuthService {
             throw new BusinessException(ErrorCode.USER_DISABLED, "账号已停用或冻结，请联系系统管理员");
         }
         return userService.buildUserInfo(user);
+    }
+
+    /**
+     * 自助修改密码（API_SPECIFICATION §9.1，登录即可，仅本人）。
+     *
+     * <p>顺序：取当前登录用户 → BCrypt 校验旧密码（不通过 400「原密码不正确」）→ 写入新哈希 →
+     * <b>事务提交后</b>清空 {@code user:tokens:{userId}}（{@link TxUtil#afterCommit}，ARCHITECTURE §8：
+     * 事务内不写 Redis）。清空的是该用户的<b>全部</b> token，因此改密后旧 token 立即 401，
+     * 必须用新密码重新登录（与管理员重置密码同一条安全口径）。</p>
+     *
+     * @param req 改密入参（旧密码 + 新密码）
+     */
+    @Override
+    @Transactional
+    public void changePassword(PasswordChangeDtoReq req) {
+        Long userId = SecurityContext.requireUserId();
+        User user = userService.getUserOrThrow(userId);
+        if (!BCrypt.checkpw(req.oldPassword(), user.getPasswordHash())) {
+            log.warn("自助改密失败（原密码不正确）: userId={}", userId);
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "原密码不正确");
+        }
+        user.setPasswordHash(BCrypt.hashpw(req.newPassword(), BCrypt.gensalt(BCRYPT_STRENGTH)));
+        userRepository.saveAndFlush(user);
+        TxUtil.afterCommit(() -> tokenService.revokeAll(userId));
+        log.info("自助改密成功: userId={}", userId);
     }
 }
