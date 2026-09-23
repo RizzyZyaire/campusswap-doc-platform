@@ -110,11 +110,12 @@ $uiOrphans = @()
 foreach ($p in $uiPaths) { if ($api -notlike "*$p*") { $uiOrphans += $p } }
 Check 'C4 ui-endpoints-subset-of-api' ($uiOrphans.Count -eq 0) ("ui paths=" + $uiPaths.Count + " orphans=" + $(if ($uiOrphans.Count) { $uiOrphans -join ',' } else { '0' }))
 
-# --- C5: the 8 front-end routes from plan 6.1 all exist in the UI spec ---------
-$routes = @('/login', '/docs/:id', '/docs/edit/:id?', '/docs', '/my', '/review', '/admin/docs', '/admin/system')
+# --- C5: the 13 front-end routes of UI spec v2 all exist in the UI spec --------
+$routes = @('/login', '/workbench', '/docs', '/docs/:id', '/docs/edit/:id?', '/my', '/review',
+            '/governance', '/taxonomy', '/admin/users', '/admin/roles', '/admin/org', '/me')
 $missingRoutes = @()
 foreach ($r in $routes) { if ($ui -notlike "*$r*") { $missingRoutes += $r } }
-Check 'C5 ui-eight-routes' ($missingRoutes.Count -eq 0) ("missing=" + $(if ($missingRoutes.Count) { $missingRoutes -join ',' } else { '0' }))
+Check 'C5 ui-v2-thirteen-routes' ($missingRoutes.Count -eq 0) ("required=" + $routes.Count + " missing=" + $(if ($missingRoutes.Count) { $missingRoutes -join ',' } else { '0' }))
 
 # --- C6: all 8 user stories are covered by the API contract --------------------
 $missingUs = @()

@@ -2459,6 +2459,55 @@ Content-Type: image/png
 
 ---
 
+## 9. 待落地接口变更（已决定，尚未实现；实现后并入 §3 总表与 §4 详规）
+
+> 本节的 3 项变更由 2026-09-23 的界面信息架构评审定案（见 `UI_UX_SPECIFICATION.md` v2 §10）。
+> 它们的**契约已冻结**，但**代码尚未实现**；因此暂不并入 §3「接口总表（55 条）」与 §4 逐模块详规，以免出现"文档说有、代码没有"的死链。
+> 落地顺序与受影响机检见 `UI_UX_SPECIFICATION.md §10.5`。
+
+### 9.1 新增 `PUT /api/auth/password`（登录用户自助改密）
+
+| 项 | 值 |
+|---|---|
+| 权限 | 登录即可（仅本人） |
+| 入参 | `PasswordChangeDtoReq`：`oldPassword`（必填）、`newPassword`（必填，8–32 位且含字母与数字，与 F1-08 同规则） |
+| 出参 | `Void` |
+| 主要错误码 | 400（原密码不正确 / 新密码不合规，中文提示）、401 |
+| 行为 | 校验旧密码 → 更新 `password_hash` → **清空 `user:tokens:{userId}`（踢掉其它会话）** → 200 |
+| 与既有接口边界 | 管理员重置 `PUT /api/users/{id}/password`（`sys:user:reset`）保持不变；前端「我的账号」页调用本接口 |
+| 机检增补 | 改密成功后旧 token 请求 401；旧密码错误 400；新密码不合规 400 且提示为中文 |
+
+### 9.2 新增 `GET /api/documents/manage`（治理用全状态列表）
+
+| 项 | 值 |
+|---|---|
+| 权限 | `doc:manage` |
+| 入参 | `DocumentManageDtoReq`：`status`（可空，`DRAFT`/`PUBLISHED`/`ARCHIVED`/`TRASH`，空=全部）、`keyword`、`unitId`、`pageNum`/`pageSize` |
+| 出参 | `PageVo<DocumentVo>`（含 `status`；回收站行 `deleted=1`，需原生 SQL 绕过 `@SQLRestriction`，列序与类型转换复用 `DocumentColumns`） |
+| 主要错误码 | 400 / 401 / 403 |
+| 与既有接口边界 | `GET /api/documents` 语义**不变**（只返回 `PUBLISHED`，权限 `doc:search`）；治理页只调新接口 |
+| 机检增补 | 含 `TRASH` 返回 200 且行数 ≥1；`staff`/`docadmin` 调用 403；SQL 条数 ≤3（`ARCHITECTURE §10.5` 预算表同步登记） |
+
+### 9.3 `GET /api/documents` 检索能力增强（全文检索）
+
+现状：`keyword` 只做 `LIKE` 匹配 `title` 与 `summary`，**不搜正文**。真实种子数据上的对照实验：关键词「递归」在正文中存在（`content_md LIKE` 命中 1 篇），而现行为命中 0 篇。
+
+| 项 | 变更 |
+|---|---|
+| 索引 | `ALTER TABLE doc_document ADD FULLTEXT KEY ft_doc_search (title, summary, content_md) WITH PARSER ngram;`（MySQL 8.0.46 实测可用，`ngram_token_size=2`） |
+| 匹配 | `keyword` 非空且长度 ≥2 → `MATCH(title,summary,content_md) AGAINST('+词 +词*' IN BOOLEAN MODE)`；`keyword` 为空 → 走原 Criteria 分支 |
+| 排序 | 新增可选 `sort=relevance`（相关度倒序），默认仍为 `updatedAt` 倒序 |
+| 出参新增 | `highlight`（命中的正文片段，命中词两侧各 30 字，命中词以 `<em>` 包裹）、`matchedIn`（`title` / `summary` / `content`） |
+| 安全 | 拼接前剥离布尔符号 `+ - * " ( ) ~ < >`，避免布尔注入 |
+| 兜底 | 关键词 < 2 字时回落 `LIKE title/summary`；接口仍只返回 `PUBLISHED` |
+
+### 9.4 审查发现：权限点 `doc:offline`（下架文档）**没有对应接口**
+
+`sys_permission` 中存在 `doc:offline`（DOC_ADMIN / SYS_ADMIN 均持有），但后端无任何 `offline` 端点，v1 界面也未渲染入口。
+处置：**本轮不新增下架接口** —— 状态机里 `ARCHIVED`（归档＝下架但可检索只读）已覆盖该语义，二者重复。该权限点作为预留位保留在权限树中，界面上不出现任何入口；是否在 M6 清理权限树（会牵动 PRD §3.2 与 `data.sql` 的角色权限条数）留待 M6 评审决定。
+
+---
+
 ## 附录 A：作废写法对照表（DEPRECATED — anti-alias reference）（迁移既有文档用，**代码中禁止出现**）
 
 > 用途：`PRD.md` / `USER_STORIES.md` / `MASTER-PLAN.md §5.2 §5.3` 迁移到 GLOSSARY v2.1 时的逐项对照依据。
