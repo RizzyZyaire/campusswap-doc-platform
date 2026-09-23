@@ -34,19 +34,19 @@
 
 ---
 
-## 2 现状数字（2026-09-23 实测，不是估的）
+## 2 现状数字（2026-09-23 M5 收口后实测，不是估的）
 
 | 项 | 值 |
 |---|---|
-| 提交 | **11 次**，`main` == `origin/main` == `edbe00c` |
-| 被跟踪文件 | **191**：`backend/*.java` **150**、`docs/*.md` **13**、`docs/03-qa-review/*.ps1` **9**、`*.sql` **3** |
-| 机检规模 | 9 个脚本、**420 个断言/检查点**（13+15+24+16+9+36+125+30+152） |
-| 接口 | **55 个**（OpenAPI 3.0.3，52 个 schema，40 条 path） |
+| 提交 | **12 次**，`main` == `origin/main` == `397d7c8` |
+| 被跟踪文件 | **269**：`backend/*.java` **150**、`frontend/src/**` **45**（含 15 个 .vue）、`docs/*.md` **14**、`docs/03-qa-review/*.ps1` **10** |
+| 机检规模 | **10 个脚本、约 568 个断言/检查点**（13+15+24+17+9+36+142+30+221+43）+ 前端 4 条命令（typecheck/lint/build/check-classes）+ 预览稿 211 项 |
+| 接口 | **57 个**后端端点，前端 `src/api` **全覆盖**（机检 D9b 对账 0 未覆盖） |
 | 数据库 | `campusswap_db`：**14 张表 / 20 个索引**，零物理外键（靠机检守逻辑外键） |
-| 权限 | **39 个权限点**、3 个角色、3 个部门 |
+| 权限 | **39 个权限点**、3 个角色、3 个部门；前端 39 个常量与库中逐字一致（机检 D7c） |
 | 鉴权 | **4 道关卡**；4 族 Redis 键（`login:token:` 2h、`user:tokens:` 2h、`perm:user:` 30min、`view:doc:{docId}:{userId}` 30min） |
-| 前端 | `frontend/` **只有骨架目录 + `public/.gitkeep`**，业务代码 0 行（M5 未开工） |
-| 本地服务 | Redis 6379 正在监听；后端 10087 空闲（未启动）；MySQL80 服务自启 |
+| 前端 | **13 条功能路由 + 2 条异常路由 / 15 个视图**，四态与权限逐页落地；6 套主题；设计系统 361 条规则由预览稿**生成** |
+| 本地服务 | Redis 6379 正在监听；后端 10087 正在跑（dev）；前端 Vite 5173；MySQL80 服务自启 |
 
 ---
 
@@ -111,6 +111,16 @@
 - **发现的坑（重要）**：老师那份 `SecurityConfig` 引用的 `SmsCodeAuthenticationProvider`、`WeChatAuthenticationProvider` **两个类在工程里不存在**，pom 里也没有 security / jose4j 依赖，`UserController.login()` 是 `return "";` 的桩 → 它是"形态参考"，不是可运行基线。
 - **结论（老师 2026-09-23 答复）**：原理一致，那套只是更规范 → **架构不改**，重心转向"把已有代码读懂讲清"。
 
+### M5 前端实现 —— `397d7c8`（2026-09-23 深夜）
+- **做了什么**：`frontend/` 从零到可用 —— Vue 3.5 + TS 5.7(strict) + Vite 6.4 + Tailwind 3.4 + Pinia + vue-router；**13 条功能路由 + 2 条异常路由 / 15 个视图**，每页四态与权限显隐逐条对齐 `UI_UX_SPECIFICATION §8.x`；`src/api` 覆盖后端 **57 个端点**；6 套主题；设计系统的 361 条 CSS 规则与 13 项素材**由预览稿生成**（不手抄）。
+- **三处最值得讲的实现**：
+  1. `src/api/request.ts` —— 响应拦截器**拆信封**（调用方只拿 `data`）+ `ApiError` 按 `code` 分类；401 不 import router（会成环），而是 `dispatchEvent('app:unauthorized')` 由 `main.ts` 接。
+  2. `src/router/index.ts` 守卫按 §1.3：未登录 → `/login?redirect=`；已登录但 `meta.perm` 不匹配 → `/403?perm=`（**`/docs/edit/:id?` 必须排在 `/docs/:id` 前面**，否则 `/docs/edit` 会被详情路由吃掉）。
+  3. `views/document/DocumentEditView.vue` —— **409 分两种处置**：状态冲突（归档/回收站）切只读；**版本冲突不切只读**，出横幅 +「刷新内容」按钮（`versionNum` 陈旧表单防覆盖的前端那一半）。这个分支有端到端复现脚本 `frontend/scripts/verify-edit-conflict.mjs`（真改一版 → 保存 → 断言横幅与不切只读 → 刷新 → 再存成功，10/10）。
+- **本轮抓到并修掉的真缺陷**（`M5-CLOSURE.md §3` 有完整复现/根因/修法）：① 预览稿同步脚本从 HTML 注释里的字面量 `<style>` 起算，生成出来的 `components.css` **第一条规则是非法选择器**；② 平铺正则不支持花括号嵌套 → `@keyframes sk` 头部丢失、产物里留两行孤立声明；③ 原检查器"未解析内容"判断因 `exec` 归零 `lastIndex` 而**恒为假**（正因如此①②才藏了很久）；④ 模板里写了不存在的类名 → 因此新增 `pnpm run check-classes`（拿**产物 CSS** 对账 206 个类名）。
+- **证据**：`verify-m5.ps1` **43/43** + `typecheck/lint/build/check-classes` 四条 exit 0 + 409 脚本 **10/10** + 后端全量回归绿（m0 13 / m1 15 / api-spec 24 / m2 17 / db-deep 9 / m3 36 / m3-http 142 / m4 30 / m4-http 221 / JUnit 6）+ 预览稿 211 + 15 张页面截图（`D:\DevEnv\logs\shots\m5-*.png`）。
+- **一条可以背下来的经验**：**"生成物"也要有体检**。设计系统是脚本从预览稿生成的，脚本的两个正则 bug 都能产出"看起来正常、其实非法/丢失"的 CSS；而静态检查当时全绿 —— 最后是拿**构建产物**核对类名、以及截图人眼，才把它们揪出来。
+
 ---
 
 ## 4 代码地图（150 个 Java 文件）
@@ -127,6 +137,19 @@
 | `document/{controller,service,repository,dto,vo}` | 6 / 9 / 12 / 17 / 8 | 文档域全部业务 | `DocumentQueryRepositoryImpl`（Criteria + 投影）→ `DocumentServiceImpl`（状态机与归属校验） |
 
 **读代码的顺序建议**：`WebMvcConfig` → `LoginInterceptor` → `SecurityContext` → `PermissionAspect` → `AuthController`（登录怎么发 token）→ `DocumentQueryRepositoryImpl`（读）→ `DocumentServiceImpl`（写）→ `DocumentColumns` + 原生 SQL（回收站/收藏）→ `GlobalExceptionHandler`。
+
+**前端代码地图（45 个文件，M5）**：
+
+| 目录 | 文件数 | 职责 | 想读懂它先看 |
+|---|---|---|---|
+| `src/api` | 7 | Axios 实例 / 拦截器 / 按域拆分的 57 个接口函数 | `request.ts`（拆信封 + `ApiError` + 401 广播） |
+| `src/types` | 4 | GLOSSARY §3.7 的手写映射（ID 一律 `string`） | `document.ts`（`DocumentUpdateDtoReq` 上的 `versionNum` 注释） |
+| `src/stores` | 3 | 用户会话与 `hasPerm` / 6 套主题 / 轻提示 | `user.ts` |
+| `src/router` | 1 | 13 + 2 条路由 + 守卫（§1.3） | `index.ts` 的 `beforeEach` |
+| `src/views` | 15 | 逐页实现（四态 + 权限显隐） | `document/DocumentEditView.vue`（409 两种处置）、`admin/RoleAdminView.vue`（三层权限树半选） |
+| `src/utils` | 4 | 权限常量 / 格式化 / Markdown 渲染与目录 / 行级 diff | `perm.ts`（39 个权限码）、`diff.ts`（自研 LCS，无第三方依赖） |
+| `src/styles` | 3 | `theme.css`+`components.css` **生成**，`main.css` 手写 | `main.css` 顶部注释（为什么不能手改生成物） |
+| `scripts` | 4 | 预览稿同步 / 截图 / 类名体检 / 409 复现 | `extract-preview.mjs`（含两个已修的正则坑） |
 
 ---
 
@@ -227,13 +250,26 @@ powershell -NoProfile -ExecutionPolicy Bypass -File D:\DevEnv\projects\campusswa
 powershell -NoProfile -ExecutionPolicy Bypass -File D:\DevEnv\projects\campusswap\docs\03-qa-review\verify-m3-http.ps1
 powershell -NoProfile -ExecutionPolicy Bypass -File D:\DevEnv\projects\campusswap\docs\03-qa-review\verify-m4-http.ps1 -AppLog D:\DevEnv\logs\campusswap-app.log
 
+# ④b 前端机检（不需要后端；M5 新增）
+powershell -NoProfile -ExecutionPolicy Bypass -File D:\DevEnv\projects\campusswap\docs\03-qa-review\verify-m5.ps1
+
 # ⑤ 白盒测试（2026-09-23 新增，4 类 6 用例；需 MySQL + Redis 在跑）
 cd D:\DevEnv\projects\campusswap\backend; .\mvnw.cmd test
 
-# ⑤ 直接看库
+# ⑤b 起前端并自检（端口 5173，/api 与 /uploads 代理到 10087）
+cd D:\DevEnv\projects\campusswap\frontend
+pnpm install; pnpm dev
+pnpm run typecheck; pnpm run lint; pnpm run build; pnpm run check-classes
+node scripts/shot.mjs workbench /workbench 1600 1200 staff        # 带登录态截图 -> D:\DevEnv\logs\shots
+node scripts/verify-edit-conflict.mjs 3 staff                     # 409 版本冲突端到端（**会真的改一篇文档**，跑完重灌演示库）
+
+# ⑤c 预览稿自检（改了 UI-PREVIEW.html 之后跑；211 项）
+node D:\DevEnv\projects\campusswap\docs\02-design\ui-preview.smoke.mjs
+
+# ⑥ 直接看库
 D:\DevEnv\03_MySQL\bin\mysql.exe -uroot -p123456 campusswap_db
 
-# ⑥ 直接看 Redis（登录后能看到 login:token:* / perm:user:*）
+# ⑦ 直接看 Redis（登录后能看到 login:token:* / perm:user:*）
 D:\DevEnv\04_Redis\redis-cli.exe -p 6379 KEYS 'login:*'
 D:\DevEnv\04_Redis\redis-cli.exe -p 6379 KEYS 'perm:*'
 ```
@@ -256,9 +292,9 @@ D:\DevEnv\04_Redis\redis-cli.exe -p 6379 KEYS 'perm:*'
 
 ### 9.2 仍未结清
 
-M5 前端未开工（`frontend/` 只有骨架目录）；M6 测试与评审、M7 交付未做；Apifox 手动导入 + 发请求待你操作；防火墙 3306/6379 的入站放行规则未按建议收窄。
+**M5 前端已完成**（见 §3 的 M5 条目与 `docs/03-qa-review/M5-CLOSURE.md`）；M6 测试与评审、M7 交付未做；Apifox 手动导入 + 发请求待你操作；防火墙 3306/6379 的入站放行规则未按建议收窄。
 
-**UI 规格 v2 重写已完成（2026-09-23）**：`docs/02-design/UI_UX_SPECIFICATION.md` 升到 **v2.2**（13 条功能路由 + 六套主题 + 视觉资源规范 + 逐页四态 + §2.5 视觉反馈规范 + §10 三处缺口处置决定与全文检索契约 + §8.5 编辑页 409 两种处置 + §11 落地检查清单），视觉以 `docs/02-design/UI-PREVIEW.html`（**v8.2**：v6 的首页三版式定为 **A 左文右图**、v7 的登录页固定时光塔、v8 的顶栏弹出面板与行级悬停、v8.2 的 409 版本冲突提示与契约登记）为准，配套自检 `docs/02-design/ui-preview.smoke.mjs`（**211 项**）。
+**UI 规格已升到 v2.4（2026-09-23 M5 收口）**：`docs/02-design/UI_UX_SPECIFICATION.md` —— v2.2（13 条功能路由 + 六套主题 + 视觉资源规范 + 逐页四态 + §2.5 视觉反馈规范 + §10 三处缺口处置决定与全文检索契约）、v2.3（§8.5 编辑页 409 两种处置）、**v2.4（§8.5 拟稿人/可见范围/积分标记、§8.7 审核意见必填与统计口径、§8.8 无下架入口与概览卡口径）**；视觉以 `docs/02-design/UI-PREVIEW.html`（**v8.3**：v6 首页三版式定为 A 左文右图、v7 登录页固定时光塔、v8 顶栏弹出面板与行级悬停、v8.2 409 版本冲突提示与契约登记、**v8.3 = M5 收口对账：删下架入口 / 可见范围改只读 / 字段名写清**）为准，配套自检 `docs/02-design/ui-preview.smoke.mjs`（**211 项**）。
 
 ### 9.3 三项后端变更的读码路线（老师问「这代码你懂吗」时按这个顺序讲）
 
