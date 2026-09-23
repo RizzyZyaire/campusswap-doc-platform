@@ -2,7 +2,7 @@
     "openapi":  "3.0.3",
     "info":  {
                  "title":  "CampusSwap 文档管理平台 API",
-                 "version":  "1.0.0-m4",
+                 "version":  "1.0.0-m5prep",
                  "description":  "系统与权限域 25 条 + 文档域 30 条 = 55 条（M4 后全部实现）。字段口径与 docs/02-design/API_SPECIFICATION.md 逐字一致；所有 ID 在 JSON 中为字符串，时间为 yyyy-MM-dd HH:mm:ss。"
              },
     "servers":  [
@@ -2966,7 +2966,237 @@
                                                                                    }
                                                                        }
                                                      }
-                                        }
+                                        },
+                  "/api/documents/manage":  {
+                                                "get":  {
+                                                            "tags":  [
+                                                                         "审核与治理"
+                                                                     ],
+                                                            "summary":  "治理用全状态文档列表",
+                                                            "description":  "权限 doc:manage。可按状态筛选全平台文档（含回收站 TRASH，走原生 SQL 绕过软删除过滤）。GET /api/documents 语义不变，仍只返回已发布文档。",
+                                                            "responses":  {
+                                                                              "200":  {
+                                                                                          "content":  {
+                                                                                                          "application/json":  {
+                                                                                                                                   "schema":  {
+                                                                                                                                                  "properties":  {
+                                                                                                                                                                     "message":  {
+                                                                                                                                                                                     "type":  "string"
+                                                                                                                                                                                 },
+                                                                                                                                                                     "code":  {
+                                                                                                                                                                                  "type":  "integer"
+                                                                                                                                                                              },
+                                                                                                                                                                     "data":  {
+                                                                                                                                                                                  "properties":  {
+                                                                                                                                                                                                     "list":  {
+                                                                                                                                                                                                                  "items":  {
+                                                                                                                                                                                                                                "$ref":  "#/components/schemas/DocumentVo"
+                                                                                                                                                                                                                            },
+                                                                                                                                                                                                                  "type":  "array"
+                                                                                                                                                                                                              },
+                                                                                                                                                                                                     "pageSize":  {
+                                                                                                                                                                                                                      "type":  "integer"
+                                                                                                                                                                                                                  },
+                                                                                                                                                                                                     "total":  {
+                                                                                                                                                                                                                   "type":  "integer"
+                                                                                                                                                                                                               },
+                                                                                                                                                                                                     "pageNum":  {
+                                                                                                                                                                                                                     "type":  "integer"
+                                                                                                                                                                                                                 }
+                                                                                                                                                                                                 },
+                                                                                                                                                                                  "type":  "object"
+                                                                                                                                                                              }
+                                                                                                                                                                 },
+                                                                                                                                                  "type":  "object"
+                                                                                                                                              }
+                                                                                                                               }
+                                                                                                      },
+                                                                                          "description":  "成功"
+                                                                                      },
+                                                                              "400":  {
+                                                                                          "$ref":  "#/components/responses/BadRequest"
+                                                                                      },
+                                                                              "401":  {
+                                                                                          "$ref":  "#/components/responses/Unauthorized"
+                                                                                      },
+                                                                              "403":  {
+                                                                                          "$ref":  "#/components/responses/NoPermission"
+                                                                                      }
+                                                                          },
+                                                            "parameters":  [
+                                                                               {
+                                                                                   "name":  "status",
+                                                                                   "in":  "query",
+                                                                                   "description":  "状态，空 = 全部（含回收站 TRASH）",
+                                                                                   "schema":  {
+                                                                                                  "type":  "string",
+                                                                                                  "enum":  [
+                                                                                                               "DRAFT",
+                                                                                                               "PUBLISHED",
+                                                                                                               "ARCHIVED",
+                                                                                                               "TRASH"
+                                                                                                           ]
+                                                                                              }
+                                                                               },
+                                                                               {
+                                                                                   "description":  "标题/摘要模糊匹配",
+                                                                                   "name":  "keyword",
+                                                                                   "in":  "query",
+                                                                                   "schema":  {
+                                                                                                  "type":  "string"
+                                                                                              }
+                                                                               },
+                                                                               {
+                                                                                   "description":  "含全部子孙分类",
+                                                                                   "name":  "categoryId",
+                                                                                   "in":  "query",
+                                                                                   "schema":  {
+                                                                                                  "type":  "string"
+                                                                                              }
+                                                                               },
+                                                                               {
+                                                                                   "name":  "authorId",
+                                                                                   "in":  "query",
+                                                                                   "required":  false,
+                                                                                   "description":  "拟稿人用户 ID（等价 created_by；数据模型里没有「发文单位」列，故按拟稿人筛选）",
+                                                                                   "schema":  {
+                                                                                                  "type":  "string",
+                                                                                                  "pattern":  "^\\d{1,19}$"
+                                                                                              }
+                                                                               },
+                                                                               {
+                                                                                   "description":  "创建时间起",
+                                                                                   "name":  "startTime",
+                                                                                   "in":  "query",
+                                                                                   "schema":  {
+                                                                                                  "type":  "string"
+                                                                                              }
+                                                                               },
+                                                                               {
+                                                                                   "description":  "创建时间止",
+                                                                                   "name":  "endTime",
+                                                                                   "in":  "query",
+                                                                                   "schema":  {
+                                                                                                  "type":  "string"
+                                                                                              }
+                                                                               },
+                                                                               {
+                                                                                   "description":  "页码 \u003e=1，默认 1，\u003e100 拒绝",
+                                                                                   "name":  "pageNum",
+                                                                                   "in":  "query",
+                                                                                   "schema":  {
+                                                                                                  "type":  "integer"
+                                                                                              }
+                                                                               },
+                                                                               {
+                                                                                   "description":  "每页 1~100，默认 10",
+                                                                                   "name":  "pageSize",
+                                                                                   "in":  "query",
+                                                                                   "schema":  {
+                                                                                                  "type":  "integer"
+                                                                                              }
+                                                                               },
+                                                                               {
+                                                                                   "description":  "updatedAt_desc（默认）/publishAt_desc/viewCount_desc",
+                                                                                   "name":  "sort",
+                                                                                   "in":  "query",
+                                                                                   "schema":  {
+                                                                                                  "type":  "string"
+                                                                                              }
+                                                                               }
+                                                                           ]
+                                                        },
+                                                "post":  {
+                                                             "tags":  [
+                                                                          "文档"
+                                                                      ],
+                                                             "summary":  "新建文档草稿",
+                                                             "description":  "新建文档草稿（权限点 doc:create）",
+                                                             "requestBody":  {
+                                                                                 "content":  {
+                                                                                                 "application/json":  {
+                                                                                                                          "schema":  {
+                                                                                                                                         "$ref":  "#/components/schemas/DocumentCreateDtoReq"
+                                                                                                                                     }
+                                                                                                                      }
+                                                                                             },
+                                                                                 "required":  true
+                                                                             },
+                                                             "responses":  {
+                                                                               "200":  {
+                                                                                           "content":  {
+                                                                                                           "application/json":  {
+                                                                                                                                    "schema":  {
+                                                                                                                                                   "properties":  {
+                                                                                                                                                                      "message":  {
+                                                                                                                                                                                      "type":  "string"
+                                                                                                                                                                                  },
+                                                                                                                                                                      "code":  {
+                                                                                                                                                                                   "type":  "integer"
+                                                                                                                                                                               },
+                                                                                                                                                                      "data":  {
+                                                                                                                                                                                   "$ref":  "#/components/schemas/DocumentDetailVo"
+                                                                                                                                                                               }
+                                                                                                                                                                  },
+                                                                                                                                                   "type":  "object"
+                                                                                                                                               }
+                                                                                                                                }
+                                                                                                       },
+                                                                                           "description":  "成功"
+                                                                                       },
+                                                                               "400":  {
+                                                                                           "$ref":  "#/components/responses/BadRequest"
+                                                                                       },
+                                                                               "401":  {
+                                                                                           "$ref":  "#/components/responses/Unauthorized"
+                                                                                       },
+                                                                               "403":  {
+                                                                                           "$ref":  "#/components/responses/NoPermission"
+                                                                                       }
+                                                                           }
+                                                         }
+                                            },
+                  "/api/auth/password":  {
+                                             "put":  {
+                                                         "tags":  [
+                                                                      "认证"
+                                                                  ],
+                                                         "summary":  "自助修改密码",
+                                                         "description":  "登录用户本人在「我的账号」页修改密码：校验原密码 → 更新密码哈希 → 清空该用户全部已登录令牌（其它设备强制下线）。管理员重置仍走 PUT /api/users/{id}/password。",
+                                                         "parameters":  [
+                                                                            {
+                                                                                "$ref":  "#/components/parameters/PathId"
+                                                                            }
+                                                                        ],
+                                                         "requestBody":  {
+                                                                             "required":  true,
+                                                                             "content":  {
+                                                                                             "application/json":  {
+                                                                                                                      "schema":  {
+                                                                                                                                     "$ref":  "#/components/schemas/PasswordChangeDtoReq"
+                                                                                                                                 }
+                                                                                                                  }
+                                                                                         }
+                                                                         },
+                                                         "responses":  {
+                                                                           "200":  {
+                                                                                       "$ref":  "#/components/responses/OkVoid"
+                                                                                   },
+                                                                           "400":  {
+                                                                                       "$ref":  "#/components/responses/BadRequest"
+                                                                                   },
+                                                                           "401":  {
+                                                                                       "$ref":  "#/components/responses/Unauthorized"
+                                                                                   },
+                                                                           "403":  {
+                                                                                       "$ref":  "#/components/responses/NoPermission"
+                                                                                   },
+                                                                           "404":  {
+                                                                                       "$ref":  "#/components/responses/NotFound"
+                                                                                   }
+                                                                       }
+                                                     }
+                                         }
               },
     "components":  {
                        "securitySchemes":  {
@@ -3971,7 +4201,20 @@
                                                                                             },
                                                                              "id":  {
                                                                                         "type":  "string"
-                                                                                    }
+                                                                                    },
+                                                                             "highlight":  {
+                                                                                               "type":  "string",
+                                                                                               "description":  "全文检索命中的正文片段（命中词两侧各 30 字，命中词以 \u003cem\u003e 包裹）；仅关键词检索时返回"
+                                                                                           },
+                                                                             "matchedIn":  {
+                                                                                               "type":  "string",
+                                                                                               "description":  "命中位置；仅关键词检索时返回",
+                                                                                               "enum":  [
+                                                                                                            "title",
+                                                                                                            "summary",
+                                                                                                            "content"
+                                                                                                        ]
+                                                                                           }
                                                                          },
                                                           "description":  "文档列表项（不含正文）",
                                                           "type":  "object"
@@ -4383,7 +4626,77 @@
                                                                "required":  [
                                                                                 "name"
                                                                             ]
-                                                           }
+                                                           },
+                                       "PasswordChangeDtoReq":  {
+                                                                    "type":  "object",
+                                                                    "required":  [
+                                                                                     "oldPassword",
+                                                                                     "newPassword"
+                                                                                 ],
+                                                                    "properties":  {
+                                                                                       "oldPassword":  {
+                                                                                                           "type":  "string",
+                                                                                                           "description":  "原密码"
+                                                                                                       },
+                                                                                       "newPassword":  {
+                                                                                                           "type":  "string",
+                                                                                                           "minLength":  8,
+                                                                                                           "maxLength":  32,
+                                                                                                           "description":  "新密码：8–32 位且同时包含字母与数字"
+                                                                                                       }
+                                                                                   }
+                                                                },
+                                       "DocumentManageDtoReq":  {
+                                                                    "type":  "object",
+                                                                    "properties":  {
+                                                                                       "status":  {
+                                                                                                      "type":  "string",
+                                                                                                      "enum":  [
+                                                                                                                   "DRAFT",
+                                                                                                                   "PUBLISHED",
+                                                                                                                   "ARCHIVED",
+                                                                                                                   "TRASH"
+                                                                                                               ],
+                                                                                                      "description":  "状态，空 = 全部"
+                                                                                                  },
+                                                                                       "keyword":  {
+                                                                                                       "type":  "string",
+                                                                                                       "maxLength":  64,
+                                                                                                       "description":  "标题 / 摘要关键词"
+                                                                                                   },
+                                                                                       "categoryId":  {
+                                                                                                          "type":  "string",
+                                                                                                          "description":  "分类 ID（传父分类 = 含全部子孙）"
+                                                                                                      },
+                                                                                       "authorId":  {
+                                                                                                        "type":  "string",
+                                                                                                        "description":  "拟稿人用户 ID"
+                                                                                                    },
+                                                                                       "startTime":  {
+                                                                                                         "type":  "string",
+                                                                                                         "description":  "起始时间（闭区间）"
+                                                                                                     },
+                                                                                       "endTime":  {
+                                                                                                       "type":  "string",
+                                                                                                       "description":  "结束时间（闭区间）"
+                                                                                                   },
+                                                                                       "pageNum":  {
+                                                                                                       "type":  "integer",
+                                                                                                       "minimum":  1,
+                                                                                                       "default":  1
+                                                                                                   },
+                                                                                       "pageSize":  {
+                                                                                                        "type":  "integer",
+                                                                                                        "minimum":  1,
+                                                                                                        "maximum":  100,
+                                                                                                        "default":  10
+                                                                                                    },
+                                                                                       "sort":  {
+                                                                                                    "type":  "string",
+                                                                                                    "description":  "排序方式（DocumentSort）"
+                                                                                                }
+                                                                                   }
+                                                                }
                                    }
                    }
 }

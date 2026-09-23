@@ -34,8 +34,8 @@
   ---------------------------------------------------------------------------
   v2 相对 v1 的三处大改（用户 2026-09-23 反馈）：
    ① 口径改成「校园」而不是「公司」：分类体系 = 党政公文/教务教学/科研学术/学生工作/
-      人事人才/财务资产/后勤保障/图书档案/学院文档/模板表单；发文单位 = 学校办公室、
-      教务处、科技处、人事处、信息化中心、图书馆、档案馆、后勤服务集团等；
+      人事人才/财务资产/后勤保障/图书档案/学院文档/模板表单；拟稿人取自校内各单位（学校办公室、教务处、科技处、人事处、信息化中心、图书馆、
+      档案馆等），文档表本身不含「发文单位」列；
       示例文档取官网真实通知的题材（国基金预申报、实习支教、新入职教师培训、
       校领导接待日、裕华校区道路封闭通告…）。
       机构名称与院系清单取自河北师范大学官网「机构设置 → 院系设置 / 管理服务」
@@ -1106,16 +1106,14 @@ V.search = function(){
   var rows = DATA.docs.filter(function(d){ return d.status === 'PUBLISHED'; });
   return ''
   + '<div class="page-head"><div><h1>文档检索</h1>'
-  + '<div class="desc">按关键词、分类、标签与发文单位组合检索。检索接口只返回「已发布」文档；草稿与他人未发布内容不在检索范围内。</div></div>'
+  + '<div class="desc">按关键词（全文检索，含正文）、分类、标签与更新时间组合检索。检索接口只返回「已发布」文档；草稿与他人未发布内容不在检索范围内。</div></div>'
   + '<div class="acts">' + (has('doc:create') ? '<button class="btn btn-primary" data-go="edit">新建文档</button>' : '') + '</div></div>'
   + '<div class="card mb16"><div class="card-bd">'
   +   '<div class="filter">'
   +     '<div class="field wide"><label class="label">关键词</label><input class="input" value="" placeholder="标题或摘要，如：国家自然科学基金、实习支教"></div>'
   +     '<div class="field"><label class="label">分类</label><select class="select"><option>全部分类</option>'
   +       DATA.categories.map(function(c){ return '<option>' + esc(c.name) + '</option>'; }).join('') + '</select></div>'
-  +     '<div class="field"><label class="label">发文单位</label><select class="select"><option>全部单位</option>'
-  +       ['学校办公室','教务处','科技处','社会科学处','人事处','学生处','研究生院','信息化中心','图书馆','档案馆','后勤服务集团','软件学院','数学科学学院'].map(function(u){ return '<option>' + esc(u) + '</option>'; }).join('') + '</select></div>'
-  +     '<div class="field wide"><label class="label">标签（可多选）</label><div class="chip-pick">'
+  +     '<div class="field"><label class="label">标签（可多选）</label><div class="chip-pick">'
   +       DATA.tags.map(function(t,i){ return '<span class="tag' + (i < 2 ? ' on' : '') + '">' + esc(t) + '</span>'; }).join('')
   +     '</div></div>'
   +     '<div class="field"><label class="label">更新时间</label><select class="select"><option>不限</option><option>近一周</option><option>近一月</option><option>本学期</option></select></div>'
@@ -1125,14 +1123,14 @@ V.search = function(){
   + '</div></div>'
   + '<div class="card"><div class="card-hd"><h3>检索结果</h3><span class="sub">共 ' + rows.length + ' 篇</span>'
   +   '<div class="acts xs t3">仅显示你有权查看的文档</div></div>'
-  +   '<table class="tbl"><thead><tr><th>文档</th><th class="w-fix2">发文单位</th><th class="w-fix2">分类</th>'
+  +   '<table class="tbl"><thead><tr><th>文档</th><th class="w-fix2">拟稿人</th><th class="w-fix2">分类</th>'
   +   '<th class="w-fix">状态</th><th class="w-fix">阅读</th><th class="w-fix2">更新时间</th><th class="w-fix3"></th></tr></thead><tbody>'
   +   rows.map(function(d){
         return '<tr>'
         + '<td><a class="title" data-go="detail">' + esc(d.title) + '</a><span class="sub">' + esc(d.summary) + '</span>'
         +   (d.tags.length ? '<span class="mt8 row wrap">' + d.tags.map(function(t){ return '<span class="tag">' + esc(t) + '</span>'; }).join('') + '</span>' : '')
         + '</td>'
-        + '<td class="sm t2">' + esc(d.unit) + '</td>'
+        + '<td class="sm t2">' + esc(d.owner) + '</td>'
         + '<td class="sm t2">' + esc(d.cat) + '</td>'
         + '<td>' + statusBadge(d.status) + '</td>'
         + '<td class="num t2">' + d.views + '</td>'
@@ -1156,7 +1154,7 @@ V.detail = function(){
   + '<div class="page-head"><div>'
   +   '<div class="row wrap mb8"><h1>' + esc(d.title) + '</h1>' + statusBadge(d.status) + '<span class="badge plain">v' + d.ver + '</span></div>'
   +   '<div class="row wrap xs t2">'
-  +     '<span>发文单位：' + esc(d.unit) + '</span><span>·</span><span>分类：' + esc(d.cat) + '</span>'
+  +     '<span>拟稿人：' + esc(d.owner) + '</span><span>·</span><span>分类：' + esc(d.cat) + '</span>'
   +     '<span>·</span><span>拟稿：' + esc(d.owner) + '</span><span>·</span><span>更新时间：' + esc(d.updated) + '</span>'
   +     '<span>·</span><span>阅读 ' + d.views + '</span><span>·</span><span>收藏 ' + d.favs + '</span>'
   +   '</div>'
@@ -1201,7 +1199,7 @@ V.detail = function(){
   +       '<div class="toc"><a>第一章　总则</a><a>第二章　组织与职责</a><a>第三章　时间安排</a></div>'
   +     '</div></div>'
   +     '<div class="card"><div class="card-hd"><h3>文档信息</h3></div><div class="card-bd"><div class="kv">'
-  +       '<div class="k">发文单位</div><div>' + esc(d.unit) + '</div>'
+  +       '<div class="k">拟稿人</div><div>' + esc(d.owner) + '</div>'
   +       '<div class="k">文号</div><div class="mono">校教〔2026〕18 号</div>'
   +       '<div class="k">分类</div><div>' + esc(d.cat) + '</div>'
   +       '<div class="k">拟稿</div><div>' + esc(d.owner) + '</div>'
@@ -1277,8 +1275,7 @@ V.edit = function(){
   +       '<select class="select"><option>科研学术 / 科研平台</option>'
   +       DATA.categories.map(function(c){ return '<option>' + esc(c.name) + '</option>'; }).join('') + '</select>'
   +       '<div class="hint">用于全校检索与归档</div></div>'
-  +     '<div class="field mb12"><label class="label">发文单位</label>'
-  +       '<select class="select"><option>软件学院（网络教育学院）</option><option>国有资产委员会办公室</option><option>教务处</option><option>科技处</option></select></div>'
+  +     '<div class="field mb12"><label class="label">拟稿人</label><input class="input readonly" value="当前登录用户（自动取登录态）" disabled></div>'
   +     '<div class="field mb12"><label class="label">标签（最多 5 个）</label><div class="chip-pick">'
   +       DATA.tags.map(function(t,i){ return '<span class="tag' + (i === 6 ? ' on' : '') + '">' + esc(t) + '</span>'; }).join('') + '</div></div>'
   +     '<div class="field mb12"><label class="label">摘要</label><textarea class="textarea" rows="3">检查范围、时间安排与自查报告提交要求。</textarea></div>'
@@ -1305,7 +1302,7 @@ V.mine = function(){
         return '<button class="tab' + (i === 0 ? ' active' : '') + '">' + t[0] + '<span class="n">' + t[1] + '</span></button>';
       }).join('') + '</div>'
   +   '<div class="toolbar"><input class="input grow" placeholder="在标题与摘要中搜索">'
-  +     '<select class="select select-compact"><option>全部单位</option><option>软件学院</option><option>教务处</option></select>'
+  +     '<span class="xs t3">仅显示本人创建或参与审核的文档</span>'
   +     '<select class="select select-compact"><option>按更新时间 ↓</option><option>按创建时间 ↓</option></select></div>'
   +   '<table class="tbl"><thead><tr><th>文档</th><th class="w-fix">状态</th><th class="w-fix">版本</th>'
   +     '<th class="w-fix">阅读</th><th class="w-fix2">更新时间</th><th class="w-fix3"></th></tr></thead><tbody>'
@@ -1374,10 +1371,10 @@ V.governance = function(){
   +   '所以下面的「草稿 / 回收站」筛选与行属于设计意图，落地前需二选一：① 后端补一个 <span class="mono">doc:manage</span> 的全状态列表接口（推荐）；② 治理页只治理已发布与已归档。</span></div>'
   + '<div class="card"><div class="toolbar">'
   +   '<select class="select select-compact"><option>全部状态</option><option>已发布</option><option>已归档</option><option>草稿</option><option>回收站</option></select>'
-  +   '<select class="select select-compact"><option>全部单位</option><option>学校办公室</option><option>教务处</option><option>科技处</option><option>软件学院</option></select>'
+  +   '<select class="select select-compact"><option>全部拟稿人</option><option>赵慕辰</option><option>王砚秋</option><option>李承霖</option><option>孙允棠</option></select>'
   +   '<input class="input grow" placeholder="搜索标题或拟稿人">'
   +   '<button class="btn btn-sm">查询</button></div>'
-  +   '<table class="tbl"><thead><tr><th>文档</th><th class="w-fix2">发文单位</th><th class="w-fix">状态</th>'
+  +   '<table class="tbl"><thead><tr><th>文档</th><th class="w-fix2">拟稿人</th><th class="w-fix">状态</th>'
   +   '<th class="w-fix">版本</th><th class="w-fix">阅读</th><th class="w-fix3"></th></tr></thead><tbody>'
   +   DATA.docs.map(function(d){
         var acts = [];
@@ -1385,7 +1382,7 @@ V.governance = function(){
         if (has('doc:offline')) acts.push('<button class="link">下架</button>');
         if (has('doc:delete')) acts.push('<button class="link danger">彻底删除</button>');
         return '<tr><td><a class="title" data-go="detail">' + esc(d.title) + '</a><span class="sub">拟稿：' + esc(d.owner) + '</span></td>'
-          + '<td class="sm t2">' + esc(d.unit) + '</td><td>' + statusBadge(d.status) + '</td>'
+          + '<td class="sm t2">' + esc(d.owner) + '</td><td>' + statusBadge(d.status) + '</td>'
           + '<td class="t2">v' + d.ver + '</td><td class="num t2">' + d.views + '</td>'
           + '<td class="acts">' + acts.join('') + '</td></tr>';
       }).join('')
@@ -1404,7 +1401,7 @@ V.taxonomy = function(){
   }).join('');
   return ''
   + '<div class="page-head"><div><h1>分类与标签</h1>'
-  + '<div class="desc">分类体系对应学校机构与业务条线，用于全校检索与归档；标签是跨分类的横向聚合，由发文单位在编辑文档时创建。</div></div>'
+  + '<div class="desc">分类体系对应学校机构与业务条线，用于全校检索与归档；标签是跨分类的横向聚合，由拟稿人在编辑文档时创建。</div></div>'
   + '<div class="acts">'
   +   (has('doc:category:edit') ? '<button class="btn">新增一级分类</button>' : '')
   +   (has('doc:tag:edit') ? '<button class="btn btn-primary">新增标签</button>' : '')

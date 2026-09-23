@@ -2482,7 +2482,8 @@ Content-Type: image/png
 | 项 | 值 |
 |---|---|
 | 权限 | `doc:manage` |
-| 入参 | `DocumentManageDtoReq`：`status`（可空，`DRAFT`/`PUBLISHED`/`ARCHIVED`/`TRASH`，空=全部）、`keyword`、`unitId`、`pageNum`/`pageSize` |
+| 入参 | `DocumentManageDtoReq`：`status`（可空，`DRAFT`/`PUBLISHED`/`ARCHIVED`/`TRASH`，空=全部）、`keyword`、`categoryId`、`authorId`、`startTime`/`endTime`、`sort`、`pageNum`/`pageSize` |
+| 数据模型说明 | **没有「发文单位」字段**（`doc_document` 只有 `created_by` 拟稿人），因此治理筛选维度是 `authorId`；界面上原计划的「发文单位」筛选与列一律改为「拟稿人」 |
 | 出参 | `PageVo<DocumentVo>`（含 `status`；回收站行 `deleted=1`，需原生 SQL 绕过 `@SQLRestriction`，列序与类型转换复用 `DocumentColumns`） |
 | 主要错误码 | 400 / 401 / 403 |
 | 与既有接口边界 | `GET /api/documents` 语义**不变**（只返回 `PUBLISHED`，权限 `doc:search`）；治理页只调新接口 |

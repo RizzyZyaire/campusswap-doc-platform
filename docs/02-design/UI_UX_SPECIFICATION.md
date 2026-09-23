@@ -846,7 +846,7 @@ export interface UploadEntry {
 ### 8.3 `/docs` 文档检索
 
 - **权限**：`doc:search` ｜ **接口**：`GET /api/documents`（**v2 起支持全文检索**，见 §10.4）、`GET /api/categories/tree`、`GET /api/tags`、`POST /api/documents/{id}/favorite`、`POST /api/documents/{id}/derive`
-- **布局**：筛选区（关键词 / 分类树 / 发文单位 / 标签多选 / 更新时间 / 排序 + 重置/检索）→ 结果列表（标题 + 摘要 + 单位 + 分类 + 状态 + 阅读 + 更新时间 + 行操作「收藏/派生/查看」）→ 分页条
+- **布局**：筛选区（关键词 / 分类树 / 标签多选 / 更新时间 / 排序 + 重置/检索）→ 结果列表（标题 + 摘要 + **拟稿人** + 分类 + 状态 + 阅读 + 更新时间 + 行操作「收藏/派生/查看」）→ 分页条
 - **四态**：空＝「没有匹配的文档」+ 清空筛选；加载＝首屏骨架 6 行，筛选变化时保留旧数据 + 顶部 2px 进度条（200ms 内返回不显示骨架）；错误＝「文档列表加载失败」+ 服务端 message + 重新加载（保留筛选）；无权限＝无 `doc:search` 但含 `doc:mine` → 自动跳 `/my`，两者皆无 → 守卫跳 403
 - **关键交互**：关键词防抖 300ms；**筛选条件同步 URL query**（刷新与分享不丢）；**命中词在标题与摘要中高亮**（全文检索返回的 `highlight` 字段）；结果只包含「已发布」文档 —— 草稿与他人未发布内容不在此页出现
 
@@ -881,7 +881,7 @@ export interface UploadEntry {
 ### 8.8 `/governance` 内容治理
 
 - **权限**：`doc:manage`（归档/恢复上架需 `doc:archive`，彻底删除需 `doc:delete`）｜ **接口**：`GET /api/documents/manage`（**v2 新增，见 §10.1**）、`GET /api/documents/{id}`、`GET /api/documents/{id}/versions`、`POST .../archive`、`POST .../republish`、`DELETE .../destroy`
-- **布局**：概览卡 + 状态筛选（含回收站）+ 单位筛选 + 全平台文档表 + 版本历史抽屉
+- **布局**：概览卡 + 状态筛选（含回收站）+ **拟稿人筛选** + 全平台文档表 + 版本历史抽屉
 - **四态**：空＝「平台还没有任何文档」；筛选无命中＝「没有匹配的文档」+ 清空筛选；加载＝概览卡 4 块 + 表格 6 行骨架；错误＝409「状态冲突：该文档当前不是 PUBLISHED」自动刷新、彻底删除 400「仅回收站中的文档可以彻底删除」；无权限＝缺 `doc:archive` 只保留删除按钮
 - **关键交互**：归档写入审核意见；恢复上架同时清空 `rejectReason`（T7）；彻底删除需输入标题确认
 
@@ -953,7 +953,7 @@ export interface UploadEntry {
 |---|---|
 | 路径 | `GET /api/documents/manage` |
 | 权限 | `doc:manage` |
-| 入参 | `status`（可空，支持 `DRAFT`/`PUBLISHED`/`ARCHIVED`/`TRASH`，空=全部）、`keyword`（标题/摘要）、`unitId`（发文单位，可空）、`pageNum`/`pageSize` |
+| 入参 | `status`（可空，支持 `DRAFT`/`PUBLISHED`/`ARCHIVED`/`TRASH`，空=全部）、`keyword`（标题/摘要）、`categoryId`、`authorId`（拟稿人；**数据模型无「发文单位」列**，故按拟稿人筛选）、`startTime`/`endTime`、`sort`、`pageNum`/`pageSize` |
 | 出参 | `PageVo<DocumentVo>`（含 `status`，回收站行 `deleted=1` 需原生 SQL 绕过 `@SQLRestriction`，列序与类型转换复用 `DocumentColumns`） |
 | 与既有接口的边界 | `GET /api/documents` **语义不变**（只返回 `PUBLISHED`，权限 `doc:search`，供检索页）；治理页**只调新接口** |
 | 机检增补 | ① 含 `TRASH` 状态返回 200 且行数 ≥1；② `staff`/`docadmin` 调用返回 403；③ SQL 条数 ≤3（`ARCHITECTURE §10.5` 预算表同步登记） |
