@@ -1,0 +1,93 @@
+// 权限码常量：与后端 @RequiresPermission 的码**逐字一致**（39 个，见 PRD §3.2 / db/campusswap_db）。
+// 视图里一律引这里的常量，避免手写字符串拼错导致按钮该亮不亮。
+export const PERM = {
+  // —— 文档域：页面与入口
+  docCenter: 'doc:center',
+  docMine: 'doc:mine',
+  docSearch: 'doc:search',
+  docReview: 'doc:review',
+  docManage: 'doc:manage',
+  docCategory: 'doc:category',
+  // —— 文档域：动作
+  docCreate: 'doc:create',
+  docEdit: 'doc:edit',
+  docPublish: 'doc:publish',
+  docDelete: 'doc:delete',
+  docRestore: 'doc:restore',
+  docDerive: 'doc:derive',
+  docFavorite: 'doc:favorite',
+  docUpload: 'doc:upload',
+  docAudit: 'doc:audit',
+  docReject: 'doc:reject',
+  docArchive: 'doc:archive',
+  docOffline: 'doc:offline',
+  docCategoryEdit: 'doc:category:edit',
+  docTagEdit: 'doc:tag:edit',
+  // —— 系统域：页面与入口
+  sysCenter: 'sys:center',
+  sysUser: 'sys:user',
+  sysRole: 'sys:role',
+  sysPerm: 'sys:perm',
+  sysDept: 'sys:dept',
+  // —— 系统域：动作
+  sysUserAdd: 'sys:user:add',
+  sysUserEdit: 'sys:user:edit',
+  sysUserDisable: 'sys:user:disable',
+  sysUserReset: 'sys:user:reset',
+  sysRoleAdd: 'sys:role:add',
+  sysRoleEdit: 'sys:role:edit',
+  sysRoleDelete: 'sys:role:delete',
+  sysRoleGrant: 'sys:role:grant',
+  sysPermAdd: 'sys:perm:add',
+  sysPermEdit: 'sys:perm:edit',
+  sysPermDelete: 'sys:perm:delete',
+  sysDeptAdd: 'sys:dept:add',
+  sysDeptEdit: 'sys:dept:edit',
+  sysDeptDelete: 'sys:dept:delete'
+} as const
+
+/** 权限码类型。 */
+export type PermCode = (typeof PERM)[keyof typeof PERM]
+
+/** 权限码 → 中文名（用于 403 页与「我的权限」清单，取自 sys_permission.name）。 */
+export const PERM_LABEL: Record<string, string> = {
+  'doc:center': '文档中心',
+  'doc:mine': '我的文档',
+  'doc:search': '文档检索',
+  'doc:review': '待我审核',
+  'doc:manage': '内容治理',
+  'doc:category': '分类与标签',
+  'doc:create': '新建文档',
+  'doc:edit': '编辑文档',
+  'doc:publish': '提交发布',
+  'doc:delete': '删除文档',
+  'doc:restore': '恢复文档',
+  'doc:derive': '派生文档',
+  'doc:favorite': '收藏文档',
+  'doc:upload': '上传图片',
+  'doc:audit': '审核通过',
+  'doc:reject': '驳回文档',
+  'doc:archive': '归档文档',
+  'doc:offline': '下架文档（预留位，无接口亦无入口）',
+  'doc:category:edit': '维护分类',
+  'doc:tag:edit': '维护标签',
+  'sys:center': '系统管理',
+  'sys:user': '用户管理',
+  'sys:role': '角色与权限',
+  'sys:perm': '权限点',
+  'sys:dept': '组织机构',
+  'sys:user:add': '开通账号',
+  'sys:user:edit': '编辑用户',
+  'sys:user:disable': '停用账号',
+  'sys:user:reset': '重置密码',
+  'sys:role:add': '新增角色',
+  'sys:role:edit': '编辑角色',
+  'sys:role:delete': '删除角色',
+  'sys:role:grant': '角色授权',
+  'sys:perm:add': '新增权限点',
+  'sys:perm:edit': '编辑权限点',
+  'sys:perm:delete': '删除权限点',
+  'sys:dept:add': '新增机构',
+  'sys:dept:edit': '编辑机构',
+  'sys:dept:delete': '删除机构'
+}

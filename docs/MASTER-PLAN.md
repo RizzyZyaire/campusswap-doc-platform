@@ -550,23 +550,28 @@ powershell -NoProfile -ExecutionPolicy Bypass -File docs/03-qa-review/verify-m4-
 
 **目标**：§6.1 的 8 个页面全部可用，通过类型检查与 lint。**前置**：M3/M4 接口可用。
 
-- [ ] **T5.1** 初始化：`pnpm create vite frontend --template vue-ts` → 安装 `vue-router pinia axios tailwindcss markdown-it dompurify`；**只保留 `pnpm-lock.yaml`**
-- [ ] **T5.2** `src/types/`：按 GLOSSARY 手写全部 Interface（**雪花 ID 用 `string`**）
-- [ ] **T5.3** `src/api/`：`request.ts`（Axios 实例 + 拦截器）+ 按模块拆分的接口函数
-- [ ] **T5.4** `src/stores/user.ts`：token、用户信息、权限码；`hasPerm(code)` 工具
-- [ ] **T5.5** `src/router/`：路由表（§6.1）+ 守卫（未登录→登录；无权限→403）
-- [ ] **T5.6** 页面实现：登录 → 文档列表 → 详情 → 编辑器（md 分栏预览 + 图片上传）→ 我的文档 → 审核队列 → 文档管理 → 系统管理
+- [x] **T5.1** 初始化：`pnpm create vite frontend --template vue-ts` → 安装 `vue-router pinia axios tailwindcss markdown-it dompurify`；**只保留 `pnpm-lock.yaml`**
+  - 实际用的是**现成目录手搭**（`frontend/package.json` + `vite.config.ts` + `tsconfig.json`），没有跑 `create vite`；pnpm 配置放在 `frontend/pnpm-workspace.yaml`（pnpm 11 不再读 `package.json` 的 `pnpm` 字段）
+- [x] **T5.2** `src/types/`：按 GLOSSARY 手写全部 Interface（**雪花 ID 用 `string`**）
+- [x] **T5.3** `src/api/`：`request.ts`（Axios 实例 + 拦截器）+ 按模块拆分的接口函数
+- [x] **T5.4** `src/stores/user.ts`：token、用户信息、权限码；`hasPerm(code)` 工具
+- [x] **T5.5** `src/router/`：路由表（§6.1）+ 守卫（未登录→登录；无权限→403）
+- [x] **T5.6** 页面实现：登录 → 文档列表 → 详情 → 编辑器（md 分栏预览 + 图片上传）→ 我的文档 → 审核队列 → 文档管理 → 系统管理
   - **编辑器保存必须回传 `versionNum`**（打开编辑页时从 `GET /api/documents/{id}` 记下的那一版）：与库中当前版本不一致时服务端返回 **409**「该文档已被他人修改（当前版本 v3），请刷新后重试」，前端按 `UI_UX_SPECIFICATION §8.5` 的"版本冲突横幅 + 刷新内容按钮"处理，**不得静默覆盖**；缺该字段服务端返回 400。契约见 `API_SPECIFICATION §4.6.6 / §9.5`，决策见 `ARCHITECTURE §17 ADR-07`（2026-09-23 新增）
-- [ ] **T5.9**（2026-09-23 新增）后端白盒测试可复跑：`mvnw test` 全绿（4 类 6 用例；需 MySQL + Redis 在跑）
-- [ ] **T5.7** 每页四态（空/加载/错误/无权限）与中文文案
-- [ ] **T5.8** 自检：`pnpm run typecheck && pnpm run lint` 全绿
+  - 该分支有**端到端复现脚本**：`frontend/scripts/verify-edit-conflict.mjs`（真接口改一版 → 点保存 → 断言横幅/不切只读/轻提示 → 点刷新内容 → 再保存成功，10/10 通过）
+- [x] **T5.9**（2026-09-23 新增）后端白盒测试可复跑：`mvnw test` 全绿（4 类 6 用例；需 MySQL + Redis 在跑）
+- [x] **T5.7** 每页四态（空/加载/错误/无权限）与中文文案
+- [x] **T5.8** 自检：`pnpm run typecheck && pnpm run lint` 全绿
+  - 追加两项：`pnpm run build`（含 `vite build`）与 `pnpm run check-classes`（拿**产物 CSS** 核对模板里 207 个类名是否都存在，专治"写了个不存在的类名，页面只是少块样式"）
 
 **DoD**：三条角色旅程本地可点通；`frontend/src` 无 `any`、无内联 `style=`
 **验证**：
 ```bash
-cd frontend && pnpm run typecheck && pnpm run lint
-grep -rn "style=" src/ || echo "✅ 无内联样式"
+cd frontend && pnpm run typecheck && pnpm run lint && pnpm run build && pnpm run check-classes
+powershell -NoProfile -ExecutionPolicy Bypass -File docs/03-qa-review/verify-m5.ps1
 ```
+机检结果（2026-09-23 收口）：`verify-m5.ps1` **43/43**；`typecheck`/`lint`/`build`/`check-classes` 四条均 exit 0；
+页面截图自查见 `D:\DevEnv\logs\shots\m5-*.png`（登录 / 工作台 / 检索 / 详情 / 编辑器 / 我的文档 / 审核 / 治理 / 分类标签 / 用户 / 角色 / 组织 / 我的资料）。
 
 ---
 

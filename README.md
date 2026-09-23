@@ -3,7 +3,7 @@
 单位内部 **Markdown 文档管理平台**（课程大作业）。核心闭环：撰写文档 → 分类与标签 → 快速检索 → **基于已有文档派生新文档** → 版本管理 → 文档管理员审核/归档 → 全程 RBAC 控权。
 
 > 📘 **先读这份**：**[docs/MASTER-PLAN.md](docs/MASTER-PLAN.md)** —— 大作业执行手册（已冻结）：技术栈、硬约束、14 张表数据模型、M0~M7 执行计划（**61 个可勾选任务**）、Prompt 库、交付与 Git 规范。
-> 🔍 **质量证据**：`docs/03-qa-review/` 下有 4 个可重跑的机检脚本（`verify-m0/m1/m2/api-spec.ps1`）+ `EXPLAIN-NOTES.md`（执行计划实测）+ `AUDIT-M0-M2.md`（复核与变异测试记录）。
+> 🔍 **质量证据**：`docs/03-qa-review/` 下有 **11 个可重跑的机检脚本**（`verify-m0/m1/m2/m3/m4/m5.ps1` + `verify-api-spec.ps1` + `verify-db-deep.ps1` + 两个 HTTP 接口脚本）+ `EXPLAIN-NOTES.md`（执行计划实测）+ `AUDIT-M0-M2.md`（复核与变异测试记录）+ 各里程碑收口记录（`M3/M4/M5-CLOSURE.md`、`COURSEWARE-CLOSURE.md`）。前端另有三件套：`pnpm run check-classes`（类名体检）、`scripts/shot.mjs`（带登录态截图）、`scripts/verify-edit-conflict.mjs`（409 端到端复现）。
 
 ## 技术栈
 
@@ -41,9 +41,9 @@ campusswap/
 - [x] **M0** 需求冻结：`docs/01-requirements/` 三剑客（8 故事 / 24 条 BDD / 39 权限点 / 14 表 / 24 条业务规则）
 - [x] **M1** 设计定稿：架构、接口规格（55 条接口）、UI/UX 规范（8 页 + 四态）
 - [x] **M2** 数据库：`backend/sql/schema.sql`（14 张表 + 20 索引）+ `data.sql` 种子数据
-- [ ] **M3** 后端骨架 + RBAC（用户/角色/权限/部门）
-- [ ] **M4** 文档业务（CRUD/版本/检索/派生/审核/回收站）
-- [ ] **M5** 前端（8 个页面）
+- [x] **M3** 后端骨架 + RBAC（用户/角色/权限/部门；25 端点，静态 36 项 + 接口 125 项全绿）
+- [x] **M4** 文档业务（CRUD/版本/检索/派生/审核/回收站；30 端点，静态 30 项 + 接口 221 项全绿）
+- [x] **M5** 前端（Vue3 + TS，13 条功能路由 + 2 条异常路由，四态与权限逐页落地；机检 43 项全绿）
 - [ ] **M6** 测试与代码审查（含零 N+1 与索引回归）
 - [ ] **M7** 交付与上传
 
@@ -63,13 +63,16 @@ campusswap/
 mysql -uroot -p < backend/sql/schema.sql      # 建库 + 14 张表 + 20 个索引
 mysql -uroot -p < backend/sql/data.sql        # 种子数据（39 权限点 / 3 角色 / 3 账号）
 
-# 后端（M3 完成后可用）
+# 后端（M3/M4 已完成）
 cd backend && ./mvnw clean compile test
-./mvnw spring-boot:run
+./mvnw spring-boot:run                       # dev 端口 10087
 
-# 前端（M5 完成后可用）
-cd frontend && pnpm install && pnpm dev
-pnpm run typecheck && pnpm run lint
+# 前端（M5 已完成）
+cd frontend && pnpm install && pnpm dev       # dev 端口 5173，/api 与 /uploads 代理到 10087
+pnpm run typecheck && pnpm run lint && pnpm run build && pnpm run check-classes
+#   sync-preview：改了预览稿（docs/02-design/UI-PREVIEW.html）后重新生成主题/组件样式与素材
+#   shot：带登录态无头截图（自检用，产物在 D:\DevEnv\logs\shots）
+#   verify-edit-conflict：409 版本冲突的端到端复现（**会真的改一篇文档**，跑完重灌演示库）
 
 # 质量机检（可随时重跑）
 powershell -File docs/03-qa-review/verify-m0.ps1            # 需求冻结 13 项
@@ -78,6 +81,13 @@ powershell -File docs/03-qa-review/verify-api-spec.ps1      # 接口契约 24 �
 $env:MYSQL_ROOT_PASSWORD='<密码>'; powershell -File docs/03-qa-review/verify-m2.ps1   # 数据库 17 项
 #   注意：这个变量是 **root** 的口令（旧名 DB_PASSWORD 仍兼容，但别混用 —— 它同时被
 #   application-dev/prod.yml 当作 campusswap_dev 的口令读取，混用会让应用/测试连不上库）
+powershell -File docs/03-qa-review/verify-db-deep.ps1       # 库结构与数据深检 9 项
+powershell -File docs/03-qa-review/verify-m3.ps1            # 后端骨架 36 项
+powershell -File docs/03-qa-review/verify-m4.ps1            # 文档域静态 30 项
+powershell -File docs/03-qa-review/verify-m5.ps1            # 前端静态 43 项（不需要后端）
+powershell -File docs/03-qa-review/verify-m3-http.ps1       # 接口回归 125 项（需后端在跑）
+powershell -File docs/03-qa-review/verify-m4-http.ps1 -AppLog D:\DevEnv\logs\campusswap-app.log   # 接口 + SQL 预算 221 项
+node docs/02-design/ui-preview.smoke.mjs                    # 预览稿自检 211 项
 ```
 
 **内置演示账号**（`data.sql` 灌入，bcrypt 真哈希）：`admin/Admin@123`（SYS_ADMIN）、`docadmin/Doc@123456`（DOC_ADMIN）、`staff/Staff@123`（STAFF）。

@@ -1,0 +1,85 @@
+{
+  "generatedFrom": "docs/02-design/UI-PREVIEW.html",
+  "note": "由 frontend/scripts/extract-preview.mjs 生成；预览稿换了素材/样式就重跑 pnpm run sync-preview。",
+  "count": 13,
+  "files": [
+    {
+      "path": "assets/banners/celadon.jpg",
+      "kind": "hero-banner",
+      "bytes": 185910,
+      "sha256": "7443d81602e037f6"
+    },
+    {
+      "path": "assets/banners/gingko.jpg",
+      "kind": "hero-banner",
+      "bytes": 160073,
+      "sha256": "24b2fdac21fb7f30"
+    },
+    {
+      "path": "assets/banners/hebtu.jpg",
+      "kind": "hero-banner",
+      "bytes": 121348,
+      "sha256": "57d8019f203af22c"
+    },
+    {
+      "path": "assets/banners/ink.jpg",
+      "kind": "hero-banner",
+      "bytes": 239842,
+      "sha256": "57edc9aa557ec81c"
+    },
+    {
+      "path": "assets/banners/jiang.jpg",
+      "kind": "hero-banner",
+      "bytes": 96449,
+      "sha256": "53f2f0aef4319cc1"
+    },
+    {
+      "path": "assets/banners/night.jpg",
+      "kind": "hero-banner",
+      "bytes": 129292,
+      "sha256": "a6a741ffc1a03274"
+    },
+    {
+      "path": "assets/brand/favicon.png",
+      "kind": "favicon",
+      "bytes": 8326,
+      "sha256": "4693e1296fa83911"
+    },
+    {
+      "path": "assets/brand/gallery.jpeg",
+      "kind": "brand",
+      "bytes": 35373,
+      "sha256": "a8ec80f9aa279807"
+    },
+    {
+      "path": "assets/brand/logo.png",
+      "kind": "brand",
+      "bytes": 28505,
+      "sha256": "53237c8001727b47"
+    },
+    {
+      "path": "assets/brand/motto.png",
+      "kind": "brand",
+      "bytes": 24335,
+      "sha256": "bef4b4c816de2337"
+    },
+    {
+      "path": "assets/login/tower.jpg",
+      "kind": "login-background",
+      "bytes": 224096,
+      "sha256": "f3a2c4bcf0bb533b"
+    },
+    {
+      "path": "styles/components.css",
+      "kind": "components",
+      "bytes": 37855,
+      "sha256": "c8ab9b2f6c94efb2"
+    },
+    {
+      "path": "styles/theme.css",
+      "kind": "tokens",
+      "bytes": 8341,
+      "sha256": "—"
+    }
+  ]
+}

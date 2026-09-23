@@ -1,0 +1,17 @@
+# pnpm 11 起，原来写在 package.json 里的 "pnpm" 字段不再被读取，配置统一放这里。
+# （pnpm 的告警原文：The "pnpm" field in package.json is no longer read by pnpm.）
+#
+# allowBuilds：esbuild 与 vue-demi 的安装脚本必须放行 ——
+#   esbuild 需要它校验/落地平台二进制（node_modules/.pnpm/@esbuild+win32-x64@*/node_modules/@esbuild/win32-x64/esbuild.exe），
+#   vue-demi 需要它把 shim 指向 Vue 3 版本（Pinia 依赖它）。
+#   不放行时 pnpm 每条命令都会报 ERR_PNPM_IGNORED_BUILDS 并以退出码 1 结束，vite 也就起不来。
+allowBuilds:
+  esbuild: true
+  vue-demi: true
+
+# overrides：本机 pnpm 带供应链策略检查（拒绝 24 小时内新发布的包）。
+# 下面三个是 autoprefixer→browserslist / eslint 的传递依赖，钉到策略能通过、功能等价的版本。
+overrides:
+  electron-to-chromium: 1.5.434
+  ignore: 7.0.9
+  node-releases: 2.0.56

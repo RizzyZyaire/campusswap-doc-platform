@@ -93,3 +93,48 @@
 | T10 `TRASH→物理删除` | `DELETE /documents/{id}/destroy` | `US07.destroy.real.http` + 级联清理检查 |
 | T11 `PUBLISHED→DRAFT`（驳回） | `POST /documents/{id}/reject` | `US07.reject.status` |
 | 审核不改状态 | `POST /documents/{id}/audit` | `US07.audit.status-unchanged` |
+
+---
+
+# M5 验收清单 —— 前端 15 条路由逐页对账
+
+> 里程碑：M5 前端实现　｜　日期：2026-09-23　｜　机检入口 `verify-m5.ps1`（**43/43**）
+>
+> 前端没有单元测试框架（范围外），验收证据 = **①静态机检 ②产物类名体检 ③端到端脚本 ④截图人眼**。
+> 截图全部在 `D:\DevEnv\logs\shots\m5-*.png`，重跑方式见 `M5-CLOSURE.md §2`。
+> 「四态」列的 ✅ 表示该页实现了空 / 加载 / 错误 / 无权限四种态（§8.x 的文案已在代码里逐字落地）。
+
+| # | 路由（§6.1） | 视图文件 | 权限 | 四态 | 关键交互验收点 | 证据 |
+|---|---|---|---|---|---|---|
+| 1 | `/login` | `auth/LoginView.vue` | 公开 | ✅ | 校徽 + 校训 + 塔图背景 + 6 主题；错误密码给服务端中文文案 | `m5-login2.png` |
+| 2 | `/workbench` | `workbench/WorkbenchView.vue` | 登录 | ✅ | 4 张统计（真接口 `GET /api/stats/overview`）、我的草稿、待我审核、常用分类、通知（静态，已注明无接口） | `m5-workbench.png` |
+| 3 | `/docs` | `document/DocumentListView.vue` | `doc:search` | ✅ | 筛选同步 URL、关键词 300ms 防抖、`highlight` 高亮 + 命中位置、分页 | `m5-search.png`、`m5-search-hit.png` |
+| 4 | `/docs/:id` | `document/DocumentDetailView.vue` | `doc:search` | ✅ | 面包屑、正文 Markdown 渲染（markdown-it + DOMPurify）、本文目录（H1 与标题重复时不上目录）、相关文档（同分类）、版本历史（**仅作者/`doc:manage`**，否则显示"仅作者可见"）、收藏/派生/归档/恢复上架/回收站操作 | `m5-detail.png`、`m5-detail3.png` |
+| 5 | `/docs/edit/:id?` | `document/DocumentEditView.vue` | `doc:create` / `doc:edit`+`canEdit` | ✅ | 三态编辑器（编辑/双栏/预览）、图片三入口（工具栏/粘贴/拖拽）+ 失败"点击重试"+ 未完成上传禁止保存、未保存离开二次确认、**409 分两种处置**（状态冲突切只读 / 版本冲突横幅 +「刷新内容」不切只读）、400 字段级红字 + 聚焦 | `m5-edit3.png`、`m5-conflict-1-banner.png`、`m5-conflict-2-recovered.png`；脚本 `verify-edit-conflict.mjs` **10/10** |
+| 6 | `/my` | `document/MyDocumentView.vue` | `doc:mine` | ✅ | 6 个 tab（按权限渲染收藏/回收站）、发布/恢复/删除、彻底删除需**输入标题**确认（BR-08） | `m5-my.png` |
+| 7 | `/review` | `review/ReviewView.vue` | `doc:review` | ✅ | 三张统计（口径写明）、左列表 + 右抽屉、**版本并排逐行 diff**（自研 LCS，无第三方依赖）、通过意见必填、驳回理由必填 1–255（BR-12）、409 关抽屉重拉 | `m5-review.png` |
+| 8 | `/governance` | `admin/GovernanceView.vue` | `doc:manage` | ✅ | 概览卡（各状态 count 查询）、状态/拟稿人/关键词/排序筛选、宽表 + 版本抽屉、移入回收站 → 彻底删除两步、**无「下架」入口**（§10.6） | `m5-governance2.png`、`m5-governance3.png` |
+| 9 | `/taxonomy` | `admin/TaxonomyView.vue` | `doc:category` | ✅ | 左分类树（可折叠/缩进/选中）+ 右标签表（分页/查询）、分类与标签各自 CRUD、服务端 400/409 原文回显（"不能移动到子节点下"/"该分类下仍有文档"） | `m5-taxonomy2.png` |
+| 10 | `/admin/users` | `admin/UserAdminView.vue` | `sys:user` | ✅ | 关键词/单位/状态筛选（**按角色筛选后端无入参，页面明写原因**）、新增/编辑（编辑不带 `username`/`password`）、状态切换提示"立即下线"、重置密码 | `m5-users.png` |
+| 11 | `/admin/roles` | `admin/RoleAdminView.vue` | `sys:role` | ✅ | 左角色列表（内置不可删）+ 右三层权限树（**父节点半选**、全选/反选/撤销、覆盖式保存、保存时树置灰）+「权限点清单」tab（`sys:perm` 可增删改） | `m5-roles.png` |
+| 12 | `/admin/org` | `admin/OrgAdminView.vue` | `sys:dept` | ✅ | 左机构树（折叠/缩进）+ 单位详情 + 绑定角色（覆盖式、`sys:role:grant`）+ 单位成员分页表；缺 `sys:role`/`sys:user` 时降级并说明 | `m5-org.png` |
+| 13 | `/me` | `me/ProfileView.vue` | 登录 | ✅ | 账号信息、39 个权限点墙（持有高亮 + 权限码）、角色两个来源说明、自助改密 → 清会话回登录页 | `m5-me.png` |
+| 14 | `/403` | `error/ForbiddenView.vue` | 公开 | 不适用 | 写明缺哪个权限点（`?perm=`）、三个出口（工作台/检索/我的资料） | 路由守卫日志 + 页面截图 |
+| 15 | `/404` | `error/NotFoundView.vue` | 公开 | 不适用 | 空白布局 + 回工作台 | `m5-404.png` |
+
+## 跨页面硬约束（机检项）
+
+| 约束 | 机检项 | 结果 |
+|---|---|---|
+| 无 `any`、无内联 `style=` / `v-bind:style` | `verify-m5.ps1` D4a/D4b | 通过 |
+| 15 个视图都真的实现（无占位桩） | D1a/D1b/D1c | 通过 |
+| 路由 path/name/视图文件与 §6.1 逐字一致；`/docs/edit/:id?` 在 `/docs/:id` 之前 | D2a~D2d | 通过 |
+| 6 套主题三处（theme.css / theme store / index.html）一致 | D3a~D3c | 通过 |
+| 保存回传 `versionNum` + 冲突横幅 + 两种 409 分开 | D5a~D5e | 通过 |
+| `doc:offline` 在前端**任何地方**都没有端点与入口 | D6a~D6c | 通过 |
+| 39 个权限码与 `data.sql` 逐字一致、`PERM_LABEL` 全覆盖 | D7a~D7d | 通过 |
+| token 键单一出处（`TOKEN_KEY`） | D8a/D8b | 通过 |
+| 57 个后端端点全部被 `src/api` 覆盖 | D9a/D9b | 通过 |
+| 生成物带"请勿手改"横幅、素材清单逐项存在、`main.css` 未被生成脚本覆盖 | D10a~D10f、D11a~D11d | 通过 |
+| 模板里的类名都在产物 CSS 里存在（206 个） | `pnpm run check-classes` | 通过 |
+| `src/types` 无自造字段名（逐个回查 GLOSSARY） | D13 | 通过 |
