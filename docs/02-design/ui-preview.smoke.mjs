@@ -151,8 +151,8 @@ t('检索页筛选按 created_at 口径（创建时间，不再是更新时间�
 t('预览不再出现「发文单位 / 提交单位」字样', !/发文单位|提交单位/.test(all + api.render('kit')))
 t('数据层不再带 unit 字段（doc_document 无单位列）', !/unit:/.test(html))
 t('登录下拉的所属单位与用户数据一致', ['系统管理员 · 信息化中心 · 赵慕辰', '文档管理员 · 信息化中心 · 王砚秋', '教职工 · 软件学院（网络教育学院） · 李承霖'].every((s) => html.includes(s)))
-t('预览稿版本号统一为 v6（标题/页头/预览条）', (html.match(/界面预览稿 v6/g) || []).length === 2 && html.includes('预览稿 v6 · 假数据')
-  && !/界面预览稿 v[1-5]/.test(html.replace(/<!--[\s\S]*?-->/g, '')))
+t('预览稿版本号统一为 v7（标题/页头/预览条）', (html.match(/界面预览稿 v7/g) || []).length === 2 && html.includes('预览稿 v7 · 假数据')
+  && !/界面预览稿 v[1-6]/.test(html.replace(/<!--[\s\S]*?-->/g, '')))
 t('我的文档页不再有「单位」筛选', !/<label class="label">单位<\/label>/.test(api.render('mine')))
 
 console.log('=== ⑤b v6：预览条 / 选择器位置 / 三版式首页 / 退出登录 ===')
@@ -179,7 +179,7 @@ const optAdmin = api.buildViewOptions()
 t('直达下拉：系统管理员全部可达', optAdmin.ok === 14 && optAdmin.denied === 0, JSON.stringify(optAdmin))
 t('直达下拉用 optgroup 标注有无权限', html.includes('function buildViewOptions') && /无权限（/.test(html) && /有权限（/.test(html))
 /* ④首页三版式 */
-t('首页三版式都在', api.HOME_VARIANTS.length === 3 && api.HOME_VARIANTS.map((x) => x.id).join('') === 'abc')
+t('首页三版式都在，默认 A 左文右图', api.HOME_VARIANTS.length === 3 && api.HOME_VARIANTS.map((x) => x.id).join('') === 'abc' && api.getHomeVariant() === 'a')
 for (const v of ['a', 'b', 'c']) {
   api.setHomeVariant(v)
   const out = api.render('home')
@@ -188,9 +188,15 @@ for (const v of ['a', 'b', 'c']) {
   t(`首页版式 ${v} div 配对`, divBalanced(stripData(out)), (stripData(out).match(/<div\b/g) || []).length + '/' + (stripData(out).match(/<\/div>/g) || []).length)
   t(`首页版式 ${v} 无占位垃圾`, !/undefined|\[object Object\]|NaN/.test(stripData(out)))
 }
-t('首页版式 B 是通栏大图（照片铺满）', /\.hero\.hv-b \.shot\{position:absolute;inset:0/.test(html))
+t('首页版式 B 是通栏大图（照片铺满、渐变跟随主题）', /\.hero\.hv-b \.shot\{position:absolute;inset:0[^}]*background-size:auto 100%/.test(html) && /\.hero\.hv-b \.lead\{[\s\S]{0,400}color-mix\(in srgb,var\(--sidebar-bg\)/.test(html))
+t('版式 B 的渐变不再写死深蓝', /\.hero\.hv-b \.lead\{[\s\S]*?background:linear-gradient\(96deg,\s*color-mix\(in srgb,var\(--sidebar-bg\)/.test(html))
 t('首页版式 C 是细照片带（浅色信息卡）', /\.hero\.hv-c \.shot\{order:-1[^}]*height:138px/.test(html))
-api.setHomeVariant('b')
+api.setHomeVariant('a')
+/* ⑤登录页背景两版 */
+t('登录页背景有 A/B 两版候选', html.includes('--photo-login-a:url(') && html.includes('--photo-login-b:url(') && /\.login-aside \.bg\{[^}]*background-image:var\(--photo-login-a\)/.test(html))
+t('登录页有背景切换开关（预览专用）', /class="lgb-switch"/.test(html) && /data-lgb="a" class="on"/.test(html) && /#viewLogin\[data-lgb="b"\]/.test(html))
+t('登录页遮罩跟随主题且更轻', /\.login-aside \.veil\{[^}]*color-mix\(in srgb,var\(--sidebar-bg\) 92%/.test(html) && !/\.login-aside \.veil\{[^}]*rgba\(11,24,54/.test(html) && /\.login-aside \.inner,\.login-aside \.inner \*,\.login-aside \.foot\{text-shadow/.test(html))
+t('青瓷 = 华砚湖畔', /青瓷 · 华砚湖畔/.test(api.render('kit')))
 /* ⑤退出登录 */
 t('侧栏底部常驻退出登录', /class="side-logout" data-go="login"/.test(html) && /\.side-logout\{/.test(html))
 t('退出登录会回到登录页', /data-go="login"/.test(html) && /document\.getElementById\('viewLogin'\)/.test(html))
@@ -202,9 +208,10 @@ t('按钮悬停变色', /\.btn:hover\{[\s\S]{0,160}background:var\(--primary-sof
 t('链接悬停变色', /\.link:hover\{[^}]*color:var\(--accent\)/.test(html))
 t('横幅也是 2px 描边并参与悬停', /\.hero\{[^}]*border:2px solid var\(--border\)/.test(html) && /\.hero:hover\{/.test(html))
 /* ⑦换图 */
-t('师大蓝换成校训石碑', /师大蓝 · 校训石碑/.test(api.render('kit')))
-t('青瓷换成华砚湖畔（不再是玉兰特写）', /青瓷 · 华砚湖畔/.test(api.render('kit')) && !/玉兰与蓝天/.test(api.render('kit')))
+t('师大蓝换成时光塔高清版（石碑已弃用）', /师大蓝 · 时光塔/.test(api.render('kit')) && !/校训石碑/.test(api.render('kit')))
+t('青瓷 = 华砚湖畔（用户改回）', /青瓷 · 华砚湖畔/.test(api.render('kit')) && !/玉兰与蓝天/.test(api.render('kit')))
 t('墨玉青换成天下石牌坊（不再与师大蓝重复时光塔）', /墨玉青 · 天下石牌坊/.test(api.render('kit')) && !/墨玉青 · 时光塔下/.test(api.render('kit')))
+t('登录页默认多花（避免与师大蓝横幅的时光塔重复）', api.getLoginBg() === 'a')
 t('画廊说明写明不放大', /裁剪宽度 ≥ 输出宽度/.test(api.render('kit')))
 t('设计系统页列出后端差异清单', /演示数据已按校园口径重新种子化/.test(api.render('kit')) && /分类体系：设计 10 类 41 子类/.test(api.render('kit')))
 t('预览数据与新版种子同口径', /驻县教师职责/.test(api.render('detail')) && api.DATA.users.every((u) => !/技术部|产品部|教务处/.test(u.dept)))
@@ -244,9 +251,9 @@ t('校训题字已内联', html.includes('alt="校训：怀天下 求真知"'))
 t('favicon 用校徽', /<link rel="icon" href="data:image\/png;base64,/.test(html))
 t('六套主题各有独立横幅照片', ['hebtu', 'gingko', 'celadon', 'ink', 'jiang', 'night'].every((id) => html.includes(`--photo-${id}:url(`) && html.includes(`html[data-theme="${id}"] .hero .shot{background-image:var(--photo-${id})}`)))
 const jpegCount = (html.match(/data:image\/jpeg;base64,/g) || []).length
-t('共 8 张 JPEG 且每张只内联一次（不重复膨胀）', jpegCount === 8, '出现 ' + jpegCount + ' 次 = 6 张主题照片 + 登录页 + 画廊小图')
+t('共 9 张 JPEG 且每张只内联一次（不重复膨胀）', jpegCount === 9, '出现 ' + jpegCount + ' 次 = 6 张主题照片 + 登录页 2 版候选 + 画廊小图')
 t('横幅是「左渐变 + 右照片」两栏，不是整张铺底', html.includes('<div class="lead">') && html.includes('<div class="shot">') && !/class="photo"/.test(html))
-t('登录页背景换成竖构图新图', html.includes('background-image:url("data:image/jpeg;base64,') && !html.includes('__ASSET_CAMPUS__'))
+t('登录页背景走变量（按显示框比例竖裁，不再被 cover 拉大）', /\.login-aside \.bg\{[^}]*background-image:var\(--photo-login-a\)/.test(html) && html.includes('--photo-login-b:url(') && !html.includes('__ASSET_CAMPUS__'))
 t('没有残留 __ASSET_ 占位符', !html.includes('__ASSET_'))
 t('没有「师」字假 Logo', !html.includes('<div class="brand-mark">师</div>'))
 
