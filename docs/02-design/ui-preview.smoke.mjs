@@ -161,10 +161,12 @@ console.log('=== ⑤c v8：弹出面板 / 悬停到行 / 版式固定 / 主题�
 /* 顶栏两个按钮必须真的弹东西（用户反馈"点了没有任何弹出"） */
 api.setRole('admin')
 t('通知铃有弹出面板与未读红点', html.includes('id="bellBtn"') && html.includes('id="bellPop"') && html.includes('id="bellDot"') && api.getUnreadNotes() === 3)
-t('通知面板逐条列出未读并带时间', (() => { const p = api.renderBellPop(), el = document.getElementById('bellPop'); return /note-item/.test(el.innerHTML) && /系统将于/.test(el.innerHTML) && /维护/.test(el.innerHTML) })())
-t('通知可「全部标为已读」并清掉红点', (() => { api.setNotesRead(true); api.renderBellPop(); const el = document.getElementById('bellPop'); const ok = api.getUnreadNotes() === 0 && !/data-readall/.test(el.innerHTML); api.setNotesRead(false); api.renderBellPop(); return ok })())
-t('身份框有弹出菜单（介绍 + 我的资料 + 切换账号 + 退出登录）', (() => { api.renderChipPop(); const h = document.getElementById('chipPop').innerHTML; return /有效权限 39 \/ 39/.test(h) && /data-go="me"/.test(h) && /data-role="staff"/.test(h) && /data-go="login"/.test(h) })())
-t('身份菜单里当前身份被标出来', /data-role="admin" class="pop-item on"|class="pop-item on" data-role="admin"/.test((() => { api.renderChipPop(); return document.getElementById('chipPop').innerHTML })()) || /当前/.test(document.getElementById('chipPop').innerHTML))
+t('通知面板逐条列出未读并带时间', (() => { api.renderBellPop(); const el = document.getElementById('bellPop'); return /note-item/.test(el.innerHTML) && /系统将于/.test(el.innerHTML) && /维护/.test(el.innerHTML) })())
+t('3 条通知全部标为未读', (api.renderBellPop() || document.getElementById('bellPop').innerHTML).toString() && ((document.getElementById('bellPop').innerHTML.match(/note-item unread/g) || []).length === 3))
+t('通知可「全部标为已读」并清掉红点', (() => { api.setNotesRead(true); api.renderBellPop(); const el = document.getElementById('bellPop'); const ok = api.getUnreadNotes() === 0 && !/data-readall/.test(el.innerHTML) && (el.innerHTML.match(/note-item unread/g) || []).length === 0; api.setNotesRead(false); api.renderBellPop(); return ok })())
+t('身份框有弹出菜单（介绍 + 我的资料 + 切换账号 + 退出登录）', (() => { api.renderChipPop(); const h = document.getElementById('chipPop').innerHTML; return /有效权限 39 \/ 39/.test(h) && /data-go="me"/.test(h) && /切换账号/.test(h) && /data-go="login"/.test(h) })())
+/* v8.1：用户要求预览严格照正式版 —— 身份菜单里不再有"即时切换身份"的按钮 */
+t('身份菜单不做即时切换（与正式版一致：退出后重新登录）', (() => { api.renderChipPop(); const h = document.getElementById('chipPop').innerHTML; return !/data-role="/.test(h) && (h.match(/data-go="login"/g) || []).length === 2 })())
 /* 行级悬停 + 分隔线 + 板块不再整块放大 */
 t('表格行悬停高亮到行（含左侧主题色条）', /\.tbl tbody tr:hover td\{background:var\(--primary-soft\)\}/.test(html) && /\.tbl tbody tr:hover td:first-child\{box-shadow:inset 3px 0 0 var\(--accent\)\}/.test(html))
 t('列表行悬停高亮到行', /\.list-item:hover\{background:var\(--primary-soft\);box-shadow:inset 3px 0 0 var\(--accent\)\}/.test(html))

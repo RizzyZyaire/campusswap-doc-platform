@@ -9,6 +9,15 @@
   ===========================================================================
   河北师范大学 校内文档平台 —— 界面预览稿 v8（纯静态单文件）
   ---------------------------------------------------------------------------
+  v8.1 修订（同日晚，用户看完 v8 截图后的三条追加）：
+   ① 通知面板 **3 条全部标为未读**（原先只有第 1 条带红点，用户要求全标）。
+   ② 身份菜单**严格照正式版**：「切换账号」不再做即时切换（那是预览条下拉的职责），
+      而是与正式版一致 —— 退出当前登录、回登录页重新登录。
+   ③ **修表格"错行"**：`.tbl .acts` 原来写 `display:flex`，而它作用在 `<td class="acts">` 上 ——
+      给 td 设 flex 会让该单元格**退出表格布局**，操作列不再撑满整行，行底边线在操作列处断开、
+      与「文档」列错开（v8 把分隔线加到 2px 后一眼可见）。改为 td 保持 table-cell +
+      相邻兄弟 margin 控制间距，全部 8 处表格一起修好。
+  ---------------------------------------------------------------------------
   v8 相对 v7 的改动（用户 2026-09-23 第六轮反馈 · 七条）：
    ① 登录页（用户口中的"首页"）**固定为时光塔**，并换成把**整座塔**放进取景框的那一版
       （5471×2914 按整幅高度裁 1:1 → 1200×1200：塔尖到广场全在画面里）；两版候选开关与候选 B 一并移除。
@@ -641,7 +650,13 @@ h1,h2,h3,h4{margin:0;font-weight:600;letter-spacing:-.01em}
 .hl{display:block;margin-top:7px;padding-left:9px;border-left:3px solid var(--accent);color:var(--text-2);font-size:12px;line-height:1.75;max-width:640px}
 .hl em{font-style:normal;background:var(--accent-soft);color:var(--accent);border-radius:3px;padding:0 3px;font-weight:600}
 .hit-note{display:inline-flex;align-items:center;gap:6px;margin-top:6px;color:var(--text-3);font-size:11px}
-.tbl .acts{text-align:right;white-space:nowrap;display:flex;gap:10px;justify-content:flex-end}
+/* v8.1 修错行：这里原来写 `display:flex`，而它作用在 `<td class="acts">` 上 ——
+   给 td 设 flex 会让它**退出表格布局**，于是操作列的高度只按自身内容算、不再撑满整行，
+   行底边线就在操作列处断开、与文档列错开（2px 分隔线上线后一眼可见）。
+   修法：td 保持 table-cell，间距改用相邻兄弟 margin。 */
+.tbl .acts{text-align:right;white-space:nowrap}
+.tbl .acts>*+*{margin-left:10px}
+.tbl .acts .link{vertical-align:middle}
 .tbl .num{font-variant-numeric:tabular-nums}
 .w-fix{width:110px}.w-fix2{width:150px}.w-fix3{width:190px}
 .list{display:flex;flex-direction:column}
@@ -1984,8 +1999,8 @@ function renderBellPop(){
     + '<span class="xs t3">' + (n ? n + ' 条未读' : '已全部读完') + '</span><span class="spacer"></span>'
     + (n ? '<button class="link" data-readall="1">全部标为已读</button>' : '')
     + '</div><div class="pop-body">'
-    + DATA.notices.map(function(x, i){
-        var unread = !NOTES_READ && i === 0 ? true : false;   /* 红点只代表最新一条，其余为历史 */
+    + DATA.notices.map(function(x){
+        /* v8.1：用户要求「3 条全标未读」—— 全部行带未读圆点，读完一起消失 */
         return '<div class="note-item' + (NOTES_READ ? '' : ' unread') + '">'
           + '<span class="badge plain">' + esc(x.kind) + '</span>'
           + '<div class="bd"><div class="t">' + esc(x.t) + '</div><div class="m">' + esc(x.at) + '</div></div></div>';
@@ -2006,23 +2021,10 @@ function renderChipPop(){
     + '<div><div class="nm">' + esc(id.name) + '　<span class="xs t3">' + esc(id.title) + '</span></div>'
     + '<div class="xs t3">' + esc(id.roleName) + ' · ' + esc(id.dept) + ' · 有效权限 ' + id.perms + ' / 39</div></div></div>'
     + '<button class="pop-item" data-go="me">我的资料<span class="k">' + esc(id.no) + '</span></button>'
-    + '<div class="pop-sec">切换账号（预览稿：即时切换身份）</div>'
-    + ['staff','docadmin','admin'].map(function(r){
-        var x = DATA.identities[r];
-        return '<button class="pop-item' + (r === role ? ' on' : '') + '" data-role="' + r + '">'
-          + esc(x.roleName) + ' · ' + esc(x.name) + '<span class="k">' + (r === role ? '当前' : '切换') + '</span></button>';
-      }).join('')
+    /* v8.1：用户要求预览稿严格照正式版 —— 这里不再"即时切换身份"（那是预览工具的行为，
+       由上方的预览条下拉承担），而是和正式版一致：退出当前登录去登录页换账号 */
+    + '<button class="pop-item" data-go="login">切换账号<span class="k">退出后重新登录</span></button>'
     + '<button class="pop-item danger" data-go="login">退出登录<span class="k">回登录页</span></button>';
-  [].forEach.call(pop.querySelectorAll('[data-role]'), function(el){
-    el.addEventListener('click', function(){
-      role = el.getAttribute('data-role');
-      var sel = document.getElementById('pvRole');
-      if (sel) sel.value = role;
-      buildViewOptions();
-      hidePops();
-      go(view === 'login' ? 'home' : view);
-    });
-  });
   bindGo();
 }
 function hidePops(){
