@@ -1,105 +1,163 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="zh-CN" data-theme="ink">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>CampusSwap 文档管理平台 · 静态视觉预览稿（假数据 · 不发请求）</title>
+<title>河北师范大学 · 校内文档平台 —— 界面预览稿 v2（假数据 · 不发请求）</title>
 <!--
-  ============================================================================
-  CampusSwap 文档管理平台 —— 纯静态单文件视觉预览稿
-  ----------------------------------------------------------------------------
-  · 用途：M5 前端开工前，先确认页面观感、信息密度、配色与四态文案。
-  · 性质：假数据、零请求、零依赖（不加载任何外部字体/CSS/JS/图片）；双击即可打开。
-  · 依据：docs/02-design/UI_UX_SPECIFICATION.md v1.0（§2 设计令牌 / §8 逐页设计，8 条路由）
-  · 数据：文档 5 篇、账号 3 个、分类 4 个、标签 5 个、部门 3 个 —— 全部取自真实种子
-          backend/sql/data.sql；权限集合取自库内 sys_role_permission 现查结果
-          （STAFF 11 / DOC_ADMIN 20 / SYS_ADMIN 39，与 PRD §3.3 一致）。
-  · 样式：令牌见 :root（值与 spec §2 的 tailwind.config.js 逐项一致）。
-          本文件把样式集中在 <style> 里，等价于正式工程 main.css 的 @layer components；
-          正文里没有任何一处 style 属性（对齐红线 R6「模板内禁止内联样式」）。
-  · 交互：右上角「预览身份」可切换 staff / docadmin / admin —— 你会看到
-          侧栏菜单与页面内按钮随权限实时增减（这就是 §4 权限驱动渲染的效果）；
-          点击菜单进入无权限页面会被守卫拦到 /403（§1.2 判定表的真实呈现）。
-  ============================================================================
+  ===========================================================================
+  河北师范大学 校内文档平台 —— 界面预览稿 v2（纯静态单文件）
+  ---------------------------------------------------------------------------
+  v2 相对 v1 的三处大改（用户 2026-09-23 反馈）：
+   ① 口径改成「校园」而不是「公司」：分类体系 = 党政公文/教务教学/科研学术/学生工作/
+      人事人才/财务资产/后勤保障/图书档案/学院文档/模板表单；发文单位 = 学校办公室、
+      教务处、科技处、人事处、信息化中心、图书馆、档案馆、后勤服务集团等；
+      示例文档取官网真实通知的题材（国基金预申报、实习支教、新入职教师培训、
+      校领导接待日、裕华校区道路封闭通告…）。
+      机构名称与院系清单取自河北师范大学官网「机构设置 → 院系设置 / 管理服务」
+      （27 个院系 + 40 余个管理服务机构），校训「怀天下，求真知」、裕华/红旗两校区
+      亦为官网事实；**所有人名、工号、文档都是虚构的**，不使用官网出现的真实姓名。
+   ② 主题：从「蓝白黑」改成 5 套可切换主题（墨玉青 / 师大绛 / 松烟黛 / 宣纸暖 / 墨夜），
+      全部令牌走 CSS 变量，顶栏与设计系统页都能一键切换（含一套深色）。
+      配色参考中国传统色谱的命名与气质（zhongguose.com 只提供色名，具体色值是本稿
+      自行设计的，不声称等于某个传统色的标准值）。
+   ③ 信息架构：删掉「系统管理」这种把 用户/角色/权限/部门 堆一页的聚合板块，
+      拆成 用户管理 / 角色与权限 / 组织机构 三个独立菜单（各自有正常站点的命名与职责）；
+      并给**所有身份**加「我的资料」——每个人都能看到自己的单位、角色、权限来源与
+      账号安全，不再只有管理员才找得到这些东西。
+  ---------------------------------------------------------------------------
+  · 假数据、零请求、零外部依赖（不加载任何字体/CSS/JS/图片），双击即可打开。
+  · 正文零内联 style；所有样式在下方 <style>，等价正式工程 main.css 的 @layer components。
+  · 顶部深色条是「预览稿专用」，不属于产品 UI。
+  · 自检脚本：docs/02-design/ui-preview.smoke.mjs（Node，可重跑）
+  ===========================================================================
 -->
 <style>
-/* ---------- 设计令牌（对应 spec §2 tailwind.config.js） ---------- */
+/* ===========================================================================
+   1) 主题令牌 —— 5 套。每套定义同一组变量，切换 [data-theme] 即可整体换肤。
+   =========================================================================== */
 :root{
-  --primary-50:#eff6ff; --primary-100:#dbeafe; --primary-200:#bfdbfe; --primary-300:#93c5fd;
-  --primary-400:#60a5fa; --primary-500:#3b82f6; --primary-600:#2563eb; --primary-700:#1d4ed8;
-  --primary-800:#1e40af; --primary-900:#1e3a8a;
-  --gray-50:#f8fafc; --gray-100:#f1f5f9; --gray-200:#e2e8f0; --gray-300:#cbd5e1;
-  --gray-400:#94a3b8; --gray-500:#64748b; --gray-600:#475569; --gray-700:#334155;
-  --gray-800:#1e293b; --gray-900:#0f172a;
-  --success:#16a34a; --success-light:#dcfce7; --success-dark:#15803d;
-  --warning:#d97706; --warning-light:#fef3c7; --warning-dark:#b45309;
-  --danger:#dc2626; --danger-light:#fee2e2; --danger-dark:#b91c1c;
-  --info:#0284c7; --info-light:#e0f2fe; --info-dark:#0369a1;
-  --sidebar:240px; --header:56px; --content:1152px;
-  --radius-control:6px; --radius-card:8px; --radius-pill:9999px;
-  --shadow-card:0 1px 2px 0 rgb(15 23 42 / .06),0 1px 3px 0 rgb(15 23 42 / .10);
-  --shadow-pop:0 10px 15px -3px rgb(15 23 42 / .10),0 4px 6px -4px rgb(15 23 42 / .10);
-  --shadow-focus:0 0 0 3px rgb(37 99 235 / .35);
-  --font-sans:Inter,system-ui,"Microsoft YaHei",sans-serif;
-  --font-mono:"JetBrains Mono",Consolas,monospace;
+  --font-sans:"PingFang SC","Microsoft YaHei","Source Han Sans SC",Inter,system-ui,sans-serif;
+  --font-mono:"JetBrains Mono",Consolas,"Courier New",monospace;
+  --radius-sm:6px; --radius:8px; --radius-lg:12px; --radius-pill:999px;
+  --sidebar-w:252px; --topbar-h:60px; --content-max:1280px;
+  --t-fast:.15s ease; --t:.22s ease;
 }
+/* —— 墨玉青（默认）：深墨侧栏 + 青玉主色 + 鎏金点缀 —— */
+html[data-theme="ink"]{
+  --bg:#F3F6F4; --surface:#FFFFFF; --surface-2:#EBF1EE; --surface-3:#E2EAE6;
+  --border:#DBE4DF; --border-strong:#C4D2CB;
+  --text:#16211D; --text-2:#586B65; --text-3:#8B9C96;
+  --primary:#1F6F63; --primary-hover:#175A50; --primary-soft:#E3F0EC; --primary-soft-text:#12574D;
+  --on-primary:#FFFFFF; --accent:#B58A2B; --accent-soft:#F7EFD9;
+  --sidebar-bg:#11201C; --sidebar-text:#C6D3CE; --sidebar-muted:#7E918A;
+  --sidebar-hover:#1A2E28; --sidebar-active:#1F4038; --sidebar-active-text:#F1F7F4;
+  --topbar-bg:rgba(255,255,255,.88);
+  --success:#177245; --success-soft:#E3F3E9; --success-text:#0F5533;
+  --warning:#9A6206; --warning-soft:#FBF0D9; --warning-text:#7A4D05;
+  --danger:#A63232; --danger-soft:#FBE9E7; --danger-text:#872727;
+  --info:#1D5F8A; --info-soft:#E4EFF7; --info-text:#164B6E;
+  --shadow-sm:0 1px 2px rgba(17,32,28,.05);
+  --shadow:0 2px 6px rgba(17,32,28,.06),0 1px 2px rgba(17,32,28,.04);
+  --shadow-lg:0 12px 32px rgba(17,32,28,.14);
+  --ring:0 0 0 3px rgba(31,111,99,.22);
+}
+/* —— 师大绛：绛红主色 + 宣纸微暖底 —— */
+html[data-theme="jiang"]{
+  --bg:#FAF6F3; --surface:#FFFFFF; --surface-2:#F6EDE8; --surface-3:#EFE2DA;
+  --border:#E9DCD4; --border-strong:#D6C2B7;
+  --text:#241A17; --text-2:#6B5850; --text-3:#9A8880;
+  --primary:#9E2B25; --primary-hover:#82201B; --primary-soft:#FAE9E6; --primary-soft-text:#7C211C;
+  --on-primary:#FFFFFF; --accent:#A9772A; --accent-soft:#F7EEDC;
+  --sidebar-bg:#2A1215; --sidebar-text:#E3CFD0; --sidebar-muted:#A88386;
+  --sidebar-hover:#3A1A1E; --sidebar-active:#4C2226; --sidebar-active-text:#FDF3F2;
+  --topbar-bg:rgba(255,255,255,.9);
+  --success:#1B6B3A; --success-soft:#E6F3E8; --success-text:#12512B;
+  --warning:#96601A; --warning-soft:#FAF0DC; --warning-text:#764B12;
+  --danger:#A32B23; --danger-soft:#FBE7E4; --danger-text:#84221B;
+  --info:#255C86; --info-soft:#E7EFF6; --info-text:#1B4869;
+  --shadow-sm:0 1px 2px rgba(42,18,21,.05);
+  --shadow:0 2px 6px rgba(42,18,21,.07),0 1px 2px rgba(42,18,21,.04);
+  --shadow-lg:0 12px 32px rgba(42,18,21,.15);
+  --ring:0 0 0 3px rgba(158,43,37,.2);
+}
+/* —— 松烟黛：学院派冷调，靛蓝 + 石墨 —— */
+html[data-theme="dai"]{
+  --bg:#F5F7FA; --surface:#FFFFFF; --surface-2:#EDF1F6; --surface-3:#E2E8F0;
+  --border:#DCE3EB; --border-strong:#C2CDD9;
+  --text:#161F29; --text-2:#55636F; --text-3:#8695A3;
+  --primary:#2B4A72; --primary-hover:#213B5C; --primary-soft:#E7EDF6; --primary-soft-text:#1F3C60;
+  --on-primary:#FFFFFF; --accent:#8C6A2F; --accent-soft:#F4EEDF;
+  --sidebar-bg:#141E2B; --sidebar-text:#C3CEE0; --sidebar-muted:#7C8A9E;
+  --sidebar-hover:#1B2837; --sidebar-active:#223449; --sidebar-active-text:#F0F4FA;
+  --topbar-bg:rgba(255,255,255,.9);
+  --success:#186B45; --success-soft:#E4F1EA; --success-text:#0F5234;
+  --warning:#8F5E10; --warning-soft:#FAF0DA; --warning-text:#71490B;
+  --danger:#A3313C; --danger-soft:#FAE8EA; --danger-text:#832630;
+  --info:#1F5C8C; --info-soft:#E5EFF8; --info-text:#174870;
+  --shadow-sm:0 1px 2px rgba(20,30,43,.06);
+  --shadow:0 2px 6px rgba(20,30,43,.07),0 1px 2px rgba(20,30,43,.04);
+  --shadow-lg:0 12px 32px rgba(20,30,43,.16);
+  --ring:0 0 0 3px rgba(43,74,114,.2);
+}
+/* —— 宣纸暖：米色纸感 + 赭石，长文阅读友好 —— */
+html[data-theme="paper"]{
+  --bg:#FAF7F0; --surface:#FFFDF9; --surface-2:#F2EBDD; --surface-3:#E9DFCC;
+  --border:#E3D9C5; --border-strong:#CFC0A5;
+  --text:#2A241B; --text-2:#6C6151; --text-3:#9C9182;
+  --primary:#8A5A2B; --primary-hover:#714821; --primary-soft:#F6EBDC; --primary-soft-text:#6B451C;
+  --on-primary:#FFFFFF; --accent:#2F6F63; --accent-soft:#E4F0EC;
+  --sidebar-bg:#332C24; --sidebar-text:#DED4C4; --sidebar-muted:#A79A85;
+  --sidebar-hover:#40372D; --sidebar-active:#4E4335; --sidebar-active-text:#FBF6EC;
+  --topbar-bg:rgba(255,253,249,.92);
+  --success:#256B3C; --success-soft:#E7F1E5; --success-text:#1A512C;
+  --warning:#8C6318; --warning-soft:#F8EFD9; --warning-text:#6D4C11;
+  --danger:#9E3227; --danger-soft:#F8E8E2; --danger-text:#7F271E;
+  --info:#2A6087; --info-soft:#E8EFF4; --info-text:#1E4A6A;
+  --shadow-sm:0 1px 2px rgba(51,44,36,.05);
+  --shadow:0 2px 6px rgba(51,44,36,.07),0 1px 2px rgba(51,44,36,.04);
+  --shadow-lg:0 12px 32px rgba(51,44,36,.15);
+  --ring:0 0 0 3px rgba(138,90,43,.2);
+}
+/* —— 墨夜：深色主题（夜间/值班场景） —— */
+html[data-theme="night"]{
+  --bg:#0E1417; --surface:#161D21; --surface-2:#1D262B; --surface-3:#243037;
+  --border:#27333A; --border-strong:#3A4A53;
+  --text:#E7EEF2; --text-2:#9BAAB3; --text-3:#6E7D86;
+  --primary:#4FA8A0; --primary-hover:#63BAB2; --primary-soft:#14302E; --primary-soft-text:#8FD8D0;
+  --on-primary:#06201E;
+  --accent:#D3AE6A; --accent-soft:#2C2517;
+  --sidebar-bg:#0A1013; --sidebar-text:#A9B6BE; --sidebar-muted:#6B7A83;
+  --sidebar-hover:#141D21; --sidebar-active:#17302E; --sidebar-active-text:#DFF3F0;
+  --topbar-bg:rgba(14,20,23,.86);
+  --success:#4CAF7D; --success-soft:#122C21; --success-text:#8FE0B4;
+  --warning:#D8A344; --warning-soft:#2E2413; --warning-text:#F0CE8A;
+  --danger:#E06A5E; --danger-soft:#2E1714; --danger-text:#F3A79E;
+  --info:#5AA9E0; --info-soft:#132631; --info-text:#9CD2F5;
+  --shadow-sm:0 1px 2px rgba(0,0,0,.3);
+  --shadow:0 2px 8px rgba(0,0,0,.35);
+  --shadow-lg:0 16px 40px rgba(0,0,0,.5);
+  --ring:0 0 0 3px rgba(79,168,160,.28);
+}
+/* ===========================================================================
+   2) 基础
+   =========================================================================== */
 *{box-sizing:border-box}
 html,body{margin:0;padding:0}
-body{font-family:var(--font-sans);font-size:14px;line-height:1.6;color:var(--gray-800);background:var(--gray-100);min-width:1280px}
-a{color:var(--primary-600);text-decoration:none}
+body{
+  font-family:var(--font-sans);font-size:14px;line-height:1.65;
+  color:var(--text);background:var(--bg);min-width:1180px;
+  -webkit-font-smoothing:antialiased;
+}
+a{color:var(--primary);text-decoration:none}
 a:hover{text-decoration:underline}
+h1,h2,h3,h4{margin:0;font-weight:600;letter-spacing:-.01em}
 .hidden{display:none !important}
-.code{font-family:var(--font-mono);font-size:13px;line-height:1.25rem}
-
-/* ---------- 预览稿专用条（不属于产品 UI，故意用深色区分） ---------- */
-.pv-bar{position:sticky;top:0;z-index:60;display:flex;align-items:center;gap:12px;flex-wrap:wrap;
-  padding:8px 16px;background:var(--gray-900);color:var(--gray-200);font-size:12px}
-.pv-tag{padding:2px 8px;border:1px dashed var(--gray-500);border-radius:var(--radius-pill);color:#fff}
-.pv-bar select{background:var(--gray-800);color:#fff;border:1px solid var(--gray-600);border-radius:var(--radius-control);padding:2px 6px;font-family:var(--font-sans);font-size:12px}
-.pv-bar button{background:var(--gray-800);color:var(--gray-200);border:1px solid var(--gray-600);
-  border-radius:var(--radius-control);padding:3px 10px;cursor:pointer;font-size:12px;font-family:var(--font-sans)}
-.pv-bar button:hover{background:var(--gray-700);color:#fff}
-.pv-bar button.on{background:var(--primary-600);border-color:var(--primary-600);color:#fff}
-.pv-sep{width:1px;height:18px;background:var(--gray-600)}
-
-/* ---------- 应用骨架 ---------- */
-.app{display:flex;min-height:calc(100vh - 39px)}
-.sidebar{width:var(--sidebar);flex:0 0 var(--sidebar);background:var(--gray-900);color:var(--gray-300);
-  display:flex;flex-direction:column;position:sticky;top:39px;height:calc(100vh - 39px)}
-.brand{padding:16px;border-bottom:1px solid var(--gray-800)}
-.brand-row{display:flex;align-items:center;gap:10px}
-.brand-mark{width:28px;height:28px;border-radius:var(--radius-control);background:var(--primary-600);
-  display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:13px}
-.brand-name{color:#fff;font-weight:600;font-size:14px;letter-spacing:.3px}
-.brand-sub{color:var(--gray-500);font-size:12px;margin-top:2px}
-.nav{padding:8px;overflow-y:auto;flex:1}
-.nav-group{padding:12px 8px 4px;color:var(--gray-500);font-size:11px;letter-spacing:.6px}
-.nav-item{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:var(--radius-control);
-  color:var(--gray-300);cursor:pointer;margin-bottom:2px;font-size:14px}
-.nav-item:hover{background:var(--gray-800);color:#fff;text-decoration:none}
-.nav-item.active{background:var(--primary-600);color:#fff}
-.nav-item .ico{width:16px;height:16px;flex:0 0 16px;opacity:.9}
-.nav-item .cnt{margin-left:auto;font-size:11px;background:var(--danger);color:#fff;border-radius:var(--radius-pill);padding:0 6px}
-.side-foot{padding:12px;border-top:1px solid var(--gray-800);font-size:12px;color:var(--gray-400)}
-.main{flex:1;min-width:0;display:flex;flex-direction:column}
-.topbar{height:var(--header);background:#fff;border-bottom:1px solid var(--gray-200);
-  display:flex;align-items:center;gap:12px;padding:0 24px;position:sticky;top:39px;z-index:40}
-.crumb{color:var(--gray-500);font-size:13px}
-.crumb b{color:var(--gray-800);font-weight:600}
-.top-right{margin-left:auto;display:flex;align-items:center;gap:12px}
-.user-chip{display:flex;align-items:center;gap:8px;padding:4px 10px;border:1px solid var(--gray-200);border-radius:var(--radius-pill)}
-.avatar{width:24px;height:24px;border-radius:var(--radius-pill);background:var(--primary-100);color:var(--primary-700);
-  display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600}
-.content{padding:24px;width:100%;max-width:var(--content);margin:0 auto}
-
-/* ---------- 卡片 / 区块 ---------- */
-.card{background:#fff;border:1px solid var(--gray-200);border-radius:var(--radius-card);box-shadow:var(--shadow-card);margin-bottom:16px}
-.card-hd{display:flex;align-items:center;gap:12px;padding:12px 16px;border-bottom:1px solid var(--gray-200)}
-.card-hd h3{margin:0;font-size:18px;font-weight:600}
-.card-hd .sub{color:var(--gray-500);font-size:12px}
-.card-bd{padding:16px}
-.page-title{margin:0 0 4px;font-size:24px;font-weight:700;letter-spacing:-.2px}
-.page-desc{margin:0 0 16px;color:var(--gray-500)}
+.mono{font-family:var(--font-mono);font-size:12.5px}
+.t2{color:var(--text-2)}.t3{color:var(--text-3)}
+.xs{font-size:12px}.sm{font-size:13px}
+.mt4{margin-top:4px}.mt8{margin-top:8px}.mt12{margin-top:12px}.mt16{margin-top:16px}.mt24{margin-top:24px}
+.mb8{margin-bottom:8px}.mb12{margin-bottom:12px}.mb16{margin-bottom:16px}
 .row{display:flex;align-items:center;gap:8px}
 .wrap{flex-wrap:wrap}
 .spacer{margin-left:auto}
@@ -107,1112 +165,1626 @@ a:hover{text-decoration:underline}
 .g2{grid-template-columns:repeat(2,minmax(0,1fr))}
 .g3{grid-template-columns:repeat(3,minmax(0,1fr))}
 .g4{grid-template-columns:repeat(4,minmax(0,1fr))}
-.mt8{margin-top:8px}.mt16{margin-top:16px}.mb8{margin-bottom:8px}.mb16{margin-bottom:16px}
-.muted{color:var(--gray-500)}
-.xs{font-size:12px}
-.lg{font-size:18px}
-h4.sec{margin:0 0 8px;font-size:15px;font-weight:600;color:var(--gray-700)}
+.g-side{grid-template-columns:minmax(0,1fr) 320px}
+.g-list{grid-template-columns:300px minmax(0,1fr)}
 
-/* ---------- 按钮 ---------- */
-.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;
-  padding:6px 14px;border-radius:var(--radius-control);border:1px solid var(--gray-300);background:#fff;
-  color:var(--gray-700);font-size:14px;font-family:var(--font-sans);cursor:pointer;white-space:nowrap}
-.btn:hover{background:var(--gray-50)}
-.btn:focus{outline:none;box-shadow:var(--shadow-focus)}
-.btn-primary{background:var(--primary-600);border-color:var(--primary-600);color:#fff}
-.btn-primary:hover{background:var(--primary-700);border-color:var(--primary-700)}
+/* ===========================================================================
+   3) 预览稿专用条
+   =========================================================================== */
+.pvbar{
+  position:sticky;top:0;z-index:90;display:flex;align-items:center;gap:14px;flex-wrap:wrap;
+  padding:7px 16px;background:#0B1114;color:#B9C6CD;font-size:12px;border-bottom:1px solid #22313A;
+}
+.pvbar .tag{padding:2px 9px;border:1px dashed #4A5C66;border-radius:var(--radius-pill);color:#EAF1F4}
+.pvbar label{color:#8FA0A9}
+.pvbar select{
+  background:#141F25;color:#E6EEF2;border:1px solid #2C3E48;border-radius:var(--radius-sm);
+  padding:3px 8px;font-family:var(--font-sans);font-size:12px;
+}
+.pvbar .hint{color:#7C8C95}
+
+/* ===========================================================================
+   4) 应用骨架
+   =========================================================================== */
+.app{display:flex;min-height:calc(100vh - 35px)}
+.sidebar{
+  width:var(--sidebar-w);flex:0 0 var(--sidebar-w);background:var(--sidebar-bg);
+  display:flex;flex-direction:column;position:sticky;top:35px;height:calc(100vh - 35px);
+}
+.brand{display:flex;gap:11px;align-items:center;padding:18px 18px 16px}
+.brand-mark{
+  width:36px;height:36px;flex:0 0 36px;border-radius:10px;background:linear-gradient(145deg,var(--primary),var(--primary-hover));
+  color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:15px;
+  box-shadow:0 3px 10px rgba(0,0,0,.25);letter-spacing:.5px;
+}
+.brand-name{color:#fff;font-weight:600;font-size:14.5px;line-height:1.25}
+.brand-sub{color:var(--sidebar-muted);font-size:11.5px;letter-spacing:.4px}
+.motto{
+  margin:0 18px 10px;padding:7px 10px;border-radius:var(--radius-sm);background:rgba(255,255,255,.045);
+  color:var(--sidebar-muted);font-size:11.5px;letter-spacing:2px;text-align:center;
+}
+.nav{flex:1;overflow-y:auto;padding:4px 10px 14px}
+.nav-group{padding:14px 10px 6px;color:var(--sidebar-muted);font-size:11px;letter-spacing:1.2px}
+.nav-item{
+  display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:var(--radius-sm);
+  color:var(--sidebar-text);cursor:pointer;margin-bottom:1px;font-size:13.5px;
+  border-left:2px solid transparent;transition:background var(--t-fast),color var(--t-fast);
+}
+.nav-item:hover{background:var(--sidebar-hover);color:#fff;text-decoration:none}
+.nav-item.active{background:var(--sidebar-active);color:var(--sidebar-active-text);border-left-color:var(--accent);font-weight:500}
+.nav-item .ico{width:16px;height:16px;flex:0 0 16px;opacity:.85}
+.nav-item.active .ico{opacity:1}
+.nav-item .cnt{
+  margin-left:auto;font-size:11px;background:var(--danger);color:#fff;border-radius:var(--radius-pill);
+  padding:0 7px;line-height:17px;
+}
+.side-foot{padding:12px 18px 16px;border-top:1px solid rgba(255,255,255,.07);color:var(--sidebar-muted);font-size:11.5px}
+.side-foot .meter{height:4px;border-radius:2px;background:rgba(255,255,255,.1);margin-top:7px;overflow:hidden}
+.side-foot .meter i{display:block;height:100%;background:var(--accent)}
+
+.main{flex:1;min-width:0;display:flex;flex-direction:column}
+.topbar{
+  height:var(--topbar-h);display:flex;align-items:center;gap:14px;padding:0 24px;
+  background:var(--topbar-bg);backdrop-filter:saturate(180%) blur(8px);
+  border-bottom:1px solid var(--border);position:sticky;top:35px;z-index:60;
+}
+.crumb{color:var(--text-3);font-size:12.5px}
+.crumb b{color:var(--text);font-weight:600}
+.gsearch{
+  margin-left:8px;width:280px;display:flex;align-items:center;gap:8px;padding:6px 12px;
+  background:var(--surface-2);border:1px solid transparent;border-radius:var(--radius-pill);
+  color:var(--text-3);font-size:13px;cursor:text;
+}
+.gsearch:hover{border-color:var(--border-strong)}
+.gsearch kbd{
+  margin-left:auto;font-family:var(--font-mono);font-size:11px;color:var(--text-3);
+  background:var(--surface);border:1px solid var(--border);border-radius:4px;padding:0 5px;
+}
+.top-right{margin-left:auto;display:flex;align-items:center;gap:10px}
+.icon-btn{
+  width:34px;height:34px;display:flex;align-items:center;justify-content:center;border-radius:var(--radius-sm);
+  border:1px solid transparent;background:transparent;color:var(--text-2);cursor:pointer;position:relative;
+}
+.icon-btn:hover{background:var(--surface-2);color:var(--text)}
+.icon-btn .dot{position:absolute;top:6px;right:7px;width:7px;height:7px;border-radius:50%;background:var(--danger)}
+.userchip{
+  display:flex;align-items:center;gap:9px;padding:4px 10px 4px 5px;border-radius:var(--radius-pill);
+  border:1px solid var(--border);background:var(--surface);cursor:pointer;
+}
+.userchip:hover{border-color:var(--border-strong)}
+.avatar{
+  width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+  background:var(--primary-soft);color:var(--primary-soft-text);font-size:12px;font-weight:600;
+}
+.userchip .nm{font-size:13px;font-weight:500}
+.userchip .un{font-size:11px;color:var(--text-3)}
+.content{width:100%;max-width:var(--content-max);margin:0 auto;padding:24px 28px 56px}
+
+/* ===========================================================================
+   5) 页头 / 卡片 / 区块
+   =========================================================================== */
+.page-head{display:flex;align-items:flex-start;gap:16px;margin-bottom:20px}
+.page-head h1{font-size:22px;line-height:1.35}
+.page-head .desc{color:var(--text-2);font-size:13px;margin-top:5px;max-width:760px}
+.page-head .acts{margin-left:auto;display:flex;gap:8px;flex:0 0 auto}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow-sm)}
+.card+.card{margin-top:16px}
+.card-hd{display:flex;align-items:center;gap:10px;padding:14px 18px;border-bottom:1px solid var(--border)}
+.card-hd h3{font-size:15px}
+.card-hd .sub{color:var(--text-3);font-size:12px}
+.card-hd .acts{margin-left:auto;display:flex;gap:8px}
+.card-bd{padding:18px}
+.card-bd.tight{padding:12px 14px}
+.sec-title{display:flex;align-items:center;gap:8px;font-size:15px;font-weight:600;margin:0 0 12px}
+.sec-title:before{content:"";width:3px;height:15px;border-radius:2px;background:var(--primary)}
+.divider{height:1px;background:var(--border);margin:16px 0}
+.kv{display:grid;grid-template-columns:96px 1fr;gap:8px 14px;font-size:13px}
+.kv .k{color:var(--text-3)}
+
+/* ===========================================================================
+   6) 按钮
+   =========================================================================== */
+.btn{
+  display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:7px 15px;
+  border-radius:var(--radius-sm);border:1px solid var(--border-strong);background:var(--surface);
+  color:var(--text);font-size:13.5px;font-family:var(--font-sans);cursor:pointer;
+  transition:background var(--t-fast),border-color var(--t-fast),color var(--t-fast);white-space:nowrap;
+}
+.btn:hover{background:var(--surface-2)}
+.btn:focus-visible{outline:none;box-shadow:var(--ring)}
+.btn-primary{background:var(--primary);border-color:var(--primary);color:var(--on-primary)}
+.btn-primary:hover{background:var(--primary-hover);border-color:var(--primary-hover)}
+.btn-soft{background:var(--primary-soft);border-color:transparent;color:var(--primary-soft-text)}
+.btn-soft:hover{background:var(--primary-soft);filter:brightness(.97)}
 .btn-danger{background:var(--danger);border-color:var(--danger);color:#fff}
-.btn-danger:hover{background:var(--danger-dark);border-color:var(--danger-dark)}
-.btn-ghost{border-color:transparent;background:transparent;color:var(--primary-600)}
-.btn-ghost:hover{background:var(--primary-50)}
-.btn-sm{padding:3px 10px;font-size:13px}
-.btn[disabled],.btn.disabled{background:var(--primary-300);border-color:var(--primary-300);color:#fff;cursor:not-allowed}
-.btn-muted[disabled]{background:var(--gray-100);border-color:var(--gray-200);color:var(--gray-400)}
-.link-btn{border:none;background:none;color:var(--primary-600);cursor:pointer;font-size:13px;font-family:var(--font-sans);padding:0}
-.link-btn:hover{text-decoration:underline}
-.link-btn.danger{color:var(--danger)}
+.btn-danger:hover{filter:brightness(.93)}
+.btn-ghost{background:transparent;border-color:transparent;color:var(--primary)}
+.btn-ghost:hover{background:var(--primary-soft)}
+.btn-sm{padding:4px 11px;font-size:12.5px}
+.btn-lg{padding:9px 20px;font-size:14.5px}
+.btn[disabled],.btn.is-disabled{opacity:.5;cursor:not-allowed;background:var(--surface-2);border-color:var(--border);color:var(--text-3)}
+.btn-primary[disabled]{background:var(--primary);border-color:var(--primary);color:var(--on-primary)}
+.link{background:none;border:none;padding:0;color:var(--primary);cursor:pointer;font-size:13px;font-family:var(--font-sans)}
+.link:hover{text-decoration:underline}
+.link.danger{color:var(--danger)}
+.link.muted{color:var(--text-3);cursor:default}
 
-/* ---------- 表单 ---------- */
-.field{margin-bottom:14px}
-.label{display:block;font-size:13px;font-weight:600;color:var(--gray-700);margin-bottom:4px}
+/* ===========================================================================
+   7) 表单
+   =========================================================================== */
+.field{display:flex;flex-direction:column;gap:5px}
+.label{font-size:12.5px;font-weight:600;color:var(--text-2)}
 .label .req{color:var(--danger)}
-.input,.select,.textarea{width:100%;padding:7px 10px;border:1px solid var(--gray-300);border-radius:var(--radius-control);
-  font-family:var(--font-sans);font-size:14px;color:var(--gray-800);background:#fff}
-.input:focus,.select:focus,.textarea:focus{outline:none;border-color:var(--primary-600);box-shadow:var(--shadow-focus)}
+.input,.select,.textarea{
+  width:100%;padding:8px 11px;border:1px solid var(--border-strong);border-radius:var(--radius-sm);
+  background:var(--surface);color:var(--text);font-family:var(--font-sans);font-size:13.5px;
+  transition:border-color var(--t-fast),box-shadow var(--t-fast);
+}
+.input::placeholder,.textarea::placeholder{color:var(--text-3)}
+.input:focus,.select:focus,.textarea:focus{outline:none;border-color:var(--primary);box-shadow:var(--ring)}
 .input.err{border-color:var(--danger)}
-.input.sm{width:auto;padding:5px 8px;font-size:13px}
-.hint{color:var(--gray-500);font-size:12px;margin-top:4px}
-.errtxt{color:var(--danger);font-size:12px;margin-top:4px}
-.readonly{background:var(--gray-50);color:var(--gray-500);cursor:not-allowed}
-.checkline{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--gray-600)}
+.hint{color:var(--text-3);font-size:11.5px}
+.errtxt{color:var(--danger);font-size:11.5px}
+.filter{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px 16px}
+.filter .field.wide{grid-column:span 2}
+.filter-acts{display:flex;gap:8px;align-items:flex-end;justify-content:flex-end}
+.switchline{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text-2)}
+.checkbox{width:15px;height:15px;border:1.5px solid var(--border-strong);border-radius:4px;background:var(--surface);flex:0 0 15px}
+.checkbox.on{background:var(--primary);border-color:var(--primary);position:relative}
+.checkbox.on:after{content:"";position:absolute;left:4px;top:1px;width:4px;height:8px;border:2px solid #fff;border-top:0;border-left:0;transform:rotate(42deg)}
+.checkbox.half{background:linear-gradient(135deg,var(--primary) 0 50%,var(--surface) 50% 100%);border-color:var(--primary)}
 
-/* ---------- 徽标 ---------- */
-.badge{display:inline-flex;align-items:center;gap:4px;padding:1px 8px;border-radius:var(--radius-pill);font-size:12px;font-weight:500;white-space:nowrap}
-.badge-draft{background:var(--warning-light);color:var(--warning-dark)}
-.badge-published{background:var(--success-light);color:var(--success-dark)}
-.badge-archived{background:var(--info-light);color:var(--info-dark)}
-.badge-trash{background:var(--danger-light);color:var(--danger-dark)}
-.badge-active{background:var(--success-light);color:var(--success-dark)}
-.badge-locked{background:var(--warning-light);color:var(--warning-dark)}
-.badge-disabled{background:var(--gray-200);color:var(--gray-600)}
-.badge-gray{background:var(--gray-100);color:var(--gray-600)}
-.badge-blue{background:var(--primary-50);color:var(--primary-700)}
-.chip{display:inline-flex;align-items:center;gap:6px;padding:2px 10px;border:1px solid var(--gray-300);
-  border-radius:var(--radius-pill);font-size:12px;background:#fff;cursor:pointer}
-.chip.on{border-color:var(--primary-600);background:var(--primary-50);color:var(--primary-700)}
-.tag{display:inline-block;padding:0 8px;border-radius:var(--radius-control);background:var(--gray-100);color:var(--gray-600);font-size:12px;margin-right:4px}
+/* ===========================================================================
+   8) 徽标 / 标签 / 色点
+   =========================================================================== */
+.badge{
+  display:inline-flex;align-items:center;gap:5px;padding:2px 9px;border-radius:var(--radius-pill);
+  font-size:11.5px;font-weight:500;white-space:nowrap;border:1px solid transparent;
+}
+.badge:before{content:"";width:5px;height:5px;border-radius:50%;background:currentColor;opacity:.85}
+.badge.draft{background:var(--warning-soft);color:var(--warning-text)}
+.badge.published{background:var(--success-soft);color:var(--success-text)}
+.badge.archived{background:var(--info-soft);color:var(--info-text)}
+.badge.trash{background:var(--danger-soft);color:var(--danger-text)}
+.badge.active{background:var(--success-soft);color:var(--success-text)}
+.badge.locked{background:var(--warning-soft);color:var(--warning-text)}
+.badge.disabled{background:var(--surface-3);color:var(--text-2)}
+.badge.plain{background:var(--surface-2);color:var(--text-2)}
+.badge.plain:before{display:none}
+.badge.primary{background:var(--primary-soft);color:var(--primary-soft-text)}
+.tag{
+  display:inline-flex;align-items:center;gap:5px;padding:2px 9px;border-radius:var(--radius-sm);
+  background:var(--surface-2);color:var(--text-2);font-size:11.5px;border:1px solid var(--border);
+}
+.tag.on{background:var(--primary-soft);border-color:transparent;color:var(--primary-soft-text)}
+.chip-pick{display:flex;flex-wrap:wrap;gap:6px}
+.chip-pick .tag{cursor:pointer}
+.chip-pick .tag:hover{border-color:var(--border-strong)}
 
-/* ---------- 表格 ---------- */
-table.tbl{width:100%;border-collapse:collapse;font-size:14px}
-table.tbl th{text-align:left;font-weight:600;color:var(--gray-600);background:var(--gray-50);
-  padding:9px 12px;border-bottom:1px solid var(--gray-200);white-space:nowrap;font-size:13px}
-table.tbl td{padding:10px 12px;border-bottom:1px solid var(--gray-100);vertical-align:middle}
-table.tbl tr:hover td{background:var(--primary-50)}
-table.tbl .t-title{font-weight:600;color:var(--gray-800)}
-table.tbl .acts{white-space:nowrap;text-align:right}
-.col-fix{width:150px}
-.nowrap{white-space:nowrap}
+/* ===========================================================================
+   9) 表格 & 列表
+   =========================================================================== */
+.tbl{width:100%;border-collapse:collapse;font-size:13.5px}
+.tbl th{
+  text-align:left;font-weight:600;font-size:12px;color:var(--text-2);background:var(--surface-2);
+  padding:10px 14px;border-bottom:1px solid var(--border);white-space:nowrap;
+}
+.tbl td{padding:12px 14px;border-bottom:1px solid var(--border);vertical-align:top}
+.tbl tr:last-child td{border-bottom:none}
+.tbl tbody tr:hover td{background:var(--surface-2)}
+.tbl .title{font-weight:600;color:var(--text)}
+.tbl .title:hover{color:var(--primary);text-decoration:none}
+.tbl .sub{color:var(--text-3);font-size:12px;margin-top:3px;display:block;max-width:640px}
+.tbl .acts{text-align:right;white-space:nowrap;display:flex;gap:10px;justify-content:flex-end}
+.tbl .num{font-variant-numeric:tabular-nums}
+.w-fix{width:110px}.w-fix2{width:150px}.w-fix3{width:190px}
+.list{display:flex;flex-direction:column}
+.list-item{display:flex;gap:12px;padding:13px 0;border-bottom:1px solid var(--border)}
+.list-item:last-child{border-bottom:none}
+.list-item .body{min-width:0;flex:1}
+.dot{width:7px;height:7px;border-radius:50%;flex:0 0 7px;margin-top:7px}
 
-/* ---------- 分页 / tab ---------- */
-.pager{display:flex;align-items:center;gap:8px;padding:12px 16px;border-top:1px solid var(--gray-200);color:var(--gray-500);font-size:13px}
-.pager .pg{min-width:28px;height:28px;padding:0 8px;border:1px solid var(--gray-300);background:#fff;border-radius:var(--radius-control);cursor:pointer;font-size:13px;font-family:var(--font-sans)}
-.pager .pg.on{background:var(--primary-600);border-color:var(--primary-600);color:#fff}
-.tabs{display:flex;gap:4px;border-bottom:1px solid var(--gray-200);padding:0 16px}
-.tab{padding:10px 12px;color:var(--gray-500);cursor:pointer;border-bottom:2px solid transparent;font-size:14px}
-.tab:hover{color:var(--gray-800)}
-.tab.active{color:var(--primary-700);border-bottom-color:var(--primary-600);font-weight:600}
+/* ===========================================================================
+   10) 统计卡 / 工具栏 / 分页 / Tabs
+   =========================================================================== */
+.stat{
+  background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);
+  padding:16px 18px;box-shadow:var(--shadow-sm);position:relative;overflow:hidden;
+}
+.stat:before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--primary);opacity:.85}
+.stat.s2:before{background:var(--accent)}
+.stat.s3:before{background:var(--info)}
+.stat.s4:before{background:var(--success)}
+.stat .k{color:var(--text-2);font-size:12.5px;display:flex;align-items:center;gap:6px}
+.stat .v{font-size:27px;font-weight:700;letter-spacing:-.02em;line-height:1.25;font-variant-numeric:tabular-nums;margin-top:4px}
+.stat .v small{font-size:12px;font-weight:400;color:var(--text-3);margin-left:3px}
+.stat .d{font-size:11.5px;color:var(--text-3);margin-top:5px}
+.stat .d b{color:var(--success);font-weight:600}
+.toolbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:14px 18px;border-bottom:1px solid var(--border)}
+.toolbar .grow{flex:1;min-width:180px}
+.pager{display:flex;align-items:center;gap:6px;padding:14px 18px;color:var(--text-2);font-size:12.5px}
+.pg{
+  min-width:30px;height:30px;padding:0 9px;border:1px solid var(--border-strong);background:var(--surface);
+  border-radius:var(--radius-sm);cursor:pointer;font-size:12.5px;color:var(--text-2);font-family:var(--font-sans);
+}
+.pg:hover{background:var(--surface-2)}
+.pg.on{background:var(--primary);border-color:var(--primary);color:var(--on-primary)}
+.tabs{display:flex;gap:2px;padding:0 18px;border-bottom:1px solid var(--border);overflow-x:auto}
+.tab{
+  padding:12px 13px;color:var(--text-2);cursor:pointer;font-size:13.5px;white-space:nowrap;
+  border-bottom:2px solid transparent;background:none;border-top:0;border-left:0;border-right:0;font-family:var(--font-sans);
+}
+.tab:hover{color:var(--text)}
+.tab.active{color:var(--primary);border-bottom-color:var(--primary);font-weight:600}
+.tab .n{margin-left:6px;font-size:11.5px;color:var(--text-3)}
 
-/* ---------- 提示条 ---------- */
-.banner{display:flex;gap:10px;padding:10px 14px;border-radius:var(--radius-card);border:1px solid;font-size:13px;margin-bottom:16px}
-.banner b{font-weight:600}
-.b-warning{background:var(--warning-light);border-color:#fcd34d;color:var(--warning-dark)}
-.b-danger{background:var(--danger-light);border-color:#fecaca;color:var(--danger-dark)}
-.b-info{background:var(--info-light);border-color:#bae6fd;color:var(--info-dark)}
-.b-success{background:var(--success-light);border-color:#bbf7d0;color:var(--success-dark)}
-.noperm{display:flex;gap:8px;align-items:center;padding:8px 12px;border:1px dashed var(--gray-300);
-  border-radius:var(--radius-control);background:var(--gray-50);color:var(--gray-500);font-size:13px}
+/* ===========================================================================
+   11) 提示 / 四态 / 骨架
+   =========================================================================== */
+.alert{display:flex;gap:11px;padding:12px 15px;border-radius:var(--radius);border:1px solid;font-size:13px;align-items:flex-start}
+.alert .ico{flex:0 0 16px;margin-top:1px}
+.alert b{font-weight:600}
+.a-warn{background:var(--warning-soft);border-color:color-mix(in srgb,var(--warning) 32%,transparent);color:var(--warning-text)}
+.a-danger{background:var(--danger-soft);border-color:color-mix(in srgb,var(--danger) 30%,transparent);color:var(--danger-text)}
+.a-info{background:var(--info-soft);border-color:color-mix(in srgb,var(--info) 26%,transparent);color:var(--info-text)}
+.a-ok{background:var(--success-soft);border-color:color-mix(in srgb,var(--success) 26%,transparent);color:var(--success-text)}
+.empty{text-align:center;padding:52px 20px;color:var(--text-2)}
+.empty .mark{width:46px;height:46px;margin:0 auto 12px;border-radius:14px;background:var(--surface-2);display:flex;align-items:center;justify-content:center;color:var(--text-3);font-size:20px}
+.empty h4{font-size:15px;color:var(--text)}
+.empty p{margin:6px 0 0;font-size:13px;color:var(--text-3)}
+.sk{padding:18px}
+.sk-line{height:11px;border-radius:6px;background:linear-gradient(90deg,var(--surface-2),var(--surface-3),var(--surface-2));margin-bottom:11px;animation:sk 1.4s ease-in-out infinite}
+.sk-line.w40{width:40%}.sk-line.w60{width:60%}.sk-line.w80{width:80%}
+@keyframes sk{0%,100%{opacity:1}50%{opacity:.5}}
+.noperm{display:flex;gap:9px;align-items:center;padding:9px 13px;border-radius:var(--radius-sm);border:1px dashed var(--border-strong);background:var(--surface-2);color:var(--text-2);font-size:12.5px}
+.toast{display:inline-flex;align-items:center;gap:9px;padding:10px 15px;border-radius:var(--radius);background:var(--text);color:var(--surface);font-size:13px;box-shadow:var(--shadow-lg)}
+.toast.warn{background:var(--warning-text)}
+.toast.err{background:var(--danger-text)}
 
-/* ---------- 四态 ---------- */
-.empty{text-align:center;padding:40px 16px;color:var(--gray-500)}
-.empty .ico{width:40px;height:40px;margin:0 auto 10px;color:var(--gray-300)}
-.empty h4{margin:0 0 4px;color:var(--gray-700);font-size:16px}
-.sk{padding:16px}
-.sk-line{height:12px;border-radius:6px;background:linear-gradient(90deg,var(--gray-100),var(--gray-200),var(--gray-100));
-  margin-bottom:10px;animation:sk 1.2s ease-in-out infinite}
-@keyframes sk{0%{opacity:1}50%{opacity:.55}100%{opacity:1}}
-.errstate{text-align:center;padding:32px 16px}
-.errstate h4{margin:0 0 4px;color:var(--danger-dark);font-size:16px}
+/* ===========================================================================
+   12) Markdown / 编辑器
+   =========================================================================== */
+.md{font-size:14.5px;line-height:1.85;color:var(--text);max-width:78ch}
+.md h1{font-size:24px;margin:0 0 14px;padding-bottom:10px;border-bottom:1px solid var(--border)}
+.md h2{font-size:17.5px;margin:26px 0 10px}
+.md h3{font-size:15.5px;margin:20px 0 8px;color:var(--text-2)}
+.md p{margin:10px 0}
+.md ul,.md ol{margin:10px 0;padding-left:24px}
+.md li{margin:4px 0}
+.md code{font-family:var(--font-mono);font-size:13px;background:var(--surface-2);padding:2px 6px;border-radius:5px;border:1px solid var(--border)}
+.md pre{background:var(--surface-3);border:1px solid var(--border);padding:14px 16px;border-radius:var(--radius);overflow:auto;margin:14px 0}
+.md pre code{background:none;border:none;padding:0;font-size:12.5px;line-height:1.7}
+.md blockquote{margin:14px 0;padding:10px 16px;border-left:3px solid var(--primary);background:var(--primary-soft);border-radius:0 var(--radius-sm) var(--radius-sm) 0;color:var(--text-2)}
+.md table{border-collapse:collapse;margin:14px 0;font-size:13.5px}
+.md th,.md td{border:1px solid var(--border);padding:8px 12px;text-align:left}
+.md th{background:var(--surface-2);font-weight:600}
+.md a{border-bottom:1px solid color-mix(in srgb,var(--primary) 40%,transparent)}
+.editor{display:grid;grid-template-columns:minmax(0,1fr) 320px;gap:16px;align-items:start}
+.pane{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;box-shadow:var(--shadow-sm)}
+.pane-hd{display:flex;align-items:center;gap:8px;padding:9px 14px;border-bottom:1px solid var(--border);background:var(--surface-2);font-size:12.5px;color:var(--text-2)}
+.toolbar-md{display:flex;gap:1px;padding:7px 10px;border-bottom:1px solid var(--border);flex-wrap:wrap}
+.tool{
+  min-width:30px;height:30px;padding:0 8px;display:inline-flex;align-items:center;justify-content:center;
+  border:none;background:none;border-radius:var(--radius-sm);cursor:pointer;color:var(--text-2);
+  font-size:13px;font-family:var(--font-sans);
+}
+.tool:hover{background:var(--surface-2);color:var(--text)}
+.tool.sep{width:1px;min-width:1px;background:var(--border);margin:0 5px;cursor:default}
+.ta{
+  width:100%;min-height:460px;border:none;padding:16px 18px;background:var(--surface);color:var(--text);
+  font-family:var(--font-mono);font-size:13px;line-height:1.8;resize:vertical;outline:none;
+}
+.preview{padding:18px 20px;min-height:460px;max-height:640px;overflow:auto}
+.side-sticky{position:sticky;top:112px}
+.toc{border-left:1px solid var(--border);padding-left:14px;font-size:12.5px}
+.toc a{display:block;padding:3px 0;color:var(--text-2)}
+.toc a:hover{color:var(--primary)}
 
-/* ---------- 统计卡 ---------- */
-.stat{background:#fff;border:1px solid var(--gray-200);border-radius:var(--radius-card);padding:14px 16px;box-shadow:var(--shadow-card)}
-.stat .k{color:var(--gray-500);font-size:12px}
-.stat .v{font-size:26px;font-weight:700;letter-spacing:-.5px;line-height:1.3}
-.stat .u{font-size:12px;color:var(--gray-400)}
-
-/* ---------- Markdown 渲染区 ---------- */
-.markdown-body{font-size:14px;line-height:1.75;color:var(--gray-800);max-width:820px}
-.markdown-body h1{font-size:22px;margin:0 0 12px;padding-bottom:8px;border-bottom:1px solid var(--gray-200)}
-.markdown-body h2{font-size:17px;margin:20px 0 8px}
-.markdown-body p{margin:8px 0}
-.markdown-body ul,.markdown-body ol{margin:8px 0;padding-left:22px}
-.markdown-body li{margin:3px 0}
-.markdown-body code{font-family:var(--font-mono);font-size:13px;background:var(--gray-100);padding:1px 5px;border-radius:4px}
-.markdown-body pre{background:var(--gray-900);color:var(--gray-100);padding:12px 14px;border-radius:var(--radius-card);overflow:auto}
-.markdown-body pre code{background:none;color:inherit;padding:0}
-.markdown-body blockquote{margin:10px 0;padding:6px 12px;border-left:3px solid var(--primary-300);background:var(--primary-50);color:var(--gray-600)}
-.markdown-body table{border-collapse:collapse;margin:10px 0}
-.markdown-body th,.markdown-body td{border:1px solid var(--gray-200);padding:6px 10px;font-size:13px}
-.markdown-body th{background:var(--gray-50)}
-
-/* ---------- 编辑器 ---------- */
-.split{display:grid;grid-template-columns:1fr 1fr;gap:0;border:1px solid var(--gray-200);border-radius:var(--radius-card);overflow:hidden;background:#fff}
-.split>.pane{min-width:0}
-.split>.pane+.pane{border-left:1px solid var(--gray-200);background:var(--gray-50)}
-.pane-hd{padding:8px 12px;background:var(--gray-50);border-bottom:1px solid var(--gray-200);color:var(--gray-500);font-size:12px}
-.toolbar{display:flex;gap:2px;padding:6px 8px;border-bottom:1px solid var(--gray-200);background:#fff;flex-wrap:wrap}
-.tool{width:28px;height:28px;display:flex;align-items:center;justify-content:center;border:none;background:none;
-  border-radius:var(--radius-control);cursor:pointer;color:var(--gray-600);font-size:13px;font-family:var(--font-sans)}
-.tool:hover{background:var(--gray-100);color:var(--gray-900)}
-.tool.sep{width:1px;background:var(--gray-200);margin:0 4px;cursor:default}
-.ta{width:100%;min-height:420px;border:none;padding:14px;font-family:var(--font-mono);font-size:13px;line-height:1.7;
-  resize:vertical;color:var(--gray-800);outline:none}
-.preview-pane{padding:14px 16px;min-height:420px;overflow:auto;background:#fff}
-
-/* ---------- 抽屉 / 弹窗 / toast（静态示意） ---------- */
-.drawer-demo,.dialog-demo{border:1px solid var(--gray-200);border-radius:var(--radius-card);background:#fff;box-shadow:var(--shadow-pop);overflow:hidden}
-.drawer-hd,.dialog-hd{display:flex;align-items:center;gap:8px;padding:12px 16px;border-bottom:1px solid var(--gray-200);font-weight:600}
-.dialog-bd{padding:16px}
-.dialog-ft{display:flex;gap:8px;justify-content:flex-end;padding:12px 16px;border-top:1px solid var(--gray-200);background:var(--gray-50)}
-.toast{display:inline-flex;align-items:center;gap:8px;background:var(--gray-900);color:#fff;padding:8px 14px;
-  border-radius:var(--radius-control);box-shadow:var(--shadow-pop);font-size:13px}
-.toast.warn{background:var(--warning-dark)}
-.toast.err{background:var(--danger-dark)}
-.diff{border:1px solid var(--gray-200);border-radius:var(--radius-card);overflow:hidden}
-.diff .hd{display:grid;grid-template-columns:1fr 1fr;background:var(--gray-50);border-bottom:1px solid var(--gray-200);font-size:12px;color:var(--gray-500)}
-.diff .hd>div{padding:6px 12px}
-.diff .bd{display:grid;grid-template-columns:1fr 1fr;font-family:var(--font-mono);font-size:13px}
-.diff .bd>div{padding:8px 12px;border-top:1px solid var(--gray-100);white-space:pre-wrap}
-.diff .add{background:var(--success-light);color:var(--success-dark)}
-.diff .del{background:var(--danger-light);color:var(--danger-dark)}
-
-/* ---------- 权限树 ---------- */
+/* ===========================================================================
+   13) 抽屉 / 弹窗 / 树 / 主题画廊
+   =========================================================================== */
+.drawer{border:1px solid var(--border);border-radius:var(--radius);background:var(--surface);box-shadow:var(--shadow-lg);overflow:hidden}
+.drawer-hd{display:flex;align-items:center;gap:10px;padding:14px 18px;border-bottom:1px solid var(--border)}
+.drawer-ft{display:flex;gap:9px;justify-content:flex-end;padding:13px 18px;border-top:1px solid var(--border);background:var(--surface-2)}
+.dialog{border:1px solid var(--border);border-radius:var(--radius);background:var(--surface);box-shadow:var(--shadow-lg);overflow:hidden}
 .tree{font-size:13px}
-.tree-row{display:flex;align-items:center;gap:8px;padding:5px 8px;border-radius:var(--radius-control)}
-.tree-row:hover{background:var(--gray-50)}
-.tree-row .code{color:var(--gray-400);margin-left:auto;font-size:12px}
-.tree-row.dir{font-weight:600;color:var(--gray-800)}
-.tree-row.menu{color:var(--gray-700)}
-.tree-row.btn{color:var(--gray-500)}
-.ind1{padding-left:24px}.ind2{padding-left:48px}
-.cbx{width:14px;height:14px;border:1px solid var(--gray-400);border-radius:3px;flex:0 0 14px;background:#fff}
-.cbx.on{background:var(--primary-600);border-color:var(--primary-600)}
-.cbx.half{background:linear-gradient(135deg,var(--primary-600) 50%,#fff 50%);border-color:var(--primary-600)}
+.tree .node{display:flex;align-items:center;gap:9px;padding:7px 9px;border-radius:var(--radius-sm);cursor:pointer}
+.tree .node:hover{background:var(--surface-2)}
+.tree .node.on{background:var(--primary-soft);color:var(--primary-soft-text);font-weight:600}
+.tree .node .cnt{color:var(--text-3);font-size:11.5px}
+.tree .node .code{margin-left:auto;font-family:var(--font-mono);font-size:11px;color:var(--text-3)}
+.tree .lv1{padding-left:9px}.tree .lv2{padding-left:30px}.tree .lv3{padding-left:51px}
+.caret{width:12px;color:var(--text-3);font-size:10px;flex:0 0 12px}
+.themes{display:grid;grid-template-columns:repeat(auto-fill,minmax(232px,1fr));gap:14px}
+.tcard{border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;background:var(--surface);cursor:pointer;transition:box-shadow var(--t),transform var(--t)}
+.tcard:hover{box-shadow:var(--shadow);transform:translateY(-1px)}
+.tcard.on{border-color:var(--primary);box-shadow:var(--ring)}
+.tcard .pv{height:74px;display:flex}
+.tcard .pv .bar{width:34%;padding:9px}
+.tcard .pv .body{flex:1;padding:11px}
+.tcard .pv .l1{height:8px;border-radius:4px;margin-bottom:7px}
+.tcard .pv .l2{height:8px;border-radius:4px;width:62%}
+.tcard .meta{padding:11px 13px;border-top:1px solid var(--border);display:flex;align-items:center;gap:8px}
+.tcard .meta .nm{font-size:13.5px;font-weight:600}
+.tcard .meta .sw{display:flex;gap:3px;margin-left:auto}
+.tcard .meta .sw i{width:12px;height:12px;border-radius:3px;display:block;border:1px solid rgba(0,0,0,.08)}
+.swatch-row{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px}
+.swatch{border:1px solid var(--border);border-radius:var(--radius-sm);overflow:hidden}
+.swatch .c{height:40px}
+.swatch .n{padding:7px 9px;font-size:11.5px;color:var(--text-2);display:flex;justify-content:space-between;gap:6px}
+.swatch .n span{font-family:var(--font-mono);color:var(--text-3)}
+.feat{display:flex;gap:10px;font-size:13px;color:var(--text-2);padding:9px 0;border-bottom:1px dashed var(--border)}
+.feat:last-child{border-bottom:none}
+.feat .n{width:18px;height:18px;flex:0 0 18px;border-radius:50%;background:var(--primary-soft);color:var(--primary-soft-text);font-size:11px;display:flex;align-items:center;justify-content:center;font-weight:600;margin-top:1px}
 
-/* ---------- 设计系统 ---------- */
-.sw{height:44px;border-radius:var(--radius-control);border:1px solid var(--gray-200)}
-.sw-row{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:8px}
-.sw-primary-600{background:var(--primary-600)} .sw-primary-700{background:var(--primary-700)}
-.sw-success{background:var(--success)} .sw-warning{background:var(--warning)}
-.sw-danger{background:var(--danger)} .sw-info{background:var(--info)}
-.sw-gray-50{background:var(--gray-50)} .sw-gray-100{background:var(--gray-100)}
-.sw-gray-200{background:var(--gray-200)} .sw-gray-400{background:var(--gray-400)}
-.sw-gray-600{background:var(--gray-600)} .sw-gray-900{background:var(--gray-900)}
-.w60{width:60%}
-.m0{margin-bottom:0}
-.kv{display:grid;grid-template-columns:200px 1fr;gap:6px 12px;font-size:13px}
-.kv .k{color:var(--gray-500)}
-.hero-login{min-height:calc(100vh - 39px);display:flex;align-items:center;justify-content:center;background:var(--gray-100);padding:40px 16px}
-.login-card{width:400px;background:#fff;border:1px solid var(--gray-200);border-radius:var(--radius-card);box-shadow:var(--shadow-card);padding:28px}
-.login-head{text-align:center;margin-bottom:20px}
-.login-logo{width:44px;height:44px;border-radius:var(--radius-card);background:var(--primary-600);color:#fff;
-  display:flex;align-items:center;justify-content:center;margin:0 auto 10px;font-weight:700;font-size:20px}
-.login-head h1{margin:0;font-size:20px}
-.login-head p{margin:4px 0 0;color:var(--gray-500);font-size:13px}
+/* ===========================================================================
+   14) 登录页
+   =========================================================================== */
+.login-wrap{min-height:calc(100vh - 35px);display:flex}
+.login-aside{
+  flex:1;background:var(--sidebar-bg);color:var(--sidebar-text);padding:56px 60px;display:flex;flex-direction:column;
+  justify-content:space-between;position:relative;overflow:hidden;
+}
+.login-aside:after{
+  content:"";position:absolute;right:-140px;bottom:-140px;width:420px;height:420px;border-radius:50%;
+  background:radial-gradient(circle at 30% 30%,var(--primary),transparent 62%);opacity:.32;
+}
+.login-aside .motto-big{font-size:34px;letter-spacing:8px;color:#fff;font-weight:600;line-height:1.5}
+.login-aside .motto-sub{margin-top:12px;color:var(--sidebar-muted);font-size:13px;letter-spacing:1px}
+.login-aside ul{margin:26px 0 0;padding:0;list-style:none;font-size:13px;color:var(--sidebar-muted)}
+.login-aside li{margin:9px 0;display:flex;gap:9px;align-items:center}
+.login-aside li:before{content:"";width:5px;height:5px;border-radius:50%;background:var(--accent)}
+.login-panel{width:460px;flex:0 0 460px;background:var(--surface);display:flex;align-items:center;justify-content:center;padding:40px}
+.login-card{width:100%;max-width:340px}
+.login-card h1{font-size:20px;margin-bottom:6px}
+.login-card .sub{color:var(--text-3);font-size:13px;margin-bottom:22px}
+.login-foot{margin-top:18px;padding-top:14px;border-top:1px dashed var(--border);color:var(--text-3);font-size:11.5px;line-height:1.9}
 .pw-wrap{position:relative}
-.pw-eye{position:absolute;right:8px;top:6px;border:none;background:none;cursor:pointer;color:var(--gray-400);font-size:13px}
-.demo-note{margin-top:14px;padding-top:12px;border-top:1px dashed var(--gray-200);color:var(--gray-500);font-size:12px}
+.pw-eye{position:absolute;right:9px;top:7px;border:none;background:none;color:var(--text-3);cursor:pointer;font-size:12px;font-family:var(--font-sans)}
+
+/* ===========================================================================
+   15) 布局辅助类（模板里只用这些类名，不写内联样式）
+   =========================================================================== */
+.btn-block{width:100%}
+.gap8{gap:8px}.gap16{gap:16px}
+.center{justify-content:center}
+.ellip{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:190px}
+.strong{font-weight:600}
+.navrow{display:flex;align-items:center;gap:8px;padding:9px 0;border-bottom:1px dashed var(--border)}
+.navrow:last-child{border-bottom:none}
+.avatar-lg{width:48px;height:48px;font-size:18px}
+.select-compact{width:auto;min-width:96px;padding:6px 9px;font-size:12.5px}
+.input-compact{width:auto;min-width:150px;padding:5px 9px;font-size:12.5px}
+.input-title{font-size:17px;font-weight:600;border-color:transparent;padding:8px 10px}
+.input-title:focus{border-color:var(--primary)}
+.pad-top{padding-top:0}
+.pad-403{padding:28px}
+.on-light{color:var(--text)}
+.login-aside .footnote{color:var(--sidebar-muted)}
+.tree{max-height:520px;overflow:auto}
+.dot.primary{background:var(--primary)}
+.dot.warning{background:var(--warning)}
 </style>
 </head>
 <body>
 
-<!-- ======================= 预览稿专用控制条 ======================= -->
-<div class="pv-bar">
-  <span class="pv-tag">静态视觉预览稿 · 假数据 · 零请求</span>
-  <span>预览身份</span>
-  <select id="roleSel">
-    <option value="staff">staff / Staff@123 —— 普通员工（STAFF · 11 权限点）</option>
-    <option value="docadmin">docadmin / Doc@123456 —— 文档管理员（DOC_ADMIN · 20）</option>
-    <option value="admin" selected>admin / Admin@123 —— 系统管理员（SYS_ADMIN · 39）</option>
+<!-- ================= 预览稿专用条（切换身份 / 主题 / 视图） ================= -->
+<div class="pvbar">
+  <span class="tag">界面预览稿 v2 · 河北师范大学 · 假数据 · 零请求</span>
+  <label>身份</label>
+  <select id="pvRole">
+    <option value="staff">李承霖 · 软件学院 专任教师（教职工）</option>
+    <option value="docadmin">王砚秋 · 教务处 文档管理员</option>
+    <option value="admin" selected>赵慕辰 · 信息化中心 系统管理员</option>
   </select>
-  <span class="pv-sep"></span>
-  <span>跳转</span>
-  <button data-go="login">登录</button>
-  <button data-go="docs">检索</button>
-  <button data-go="detail">详情</button>
-  <button data-go="edit">编辑器</button>
-  <button data-go="my">我的文档</button>
-  <button data-go="review">审核队列</button>
-  <button data-go="adminDocs">文档治理</button>
-  <button data-go="system">系统管理</button>
-  <button data-go="kit">设计系统</button>
-  <span class="pv-sep"></span>
-  <span class="muted">切身份看菜单与按钮增减；进无权限页会被守卫拦到 403 视图</span>
+  <label>主题</label>
+  <select id="pvTheme"></select>
+  <label>直达</label>
+  <select id="pvView"></select>
+  <span class="hint">切身份看菜单与按钮增减 · 切主题看 5 套配色 · 无权限页面会被守卫拦到 403</span>
 </div>
 
-<!-- ======================= 登录页（独立布局） ======================= -->
-<div id="view-login" class="view hidden">
-  <div class="hero-login">
-    <div class="login-card">
-      <div class="login-head">
-        <div class="login-logo">CS</div>
-        <h1>CampusSwap 文档管理平台</h1>
-        <p>校内桌面 Web 文档平台 · 写下、找到、治理</p>
+<!-- ================= 登录页（独立布局，不进骨架） ================= -->
+<div id="viewLogin" class="hidden">
+  <div class="login-wrap">
+    <div class="login-aside">
+      <div>
+        <div class="motto-big">怀天下　求真知</div>
+        <div class="motto-sub">河北师范大学 · 校内文档平台</div>
+        <ul>
+          <li>统一身份认证登录，一个账号走遍全校文档</li>
+          <li>按单位与分类沉淀公文、教务、科研与学生工作材料</li>
+          <li>重要制度版本留痕，审核与归档全程可查</li>
+        </ul>
       </div>
-
-      <div id="loginAlert" class="banner b-danger hidden"><span>⚠</span><span id="loginAlertMsg">用户名或密码错误</span></div>
-
-      <div class="field">
-        <label class="label" for="lgUser">工号 <span class="req">*</span></label>
-        <input id="lgUser" class="input" value="admin" autocomplete="off">
-      </div>
-      <div class="field">
-        <label class="label" for="lgPass">密码 <span class="req">*</span></label>
-        <div class="pw-wrap">
-          <input id="lgPass" class="input" type="password" value="Admin@123" autocomplete="off">
-          <button class="pw-eye" id="pwEye" type="button">显示</button>
+      <div class="xs footnote">裕华校区 · 石家庄市南二环东路 20 号　｜　红旗校区 · 红旗大街 469 号</div>
+    </div>
+    <div class="login-panel">
+      <div class="login-card">
+        <div class="row mb16">
+          <div class="brand-mark">师</div>
+          <div>
+            <div class="brand-name on-light">校内文档平台</div>
+            <div class="brand-sub">HEBTU Document Platform</div>
+          </div>
         </div>
-        <div id="lgPassErr" class="errtxt hidden">密码不能为空</div>
-      </div>
-
-      <button class="btn btn-primary" id="lgBtn">登录</button>
-
-      <div class="demo-note">
-        预览稿状态演示：
-        <button class="link-btn" data-lg="idle">初始</button> ·
-        <button class="link-btn" data-lg="loading">登录中</button> ·
-        <button class="link-btn" data-lg="bad">密码错误</button> ·
-        <button class="link-btn" data-lg="locked">账号已冻结</button> ·
-        <button class="link-btn" data-lg="disabled">账号已停用</button>
-        <div class="mt8">真实登录后按钮进入「登录中…」并禁用两个输入框；401 的提示故意不区分「用户不存在 / 密码错误」（防工号枚举）。</div>
+        <h1>登录</h1>
+        <div class="sub">请使用统一身份认证的工号与密码登录</div>
+        <div id="lgAlert" class="alert a-danger hidden mb12"><span class="ico">!</span><span id="lgAlertMsg"></span></div>
+        <div class="field mb12">
+          <label class="label" for="lgUser">工号 / 学号</label>
+          <input id="lgUser" class="input" value="2018013" autocomplete="off">
+        </div>
+        <div class="field mb16">
+          <label class="label" for="lgPass">密码</label>
+          <div class="pw-wrap">
+            <input id="lgPass" class="input" type="password" value="Hebtu@2026" autocomplete="off">
+            <button class="pw-eye" id="pwEye" type="button">显示</button>
+          </div>
+        </div>
+        <button class="btn btn-primary btn-lg btn-block" id="lgBtn">登 录</button>
+        <div class="login-foot">
+          状态演示：
+          <button class="link" data-lg="idle">初始</button> ·
+          <button class="link" data-lg="loading">登录中</button> ·
+          <button class="link" data-lg="bad">工号或密码错误</button> ·
+          <button class="link" data-lg="locked">账号已冻结</button> ·
+          <button class="link" data-lg="disabled">账号已停用</button>
+          <div class="mt4">登录失败提示不区分「工号不存在 / 密码错误」，避免工号被枚举。</div>
+        </div>
       </div>
     </div>
   </div>
 </div>
 
-<!-- ======================= 应用骨架 ======================= -->
+<!-- ================= 应用骨架 ================= -->
 <div class="app" id="appShell">
   <aside class="sidebar">
     <div class="brand">
-      <div class="brand-row">
-        <div class="brand-mark">CS</div>
-        <div>
-          <div class="brand-name">CampusSwap</div>
-          <div class="brand-sub">文档管理平台</div>
-        </div>
+      <div class="brand-mark">师</div>
+      <div>
+        <div class="brand-name">校内文档平台</div>
+        <div class="brand-sub">河北师范大学</div>
       </div>
     </div>
-    <nav class="nav">
-      <div class="nav-group">文档中心</div>
-      <a class="nav-item" data-go="my" data-perm="doc:mine"><span class="ico">▤</span>我的文档</a>
-      <a class="nav-item" data-go="docs" data-perm="doc:search"><span class="ico">⌕</span>文档检索</a>
-      <a class="nav-item" data-go="review" data-perm="doc:review"><span class="ico">✓</span>审核队列<span class="cnt">2</span></a>
-      <a class="nav-item" data-go="adminDocs" data-perm="doc:manage"><span class="ico">◈</span>文档治理</a>
-      <div class="nav-group" data-perm="sys:center">系统管理</div>
-      <a class="nav-item" data-go="system" data-perm="sys:center"><span class="ico">⚙</span>用户 / 角色 / 权限 / 部门</a>
-      <div class="nav-group">预览稿</div>
-      <a class="nav-item" data-go="kit"><span class="ico">◐</span>设计系统与状态一览</a>
-    </nav>
-    <div class="side-foot">
-      <div>当前身份：<b id="navRoleName">系统管理员</b></div>
-      <div class="mt8">有效权限 <b id="navPermCount">39</b> 个 / 共 39 个</div>
-    </div>
+    <div class="motto">怀天下　求真知</div>
+    <nav class="nav" id="nav"></nav>
+    <div class="side-foot" id="sideFoot"></div>
   </aside>
-
   <div class="main">
     <header class="topbar">
-      <div class="crumb">首页 / <b id="crumbText">文档检索</b></div>
+      <div class="crumb" id="crumb"></div>
+      <div class="gsearch">搜索文档、制度、通知…<kbd>Ctrl K</kbd></div>
       <div class="top-right">
-        <span class="badge badge-gray" id="roleBadge">SYS_ADMIN</span>
-        <div class="user-chip">
-          <div class="avatar" id="userAvatar">系</div>
-          <span id="userName">系统管理员</span>
-        </div>
+        <select class="select select-compact" id="themePick"></select>
+        <button class="icon-btn" title="通知">🔔<span class="dot"></span></button>
+        <div class="userchip" id="userChip"></div>
       </div>
     </header>
-    <div class="content">
-
-      <!-- ============ 视图：文档检索 ============ -->
-      <section id="view-docs" class="view hidden">
-        <h2 class="page-title">文档检索</h2>
-        <p class="page-desc">按关键词 / 分类 / 标签三维检索已发布文档；筛选条件会同步到地址栏，刷新与分享都不丢。</p>
-
-        <div class="card">
-          <div class="card-bd">
-            <div class="row wrap">
-              <input class="input" id="kw" placeholder="搜索标题或摘要，例如：接口规范" value="接口">
-              <select class="select sm">
-                <option>全部分类</option>
-                <option>后端开发</option>
-                <option>　└ 接口规范</option>
-                <option>前端开发</option>
-                <option>员工制度</option>
-              </select>
-              <span class="chip on">SpringBoot</span>
-              <span class="chip">JPA</span>
-              <span class="chip">Vue</span>
-              <span class="chip">线上排障</span>
-              <span class="chip">安全合规</span>
-              <select class="select sm"><option>最近更新 ↓</option><option>发布时间 ↓</option><option>阅读量 ↓</option></select>
-              <button class="btn btn-sm">清空筛选</button>
-              <button class="btn btn-primary btn-sm" data-perm="doc:create">新建文档</button>
-            </div>
-          </div>
-        </div>
-
-        <div class="card">
-          <div class="card-hd">
-            <h3>检索结果</h3><span class="sub" id="docsCount">共 2 篇</span>
-            <div class="spacer"></div>
-            <span class="xs muted">本接口只返回「已发布」文档（后端硬编码 PUBLISHED，传其他状态直接 400）</span>
-          </div>
-          <table class="tbl">
-            <thead>
-              <tr>
-                <th>标题</th><th class="col-fix">状态</th><th class="col-fix">分类</th><th class="col-fix">作者</th>
-                <th class="col-fix">更新时间</th><th class="col-fix">阅读量</th><th class="acts col-fix">操作</th>
-              </tr>
-            </thead>
-            <tbody id="docsBody">
-              <tr>
-                <td><a class="t-title" href="#">CampusSwap 接口规范（v1）</a><div class="xs muted">统一响应体、错误码与分页约定，前后端联调的唯一依据</div></td>
-                <td><span class="badge badge-published">已发布</span></td>
-                <td>接口规范</td><td>文档管理员</td><td class="nowrap">2026-09-22 19:47</td><td>12</td>
-                <td class="acts">
-                  <button class="link-btn" data-perm="doc:derive">派生</button>
-                  <button class="link-btn" data-perm="doc:favorite">收藏</button>
-                  <button class="link-btn" data-perm="doc:archive">归档</button>
-                </td>
-              </tr>
-              <tr>
-                <td><a class="t-title" href="#">JPA 实体建模规范</a><div class="xs muted">七条戒律、审计基类与软删除的正确写法</div></td>
-                <td><span class="badge badge-published">已发布</span></td>
-                <td>后端开发</td><td>文档管理员</td><td class="nowrap">2026-09-22 19:47</td><td>8</td>
-                <td class="acts">
-                  <button class="link-btn" data-perm="doc:derive">派生</button>
-                  <button class="link-btn" data-perm="doc:favorite">收藏</button>
-                  <button class="link-btn" data-perm="doc:archive">归档</button>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-          <div class="pager">
-            <span>共 2 条</span>
-            <div class="spacer"></div>
-            <button class="pg">上一页</button><button class="pg on">1</button><button class="pg">2</button><button class="pg">下一页</button>
-            <select class="select sm"><option>10 条/页</option><option>20 条/页</option><option>50 条/页</option></select>
-          </div>
-        </div>
-      </section>
-
-      <!-- ============ 视图：文档详情 ============ -->
-      <section id="view-detail" class="view hidden">
-        <div class="card">
-          <div class="card-bd">
-            <div class="row wrap">
-              <h2 class="page-title">CampusSwap 接口规范（v1）</h2>
-              <span class="badge badge-published">已发布</span>
-              <span class="tag">SpringBoot</span><span class="tag">安全合规</span>
-              <div class="spacer"></div>
-              <span class="xs muted">版本 v2</span>
-            </div>
-            <div class="row wrap xs muted mt8">
-              <span>作者 文档管理员</span><span>·</span><span>分类 接口规范</span><span>·</span>
-              <span>更新 2026-09-22 19:47</span><span>·</span><span>阅读 12</span><span>·</span><span>收藏 2</span>
-            </div>
-            <div class="row wrap mt16">
-              <button class="btn btn-sm" data-perm="doc:favorite">收藏</button>
-              <button class="btn btn-sm" data-perm="doc:derive">派生</button>
-              <button class="btn btn-sm" data-perm="doc:edit">编辑</button>
-              <button class="btn btn-primary btn-sm" data-perm="doc:publish">提交发布</button>
-              <button class="btn btn-sm" data-perm="doc:delete">删除</button>
-              <div class="spacer"></div>
-              <button class="btn btn-sm">版本历史（3）</button>
-            </div>
-          </div>
-        </div>
-
-        <div class="banner b-warning" data-perm="doc:edit">
-          <span>⚠</span>
-          <div><b>这篇文档被驳回：</b>「统一响应体一节缺少分页示例，请补充后重新提交。」—— 审核人 文档管理员，2026-09-22 18:10。改完可直接在右上角重新提交发布。</div>
-        </div>
-
-        <div class="card">
-          <div class="card-bd">
-            <div class="markdown-body">
-              <h1>接口规范</h1>
-              <h2>统一响应体</h2>
-              <pre><code>{ "code": 200, "message": "成功", "data": {} }</code></pre>
-              <ul>
-                <li><code>code</code> 与 HTTP 状态码保持一致</li>
-                <li>分页统一 <code>PageVo&lt;T&gt;</code>：<code>list/total/pageNum/pageSize</code></li>
-                <li>所有 ID 以字符串返回（防 JS 精度丢失）</li>
-              </ul>
-              <blockquote>正文由 markdown-it 渲染，再用 DOMPurify 清洗后 v-html 注入（NFR-S4）。</blockquote>
-              <h2>分页示例</h2>
-              <table><thead><tr><th>字段</th><th>类型</th><th>说明</th></tr></thead>
-                <tbody><tr><td>list</td><td>T[]</td><td>当前页数据</td></tr><tr><td>total</td><td>number</td><td>总条数</td></tr></tbody></table>
-            </div>
-          </div>
-        </div>
-
-        <div class="card">
-          <div class="card-hd"><h3>版本历史</h3><span class="sub">抽屉内容（点击右上角「版本历史」滑出）</span></div>
-          <table class="tbl">
-            <thead><tr><th>版本</th><th>变更类型</th><th>备注</th><th>操作人</th><th>时间</th></tr></thead>
-            <tbody>
-              <tr><td>v2</td><td><span class="badge badge-blue">编辑</span></td><td>补充分页示例</td><td>文档管理员</td><td class="nowrap">2026-09-22 19:47</td></tr>
-              <tr><td>v2</td><td><span class="badge badge-gray">发布</span></td><td>首次发布</td><td>文档管理员</td><td class="nowrap">2026-09-21 10:00</td></tr>
-              <tr><td>v1</td><td><span class="badge badge-gray">创建</span></td><td>草稿建立</td><td>文档管理员</td><td class="nowrap">2026-09-20 16:22</td></tr>
-            </tbody>
-          </table>
-        </div>
-      </section>
-
-      <!-- ============ 视图：Markdown 编辑器 ============ -->
-      <section id="view-edit" class="view hidden">
-        <h2 class="page-title">编辑文档 · 新建模式</h2>
-        <p class="page-desc">左栏写 Markdown，右栏实时预览。右侧预览是真的能用 —— 试着在左栏改几行（支持标题 / 粗体 / 列表 / 引用 / 行内代码 / 代码块）。</p>
-
-        <div class="card">
-          <div class="card-bd">
-            <div class="grid g2">
-              <div class="field"><label class="label">标题 <span class="req">*</span></label><input class="input" value="前端请求拦截器写法"></div>
-              <div class="field"><label class="label">分类 <span class="req">*</span></label><select class="select"><option>接口规范</option><option>后端开发</option><option selected>前端开发</option><option>员工制度</option></select></div>
-            </div>
-            <div class="field"><label class="label">摘要</label><input class="input" value="统一带 token、统一错误提示、401 自动跳登录"><div class="hint">会出现在检索结果里，建议 40 字以内</div></div>
-            <div class="grid g3">
-              <div class="field"><label class="label">标签</label>
-                <div class="row wrap"><span class="chip on">Vue</span><span class="chip">SpringBoot</span><span class="chip">JPA</span><span class="chip">线上排障</span><span class="chip">安全合规</span></div>
-                <div class="hint">最多 5 个</div>
-              </div>
-              <div class="field"><label class="label">价格标记（元）</label><input class="input" value="0"><div class="hint">0 表示「免费」；内部按整数分存储</div></div>
-              <div class="field"><label class="label">图片上传</label>
-                <div class="noperm" data-perm-any="doc:upload"><span>⤒</span><span>工具栏插图 / 直接粘贴截图 / 拖拽文件到左栏</span></div>
-                <div class="noperm hidden" data-noperm="doc:upload"><span>🔒</span><span>你没有上传图片的权限（`doc:upload`），粘贴与拖拽图片会被拦截，纯文本不受影响</span></div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div class="split">
-          <div class="pane">
-            <div class="toolbar">
-              <button class="tool" title="加粗">B</button>
-              <button class="tool" title="标题">H</button>
-              <button class="tool" title="列表">≡</button>
-              <button class="tool" title="引用">❝</button>
-              <button class="tool" title="行内代码">&lt;/&gt;</button>
-              <button class="tool" title="代码块">▣</button>
-              <button class="tool" title="链接">🔗</button>
-              <span class="tool sep"></span>
-              <button class="tool" title="插入图片" data-perm-any="doc:upload">▤</button>
-            </div>
-            <div class="pane-hd">Markdown 源文（可编辑）</div>
-            <textarea class="ta" id="editorSrc"># 请求拦截器写法
-
-## 目标
-
-- 统一携带 `Authorization: Bearer <token>`
-- 401 统一跳登录并带上 `?redirect=`
-- 409 / 403 用轻提示展示服务端 message
-
-## 代码
-
-```ts
-service.interceptors.request.use((cfg) => {
-  const t = userStore.token
-  if (t) cfg.headers.Authorization = `Bearer ${t}`
-  return cfg
-})
-```
-
-> 注意：no token 时不要跳转，交给路由守卫处理。
-
-![上传中 0%](uploading)
-</textarea>
-          </div>
-          <div class="pane">
-            <div class="pane-hd">实时预览（markdown-it 渲染 + 清洗）</div>
-            <div class="preview-pane"><div class="markdown-body" id="editorPreview"></div></div>
-          </div>
-        </div>
-
-        <div class="card mt16">
-          <div class="card-bd row wrap">
-            <button class="btn btn-primary" data-perm="doc:create">保存草稿</button>
-            <button class="btn" data-perm="doc:publish">提交发布</button>
-            <button class="btn">返回详情</button>
-            <div class="spacer"></div>
-            <span class="xs muted">离开前若未保存会弹确认；发布前也会二次确认。上传失败时源码里会留下「点击重试」占位符。</span>
-          </div>
-        </div>
-      </section>
-
-      <!-- ============ 视图：我的文档 ============ -->
-      <section id="view-my" class="view hidden">
-        <h2 class="page-title">我的文档</h2>
-        <p class="page-desc">个人资产台账：草稿接着写、已发布改版、误删从回收站恢复、收藏回看。</p>
-
-        <div class="grid g4 mb16">
-          <div class="stat"><div class="k">我的文档</div><div class="v">2</div><div class="u">含草稿 1 篇</div></div>
-          <div class="stat"><div class="k">我的收藏</div><div class="v">2</div><div class="u">最近收藏：接口规范</div></div>
-          <div class="stat"><div class="k">平台已发布</div><div class="v">2</div><div class="u">全站可见</div></div>
-          <div class="stat"><div class="k">回收站</div><div class="v">1</div><div class="u">可恢复</div></div>
-        </div>
-
-        <div class="card">
-          <div class="tabs">
-            <div class="tab active">我的文档</div>
-            <div class="tab" data-perm="doc:favorite">我的收藏</div>
-            <div class="tab" data-perm="doc:restore">回收站</div>
-          </div>
-          <div class="card-bd row wrap">
-            <input class="input sm" placeholder="搜索标题">
-            <select class="select sm"><option>全部状态</option><option>草稿</option><option>已发布</option><option>已归档</option></select>
-            <div class="spacer"></div>
-            <button class="btn btn-primary btn-sm" data-perm="doc:create">新建文档</button>
-          </div>
-          <table class="tbl">
-            <thead><tr><th>标题</th><th class="col-fix">状态</th><th class="col-fix">版本</th><th class="col-fix">阅读</th><th class="col-fix">更新时间</th><th class="acts col-fix">操作</th></tr></thead>
-            <tbody>
-              <tr>
-                <td><a class="t-title" href="#">前端工程搭建说明</a><div class="xs muted">Vite + Vue3 + TS 严格模式 + Tailwind 初始化步骤</div></td>
-                <td><span class="badge badge-draft">草稿</span></td><td>v1</td><td>0</td><td class="nowrap">2026-09-22 19:47</td>
-                <td class="acts">
-                  <button class="link-btn" data-perm="doc:edit">编辑</button>
-                  <button class="link-btn" data-perm="doc:publish">提交发布</button>
-                  <button class="link-btn" data-perm="doc:restore">版本</button>
-                  <button class="link-btn danger" data-perm="doc:delete">删除</button>
-                </td>
-              </tr>
-              <tr>
-                <td><a class="t-title" href="#">关于开展季度分享的通知（旧版）</a><div class="xs muted">已被新版取代，删除进回收站</div></td>
-                <td><span class="badge badge-trash">回收站</span></td><td>v2</td><td>3</td><td class="nowrap">2026-09-22 19:47</td>
-                <td class="acts">
-                  <button class="link-btn" data-perm="doc:restore">恢复</button>
-                  <button class="link-btn danger" data-perm="doc:delete">彻底删除</button>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-          <div class="pager"><span>共 2 条</span><div class="spacer"></div><button class="pg on">1</button></div>
-        </div>
-      </section>
-
-      <!-- ============ 视图：审核队列 ============ -->
-      <section id="view-review" class="view hidden">
-        <h2 class="page-title">审核队列</h2>
-        <p class="page-desc">待治理内容一屏可见，就地阅读与判定；通过可写备注，驳回理由必填 1–255 字并回传属主。</p>
-
-        <div class="card">
-          <div class="card-bd row wrap">
-            <select class="select sm"><option>全部状态</option><option>已发布</option><option>已归档</option></select>
-            <input class="input sm" placeholder="关键词">
-            <select class="select sm"><option>全部作者</option><option>文档管理员</option><option>普通员工</option></select>
-            <button class="btn btn-sm">筛选</button>
-          </div>
-          <table class="tbl">
-            <thead><tr><th>标题</th><th class="col-fix">作者</th><th class="col-fix">分类</th><th class="col-fix">状态</th><th class="col-fix">阅读</th><th class="acts col-fix">操作</th></tr></thead>
-            <tbody>
-              <tr>
-                <td><a class="t-title" href="#">CampusSwap 接口规范（v1）</a><div class="xs muted">更新 2026-09-22 19:47 · v2</div></td>
-                <td>文档管理员</td><td>接口规范</td><td><span class="badge badge-published">已发布</span></td><td>12</td>
-                <td class="acts"><button class="link-btn">打开</button></td>
-              </tr>
-              <tr>
-                <td><a class="t-title" href="#">JPA 实体建模规范</a><div class="xs muted">更新 2026-09-22 19:47 · v2</div></td>
-                <td>文档管理员</td><td>后端开发</td><td><span class="badge badge-published">已发布</span></td><td>8</td>
-                <td class="acts"><button class="link-btn">打开</button></td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-
-        <div class="grid g2">
-          <div class="drawer-demo">
-            <div class="drawer-hd">审核抽屉（右侧滑出）<div class="spacer"></div><span class="xs muted">正文预览 · 不跳页</span></div>
-            <div class="card-bd">
-              <div class="row mb8"><span class="badge badge-published">已发布</span><span class="xs muted">v1 → v2 变更</span></div>
-              <div class="markdown-body">
-                <h2>统一响应体</h2>
-                <p>补充了分页示例与错误码对照表。</p>
-              </div>
-            </div>
-            <div class="dialog-ft">
-              <button class="btn btn-sm" data-perm="doc:reject">驳回</button>
-              <button class="btn btn-primary btn-sm" data-perm="doc:audit">通过（可写备注）</button>
-              <span class="noperm hidden" data-noperm-any="doc:audit,doc:reject">🔒 你没有审核操作权限，请联系系统管理员</span>
-            </div>
-          </div>
-
-          <div>
-            <div class="diff mb16">
-              <div class="hd"><div>v1（旧）</div><div>v2（新）</div></div>
-              <div class="bd">
-                <div>## 统一响应体</div><div>## 统一响应体</div>
-                <div>code 与 HTTP 状态码保持一致</div><div class="add">code 与 HTTP 状态码保持一致（附对照表）</div>
-                <div></div><div class="add">分页统一 PageVo&lt;T&gt;</div>
-                <div class="del">（无分页示例）</div><div class="add">分页示例：list / total / pageNum / pageSize</div>
-              </div>
-            </div>
-            <div class="dialog-demo">
-              <div class="dialog-hd">驳回弹窗（理由必填）</div>
-              <div class="dialog-bd">
-                <div class="field">
-                  <label class="label">驳回理由 <span class="req">*</span></label>
-                  <textarea class="textarea" rows="3">统一响应体一节缺少分页示例，请补充后重新提交。</textarea>
-                  <div class="hint">1–255 字；会写入 rejectReason 并展示在属主的文档详情页顶部</div>
-                </div>
-              </div>
-              <div class="dialog-ft"><button class="btn btn-sm">取消</button><button class="btn btn-danger btn-sm">确认驳回</button></div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <!-- ============ 视图：文档治理 ============ -->
-      <section id="view-adminDocs" class="view hidden">
-        <h2 class="page-title">文档治理</h2>
-        <p class="page-desc">全平台文档的归档 / 恢复上架 / 彻底删除；分类与标签只读浏览（写接口已有，但规格判定为不渲染入口）。</p>
-
-        <div class="banner b-danger">
-          <span>⚠</span>
-          <div><b>规格与后端不一致（M5 前需拍板）：</b>下面表格里的「草稿 / 已归档 / 回收站」三行属于<b>设计意图示意</b> ——
-            当前后端<b>没有</b>任何"全平台含全部状态"的列表接口：<span class="code">GET /api/documents</span> 只返回已发布
-            （传其他状态直接 400，见 <span class="code">DocumentServiceImpl.search()</span> 第 109–111 行），
-            <span class="code">GET /api/review/documents</span> 只允许 <span class="code">PUBLISHED / ARCHIVED</span> 两种状态
-            （见 <span class="code">ReviewServiceImpl</span> 第 55–66 行）。两条路二选一：<br>
-            ① M5 前给后端加一个 <span class="code">doc:manage</span> 的全状态列表接口（推荐，治理语义才完整）；<br>
-            ② 治理页只治理「已发布 / 已归档」，草稿与回收站仍交给「我的文档」。</div>
-        </div>
-
-        <div class="grid g4 mb16">
-          <div class="stat"><div class="k">平台文档总数</div><div class="v">5</div><div class="u">含回收站 1</div></div>
-          <div class="stat"><div class="k">已发布</div><div class="v">2</div><div class="u">可被检索</div></div>
-          <div class="stat"><div class="k">草稿</div><div class="v">1</div><div class="u">仅作者可见</div></div>
-          <div class="stat"><div class="k">已归档</div><div class="v">1</div><div class="u">只读留痕</div></div>
-        </div>
-
-        <div class="card">
-          <div class="tabs"><div class="tab active">治理</div><div class="tab" data-perm="doc:category">分类与标签</div></div>
-          <div class="card-bd row wrap">
-            <select class="select sm"><option>全部状态</option><option>草稿</option><option>已发布</option><option>已归档</option><option>回收站</option></select>
-            <input class="input sm" placeholder="关键词">
-            <div class="spacer"></div>
-            <span class="xs muted">非法状态转移由后端 409 兜底，前端只如实提示</span>
-          </div>
-          <table class="tbl">
-            <thead><tr><th>标题</th><th class="col-fix">作者</th><th class="col-fix">状态</th><th class="col-fix">版本</th><th class="acts col-fix">操作</th></tr></thead>
-            <tbody>
-              <tr><td class="t-title">CampusSwap 接口规范（v1）</td><td>文档管理员</td><td><span class="badge badge-published">已发布</span></td><td>v2</td>
-                <td class="acts"><button class="link-btn" data-perm="doc:archive">归档</button><button class="link-btn" data-perm="doc:delete">删除</button></td></tr>
-              <tr><td class="t-title">JPA 实体建模规范</td><td>文档管理员</td><td><span class="badge badge-published">已发布</span></td><td>v2</td>
-                <td class="acts"><button class="link-btn" data-perm="doc:archive">归档</button><button class="link-btn" data-perm="doc:delete">删除</button></td></tr>
-              <tr><td class="t-title">前端工程搭建说明</td><td>普通员工</td><td><span class="badge badge-draft">草稿</span></td><td>v1</td>
-                <td class="acts"><button class="link-btn" data-perm="doc:archive">归档</button><button class="link-btn" data-perm="doc:delete">删除</button></td></tr>
-              <tr><td class="t-title">季度知识分享制度（2026）</td><td>文档管理员</td><td><span class="badge badge-archived">已归档</span></td><td>v2</td>
-                <td class="acts"><button class="link-btn" data-perm="doc:archive">恢复上架</button><button class="link-btn" data-perm="doc:delete">删除</button></td></tr>
-              <tr><td class="t-title">关于开展季度分享的通知（旧版）</td><td>普通员工</td><td><span class="badge badge-trash">回收站</span></td><td>v2</td>
-                <td class="acts"><button class="link-btn danger" data-perm="doc:delete">彻底删除</button></td></tr>
-            </tbody>
-          </table>
-        </div>
-
-        <div class="grid g2">
-          <div class="card">
-            <div class="card-hd"><h3>分类树</h3><span class="sub">只读 · 4 个节点</span></div>
-            <div class="card-bd tree">
-              <div class="tree-row dir"><span>▾</span><span>后端开发</span><span class="code">1 篇</span></div>
-              <div class="tree-row menu ind1"><span>·</span><span>接口规范</span><span class="code">1 篇</span></div>
-              <div class="tree-row dir"><span>▾</span><span>前端开发</span><span class="code">1 篇</span></div>
-              <div class="tree-row dir"><span>▾</span><span>员工制度</span><span class="code">2 篇</span></div>
-              <div class="noperm mt8"><span>🔒</span><span>规格 §5.3 判定：分类写接口不在清单内 → 不渲染「新增 / 改名 / 删除」按钮（权限点 <span class="code">doc:category:edit</span> 已在树中就位）</span></div>
-            </div>
-          </div>
-          <div class="card">
-            <div class="card-hd"><h3>标签</h3><span class="sub">按使用热度倒序</span></div>
-            <div class="card-bd">
-              <div class="row wrap">
-                <span class="tag">SpringBoot · 2</span><span class="tag">JPA · 1</span><span class="tag">Vue · 1</span>
-                <span class="tag">线上排障 · 0</span><span class="tag">安全合规 · 0</span>
-              </div>
-              <div class="noperm mt8"><span>🔒</span><span>同上：<span class="code">doc:tag:edit</span> 已就位，但界面按规格不渲染写入口 —— 这是 M5 前需要你拍板的一个点</span></div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <!-- ============ 视图：系统管理 ============ -->
-      <section id="view-system" class="view hidden">
-        <h2 class="page-title">用户 / 角色 / 权限 / 部门</h2>
-        <p class="page-desc">把「谁能做什么」变成可配置：用户 CRUD、角色授权（三层权限树勾选）、部门树绑角色。</p>
-
-        <div class="card">
-          <div class="tabs">
-            <div class="tab active">用户管理</div><div class="tab" data-perm="sys:role">角色管理</div>
-            <div class="tab" data-perm="sys:perm">权限管理</div><div class="tab" data-perm="sys:dept">部门管理</div>
-          </div>
-          <div class="card-bd row wrap">
-            <input class="input sm" placeholder="工号 / 姓名">
-            <select class="select sm"><option>全部部门</option><option>技术部</option><option>　└ 后端组</option><option>产品部</option></select>
-            <select class="select sm"><option>全部状态</option><option>正常</option><option>冻结</option><option>停用</option></select>
-            <button class="btn btn-sm">查询</button>
-            <div class="spacer"></div>
-            <button class="btn btn-primary btn-sm" data-perm="sys:user:add">新增用户</button>
-          </div>
-          <table class="tbl">
-            <thead><tr><th class="col-fix">工号</th><th class="col-fix">姓名</th><th class="col-fix">部门</th><th class="col-fix">角色</th><th class="col-fix">状态</th><th class="acts col-fix">操作</th></tr></thead>
-            <tbody>
-              <tr><td class="code">admin</td><td>系统管理员</td><td>技术部</td><td><span class="badge badge-blue">SYS_ADMIN</span></td><td><span class="badge badge-active">正常</span></td>
-                <td class="acts"><button class="link-btn" data-perm="sys:user:edit">编辑</button><button class="link-btn" data-perm="sys:user:disable">变更状态</button><button class="link-btn" data-perm="sys:user:reset">重置密码</button></td></tr>
-              <tr><td class="code">docadmin</td><td>文档管理员</td><td>技术部</td><td><span class="badge badge-gray">DOC_ADMIN</span></td><td><span class="badge badge-active">正常</span></td>
-                <td class="acts"><button class="link-btn" data-perm="sys:user:edit">编辑</button><button class="link-btn" data-perm="sys:user:disable">变更状态</button><button class="link-btn" data-perm="sys:user:reset">重置密码</button></td></tr>
-              <tr><td class="code">staff</td><td>普通员工</td><td>产品部</td><td><span class="badge badge-gray">STAFF</span></td><td><span class="badge badge-locked">冻结</span></td>
-                <td class="acts"><button class="link-btn" data-perm="sys:user:edit">编辑</button><button class="link-btn" data-perm="sys:user:disable">变更状态</button><button class="link-btn" data-perm="sys:user:reset">重置密码</button></td></tr>
-            </tbody>
-          </table>
-          <div class="pager"><span>共 3 条</span><div class="spacer"></div><button class="pg on">1</button></div>
-        </div>
-
-        <div class="grid g2">
-          <div class="card">
-            <div class="card-hd"><h3>角色</h3><span class="sub">内置角色不可删</span><div class="spacer"></div>
-              <button class="btn btn-sm" data-perm="sys:role:add">新增角色</button></div>
-            <table class="tbl">
-              <thead><tr><th>角色</th><th class="col-fix">编码</th><th class="col-fix">权限数</th><th class="acts col-fix">操作</th></tr></thead>
-              <tbody>
-                <tr><td>普通员工</td><td class="code">STAFF</td><td>11</td>
-                  <td class="acts"><button class="link-btn" data-perm="sys:role:grant">授权</button><button class="link-btn" data-perm="sys:role:edit">编辑</button><span class="xs muted" data-perm="sys:role:delete">内置</span></td></tr>
-                <tr><td>文档管理员</td><td class="code">DOC_ADMIN</td><td>20</td>
-                  <td class="acts"><button class="link-btn" data-perm="sys:role:grant">授权</button><button class="link-btn" data-perm="sys:role:edit">编辑</button><span class="xs muted" data-perm="sys:role:delete">内置</span></td></tr>
-                <tr><td>系统管理员</td><td class="code">SYS_ADMIN</td><td>39</td>
-                  <td class="acts"><button class="link-btn" data-perm="sys:role:grant">授权</button><button class="link-btn" data-perm="sys:role:edit">编辑</button><span class="xs muted" data-perm="sys:role:delete">内置</span></td></tr>
-              </tbody>
-            </table>
-          </div>
-
-          <div class="card">
-            <div class="card-hd"><h3>部门树</h3><span class="sub">部门绑角色 → 成员自动继承</span></div>
-            <div class="card-bd tree">
-              <div class="tree-row dir"><span>▾</span><span>技术部</span><div class="spacer"></div>
-                <span class="badge badge-gray">STAFF</span><span class="badge badge-gray">DOC_ADMIN</span>
-                <button class="link-btn" data-perm="sys:role:grant">授权</button></div>
-              <div class="tree-row menu ind1"><span>·</span><span>后端组</span><div class="spacer"></div>
-                <span class="badge badge-gray">STAFF</span>
-                <button class="link-btn" data-perm="sys:role:grant">授权</button></div>
-              <div class="tree-row dir"><span>▾</span><span>产品部</span><div class="spacer"></div>
-                <span class="badge badge-gray">STAFF</span>
-                <button class="link-btn" data-perm="sys:role:grant">授权</button></div>
-              <div class="hint mt8">演示账号验证过：staff 在「产品部」只拿 STAFF 的 11 个权限点；docadmin 在「技术部」额外继承 DOC_ADMIN。</div>
-            </div>
-          </div>
-        </div>
-
-        <div class="card">
-          <div class="card-hd"><h3>权限树（真实 39 个权限点）</h3><span class="sub">2 目录 / 9 菜单 / 28 按钮</span><div class="spacer"></div>
-            <button class="btn btn-sm" data-perm="sys:role:grant">角色授权（三层勾选）</button></div>
-          <div class="card-bd tree">
-            <div class="tree-row dir"><span class="cbx half"></span><span>▾</span><b>文档中心</b><span class="code">doc:center</span></div>
-            <div class="tree-row menu ind1"><span class="cbx on"></span><span>我的文档</span><span class="code">doc:mine</span></div>
-            <div class="tree-row btn ind2"><span class="cbx"></span><span>新建文档 / 编辑文档 / 提交发布 / 删除文档 / 恢复文档</span></div>
-            <div class="tree-row menu ind1"><span class="cbx on"></span><span>文档检索</span><span class="code">doc:search</span></div>
-            <div class="tree-row btn ind2"><span class="cbx"></span><span>派生文档 / 收藏文档 / 上传图片</span></div>
-            <div class="tree-row menu ind1"><span class="cbx half"></span><span>审核队列</span><span class="code">doc:review</span></div>
-            <div class="tree-row btn ind2"><span class="cbx"></span><span>审核通过 / 驳回文档</span></div>
-            <div class="tree-row menu ind1"><span class="cbx half"></span><span>文档治理</span><span class="code">doc:manage</span></div>
-            <div class="tree-row btn ind2"><span class="cbx"></span><span>归档文档 / 下架文档</span></div>
-            <div class="tree-row menu ind1"><span class="cbx half"></span><span>分类与标签</span><span class="code">doc:category</span></div>
-            <div class="tree-row btn ind2"><span class="cbx"></span><span>维护分类 / 维护标签</span></div>
-            <div class="tree-row dir" data-perm="sys:center"><span class="cbx"></span><span>▸</span><b>系统管理</b><span class="code">sys:center</span></div>
-            <div class="tree-row menu ind1" data-perm="sys:center"><span class="cbx"></span><span>用户管理 / 角色管理 / 权限管理 / 部门管理</span><span class="code">sys:user … sys:dept</span></div>
-            <div class="tree-row btn ind2" data-perm="sys:center"><span class="cbx"></span><span>新增·编辑·启停用户 / 角色增删改与授权 / 权限编辑删除 / 部门增删改</span></div>
-          </div>
-        </div>
-      </section>
-
-      <!-- ============ 视图：403 / 404（守卫落点） ============ -->
-      <section id="view-403" class="view hidden">
-        <div class="card"><div class="card-bd errstate">
-          <h4>你没有访问这个页面的权限</h4>
-          <p class="muted" id="perm403Text">缺少权限：doc:review</p>
-          <div class="row mt16">
-            <button class="btn btn-primary btn-sm" data-go="docs">返回文档检索</button>
-            <button class="btn btn-sm" data-go="my">去我的文档</button>
-          </div>
-          <div class="hint mt8">这就是真实的路由守卫落点：守卫把目标权限写进地址栏（/403?perm=…），页面把缺哪个权限明确告诉你。</div>
-        </div></div>
-      </section>
-
-      <!-- ============ 视图：设计系统与状态一览 ============ -->
-      <section id="view-kit" class="view hidden">
-        <h2 class="page-title">设计系统与状态一览</h2>
-        <p class="page-desc">把 spec §2 的令牌与 §8 的四态文案集中摆出来，M5 开工时照着这个对齐即可。</p>
-
-        <div class="card">
-          <div class="card-hd"><h3>① 色彩令牌</h3><span class="sub">值与 spec §2 的 tailwind.config.js 逐项一致</span></div>
-          <div class="card-bd">
-            <div class="sw-row mb16">
-              <div><div class="sw sw-primary-600"></div><div class="xs mt8">primary-600 #2563eb</div></div>
-              <div><div class="sw sw-primary-700"></div><div class="xs mt8">primary-700 #1d4ed8</div></div>
-              <div><div class="sw sw-success"></div><div class="xs mt8">success #16a34a</div></div>
-              <div><div class="sw sw-warning"></div><div class="xs mt8">warning #d97706</div></div>
-              <div><div class="sw sw-danger"></div><div class="xs mt8">danger #dc2626</div></div>
-              <div><div class="sw sw-info"></div><div class="xs mt8">info #0284c7</div></div>
-            </div>
-            <div class="sw-row">
-              <div><div class="sw sw-gray-50"></div><div class="xs mt8">gray-50</div></div>
-              <div><div class="sw sw-gray-100"></div><div class="xs mt8">gray-100</div></div>
-              <div><div class="sw sw-gray-200"></div><div class="xs mt8">gray-200</div></div>
-              <div><div class="sw sw-gray-400"></div><div class="xs mt8">gray-400</div></div>
-              <div><div class="sw sw-gray-600"></div><div class="xs mt8">gray-600</div></div>
-              <div><div class="sw sw-gray-900"></div><div class="xs mt8">gray-900</div></div>
-            </div>
-            <div class="hint mt8">语义色含义固定：success=已发布 / warning=草稿与待处理 / info=已归档与中性 / danger=回收站与危险操作 / gray=禁用。深色模式本期不做。</div>
-          </div>
-        </div>
-
-        <div class="grid g2">
-          <div class="card">
-            <div class="card-hd"><h3>② 状态徽标</h3></div>
-            <div class="card-bd">
-              <div class="row wrap mb8"><span class="badge badge-draft">草稿</span><span class="badge badge-published">已发布</span>
-                <span class="badge badge-archived">已归档</span><span class="badge badge-trash">回收站</span><span class="xs muted">文档状态</span></div>
-              <div class="row wrap"><span class="badge badge-active">正常</span><span class="badge badge-locked">冻结</span>
-                <span class="badge badge-disabled">停用</span><span class="xs muted">用户状态</span></div>
-              <div class="hint mt8">全站唯一的状态徽标组件：文档走 mode="document"，用户走 mode="user-status"；一律以枚举字面量比较，禁止用数字或中文判断。</div>
-            </div>
-          </div>
-
-          <div class="card">
-            <div class="card-hd"><h3>③ 按钮</h3></div>
-            <div class="card-bd">
-              <div class="row wrap mb8">
-                <button class="btn btn-primary btn-sm">主操作</button>
-                <button class="btn btn-sm">次操作</button>
-                <button class="btn btn-danger btn-sm">危险操作</button>
-                <button class="btn btn-ghost btn-sm">文字按钮</button>
-                <button class="link-btn">行内链接</button>
-              </div>
-              <div class="row wrap">
-                <button class="btn btn-primary btn-sm" disabled>登录（未填完）</button>
-                <button class="btn btn-primary btn-sm disabled">登录中…</button>
-                <span class="noperm"><span>🔒</span><span>无权限时按钮不渲染，用内联提示替代（NoPermHint）</span></span>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div class="card">
-          <div class="card-hd"><h3>④ 页面四态</h3><span class="sub">空 / 加载 / 错误 / 无权限（文案取自 spec §8）</span></div>
-          <div class="card-bd grid g4">
-            <div class="card m0">
-              <div class="empty">
-                <div class="ico">▤</div>
-                <h4>没有匹配的文档</h4>
-                <div class="xs">试试更换关键词，或清空筛选条件</div>
-                <button class="btn btn-sm mt8">清空筛选</button>
-              </div>
-            </div>
-            <div class="card m0">
-              <div class="sk">
-                <div class="sk-line w60"></div><div class="sk-line"></div><div class="sk-line"></div>
-                <div class="sk-line w60"></div><div class="sk-line"></div>
-              </div>
-            </div>
-            <div class="card m0">
-              <div class="errstate">
-                <h4>文档列表加载失败</h4>
-                <div class="xs muted">服务端 message（无则「请稍后重试」）</div>
-                <button class="btn btn-sm mt8">重新加载</button>
-              </div>
-            </div>
-            <div class="card m0">
-              <div class="card-bd">
-                <div class="noperm"><span>🔒</span><span>归档文档为只读</span></div>
-                <div class="noperm mt8"><span>🔒</span><span>你没有上传图片的权限</span></div>
-                <div class="noperm mt8"><span>🔒</span><span>你没有任何系统管理权限，请联系系统管理员</span></div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div class="grid g2">
-          <div class="card">
-            <div class="card-hd"><h3>⑤ 提示条与轻提示</h3></div>
-            <div class="card-bd">
-              <div class="banner b-warning"><span>⚠</span><div><b>驳回理由</b>：统一响应体一节缺少分页示例。</div></div>
-              <div class="banner b-danger"><span>⚠</span><div><b>网络异常</b>，保存失败，请稍后重试。</div></div>
-              <div class="banner b-info"><span>i</span><div>归档文档仅可只读查看，恢复上架后才能编辑。</div></div>
-              <div class="banner b-success"><span>✓</span><div>已保存草稿。</div></div>
-              <div class="row wrap mt8">
-                <span class="toast">已收藏</span>
-                <span class="toast warn">该文档状态已变更，请刷新列表</span>
-                <span class="toast err">仅回收站中的文档可以彻底删除</span>
-              </div>
-            </div>
-          </div>
-
-          <div class="card">
-            <div class="card-hd"><h3>⑥ 弹窗与分页</h3></div>
-            <div class="card-bd">
-              <div class="dialog-demo mb16">
-                <div class="dialog-hd">彻底删除确认（需输入标题）</div>
-                <div class="dialog-bd">
-                  <div class="xs muted mb8">此操作不可恢复。请输入文档标题以确认：<b>关于开展季度分享的通知（旧版）</b></div>
-                  <input class="input" placeholder="在此输入文档标题">
-                </div>
-                <div class="dialog-ft"><button class="btn btn-sm">取消</button><button class="btn btn-danger btn-sm">彻底删除</button></div>
-              </div>
-              <div class="pager">
-                <span>共 42 条</span><div class="spacer"></div>
-                <button class="pg">上一页</button><button class="pg on">1</button><button class="pg">2</button>
-                <button class="pg">3</button><button class="pg">下一页</button>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div class="card">
-          <div class="card-hd"><h3>⑦ 权限对照表（真实数据）</h3><span class="sub">来自库内 sys_role_permission 现查结果</span></div>
-          <div class="card-bd">
-            <table class="tbl">
-              <thead><tr><th class="col-fix">身份</th><th class="col-fix">角色</th><th class="col-fix">有效权限</th><th>看得见的页面</th><th>看不到的</th></tr></thead>
-              <tbody>
-                <tr><td class="code">staff</td><td>STAFF</td><td>11</td>
-                  <td>我的文档、文档检索、详情、编辑器</td><td>审核队列、文档治理、系统管理</td></tr>
-                <tr><td class="code">docadmin</td><td>DOC_ADMIN</td><td>20</td>
-                  <td>加上审核队列、文档治理（含分类与标签只读）</td><td>系统管理</td></tr>
-                <tr><td class="code">admin</td><td>SYS_ADMIN</td><td>39</td><td>全部 8 个页面</td><td>—</td></tr>
-              </tbody>
-            </table>
-            <div class="hint mt8">注意两点：① <b>检索页对三种身份都只返回「已发布」文档</b>（后端硬编码，见上方治理页的红色提示）；② 侧栏菜单与页面内按钮随权限增减，是前端 <span class="code">hasPerm</span> 的效果，但数据可见范围始终由后端决定 —— 前端不做任何过滤逻辑。</div>
-          </div>
-        </div>
-      </section>
-
-    </div>
+    <main class="content" id="content"></main>
   </div>
 </div>
 
 <script>
-/* =========================================================================
-   预览稿脚本：只做四件事
-   ① 身份切换 → 按真实权限集合增删菜单与按钮（权限驱动渲染的可视化）
-   ② 视图切换 + 路由守卫演示（无权限 → 403 视图）
-   ③ 登录页四种状态演示
-   ④ 编辑器左栏 → 右栏的极简 Markdown 实时预览（真渲染，非图片）
-   ========================================================================= */
+/* ===========================================================================
+   A) 主题（5 套）—— 令牌值必须与 <style> 里的 [data-theme] 段一致；
+      这里只用于「主题画廊」的色卡展示与切换，不参与真实渲染。
+   =========================================================================== */
+var THEMES = [
+  { id:'ink',   name:'墨玉青', tag:'默认 · 沉稳清爽', motto:'墨玉为骨，青玉为色',
+    sw:['#11201C','#1F6F63','#B58A2B','#F3F6F4','#FFFFFF'],
+    desc:'深墨色侧栏 + 青玉主色，鎏金点缀。适合日常办公，长时间阅读不刺眼。' },
+  { id:'jiang', name:'师大绛', tag:'校园红 · 庄重',
+    sw:['#2A1215','#9E2B25','#A9772A','#FAF6F3','#FFFFFF'],
+    desc:'绛红主色取意校园红墙与印章，宣纸微暖底。适合党政公文与通知公告场景。' },
+  { id:'dai',   name:'松烟黛', tag:'学院派 · 冷调',
+    sw:['#141E2B','#2B4A72','#8C6A2F','#F5F7FA','#FFFFFF'],
+    desc:'松烟黛蓝 + 石墨灰，理性克制。适合科研学术、制度规范类内容。' },
+  { id:'paper', name:'宣纸暖', tag:'纸感 · 护眼',
+    sw:['#332C24','#8A5A2B','#2F6F63','#FAF7F0','#FFFDF9'],
+    desc:'米色纸感底 + 赭石主色，青瓷绿点缀。适合长文阅读与教案材料。' },
+  { id:'night', name:'墨夜',   tag:'深色 · 夜间',
+    sw:['#0A1013','#4FA8A0','#D3AE6A','#0E1417','#161D21'],
+    desc:'深色主题，夜间值班或投影演示时使用；状态色已按深色调校。' }
+];
 
-/* 真实权限集合（库内 sys_role_permission 现查结果，与 PRD §3.3 一致） */
-var PERMS = {
-  staff: ['doc:center','doc:create','doc:delete','doc:derive','doc:edit','doc:favorite','doc:mine','doc:publish','doc:restore','doc:search','doc:upload'],
-  docadmin: ['doc:archive','doc:audit','doc:category','doc:category:edit','doc:center','doc:create','doc:delete','doc:derive','doc:edit','doc:favorite','doc:manage','doc:mine','doc:offline','doc:publish','doc:reject','doc:restore','doc:review','doc:search','doc:tag:edit','doc:upload'],
-  admin: ['doc:archive','doc:audit','doc:category','doc:category:edit','doc:center','doc:create','doc:delete','doc:derive','doc:edit','doc:favorite','doc:manage','doc:mine','doc:offline','doc:publish','doc:reject','doc:restore','doc:review','doc:search','doc:tag:edit','doc:upload','sys:center','sys:dept','sys:dept:add','sys:dept:delete','sys:dept:edit','sys:perm','sys:perm:add','sys:perm:delete','sys:perm:edit','sys:role','sys:role:add','sys:role:delete','sys:role:edit','sys:role:grant','sys:user','sys:user:add','sys:user:disable','sys:user:edit','sys:user:reset']
+/* ===========================================================================
+   B) 数据层 —— 机构/分类口径取自河北师范大学官网；人名、工号、文档均为虚构
+   =========================================================================== */
+var DATA = {
+  school:'河北师范大学',
+  identities:{
+    staff:    { name:'李承霖', no:'2018013', dept:'软件学院', title:'专任教师',   role:'STAFF',     roleName:'教职工',       perms:11 },
+    docadmin: { name:'王砚秋', no:'2009042', dept:'教务处',   title:'教务科 · 文档管理员', role:'DOC_ADMIN', roleName:'文档管理员', perms:20 },
+    admin:    { name:'赵慕辰', no:'1996021', dept:'信息化中心', title:'系统管理员', role:'SYS_ADMIN', roleName:'系统管理员', perms:39 }
+  },
+  /* 真实权限集合（库内 sys_role_permission 现查结果，与 PRD §3.3 一致） */
+  perms:{
+    staff:['doc:center','doc:create','doc:delete','doc:derive','doc:edit','doc:favorite','doc:mine','doc:publish','doc:restore','doc:search','doc:upload'],
+    docadmin:['doc:archive','doc:audit','doc:category','doc:category:edit','doc:center','doc:create','doc:delete','doc:derive','doc:edit','doc:favorite','doc:manage','doc:mine','doc:offline','doc:publish','doc:reject','doc:restore','doc:review','doc:search','doc:tag:edit','doc:upload'],
+    admin:['doc:archive','doc:audit','doc:category','doc:category:edit','doc:center','doc:create','doc:delete','doc:derive','doc:edit','doc:favorite','doc:manage','doc:mine','doc:offline','doc:publish','doc:reject','doc:restore','doc:review','doc:search','doc:tag:edit','doc:upload','sys:center','sys:dept','sys:dept:add','sys:dept:delete','sys:dept:edit','sys:perm','sys:perm:add','sys:perm:delete','sys:perm:edit','sys:role','sys:role:add','sys:role:delete','sys:role:edit','sys:role:grant','sys:user','sys:user:add','sys:user:disable','sys:user:edit','sys:user:reset']
+  },
+  /* 分类树：校园文档口径（顶层 10 类 + 二级） */
+  categories:[
+    { id:'c1', name:'党政公文', n:418, children:[
+      {id:'c11',name:'通知公告',n:186},{id:'c12',name:'规章制度',n:97},{id:'c13',name:'会议纪要',n:72},{id:'c14',name:'党建与思政',n:63}]},
+    { id:'c2', name:'教务教学', n:326, children:[
+      {id:'c21',name:'培养方案',n:74},{id:'c22',name:'课程大纲',n:88},{id:'c23',name:'教学任务',n:61},{id:'c24',name:'考试与成绩',n:52},{id:'c25',name:'实习支教',n:51}]},
+    { id:'c3', name:'科研学术', n:274, children:[
+      {id:'c31',name:'项目申报',n:112},{id:'c32',name:'成果登记',n:58},{id:'c33',name:'学术活动',n:64},{id:'c34',name:'科研平台',n:40}]},
+    { id:'c4', name:'学生工作', n:198, children:[
+      {id:'c41',name:'学生事务',n:76},{id:'c42',name:'奖助学金',n:44},{id:'c43',name:'就业服务',n:52},{id:'c44',name:'心理健康',n:26}]},
+    { id:'c5', name:'人事人才', n:163, children:[
+      {id:'c51',name:'招聘公告',n:48},{id:'c52',name:'职称评审',n:39},{id:'c53',name:'师资培训',n:52},{id:'c54',name:'考勤与假期',n:24}]},
+    { id:'c6', name:'财务资产', n:112, children:[
+      {id:'c61',name:'预决算公开',n:38},{id:'c62',name:'采购招标',n:47},{id:'c63',name:'报销指南',n:27}]},
+    { id:'c7', name:'后勤保障', n:96,  children:[
+      {id:'c71',name:'校园通告',n:52},{id:'c72',name:'安全提示',n:29},{id:'c73',name:'生活服务',n:15}]},
+    { id:'c8', name:'图书档案', n:87,  children:[
+      {id:'c81',name:'档案移交',n:36},{id:'c82',name:'图书情报',n:31},{id:'c83',name:'学位论文',n:20}]},
+    { id:'c9', name:'学院文档', n:389, children:[
+      {id:'c91',name:'软件学院',n:64},{id:'c92',name:'数学科学学院',n:47},{id:'c93',name:'化学与材料科学学院',n:41},
+      {id:'c94',name:'文学院',n:38},{id:'c95',name:'商学院',n:33},{id:'c96',name:'法政与公共管理学院',n:29},
+      {id:'c97',name:'计算机与网络空间安全学院',n:35},{id:'c98',name:'国际文化交流学院',n:22}]},
+    { id:'c10',name:'模板表单', n:143, children:[
+      {id:'c101',name:'公文模板',n:52},{id:'c102',name:'表格下载',n:64},{id:'c103',name:'报告模板',n:27}]}
+  ],
+  tags:['国家自然科学基金','国家社科基金','十五五规划','职称评审','实习支教','课程思政','实验室安全','雄安新区','京津冀协同','师范专业认证'],
+  /* 示例文档：题材取自官网真实通知，标题与数据为虚构 */
+  docs:[
+    { id:'3128', title:'关于 2027 年度国家自然科学基金项目预申报的通知', cat:'科研学术 / 项目申报', unit:'科技处',
+      status:'PUBLISHED', ver:2, views:268, favs:12, updated:'2026-09-18 09:20', owner:'王砚秋', tags:['国家自然科学基金','十五五规划'],
+      summary:'请各学院于 10 月 20 日前完成预申报书填报，科技处统一组织形式审查与专家论证。'},
+    { id:'3097', title:'河北师范大学实习支教工作管理办法（2026 年修订）', cat:'教务教学 / 实习支教', unit:'教务处',
+      status:'PUBLISHED', ver:3, views:412, favs:26, updated:'2026-09-15 15:40', owner:'王砚秋', tags:['实习支教','师范专业认证'],
+      summary:'明确顶岗支教的组织流程、驻县教师职责与考核办法，自 2026 年秋季学期起执行。'},
+    { id:'3155', title:'软件学院 2026 版软件工程专业培养方案', cat:'学院文档 / 软件学院', unit:'软件学院',
+      status:'DRAFT', ver:1, views:0, favs:0, updated:'2026-09-22 11:05', owner:'李承霖', tags:['课程思政'],
+      summary:'含培养目标、毕业要求、课程体系与学分构成，待学院教学委员会审议后提交教务处理。'},
+    { id:'3061', title:'关于 2026 年新入职教师培训工作的通知', cat:'人事人才 / 师资培训', unit:'人事处',
+      status:'PUBLISHED', ver:1, views:96, favs:3, updated:'2026-09-10 08:50', owner:'孙允棠', tags:[],
+      summary:'培训分集中培训与跟岗研修两个阶段，请各单位于 9 月 20 日前报送参训名单。'},
+    { id:'2944', title:'关于裕华校区启智园北侧道路临时封闭的通告', cat:'后勤保障 / 校园通告', unit:'后勤服务集团',
+      status:'ARCHIVED', ver:2, views:517, favs:4, updated:'2026-08-16 17:30', owner:'孙允棠', tags:['实验室安全'],
+      summary:'因管网改造施工，8 月 18 日至 9 月 5 日该路段封闭，机动车请绕行。'},
+    { id:'3102', title:'2026—2027 学年第一学期校领导接待日工作安排', cat:'党政公文 / 通知公告', unit:'学校办公室',
+      status:'PUBLISHED', ver:1, views:143, favs:1, updated:'2026-09-02 10:10', owner:'王砚秋', tags:[],
+      summary:'本学期校领导接待日定于每周三下午，地点在行政楼一层接待室。'},
+    { id:'2871', title:'关于组织开展 2026 年实验室安全专项检查的通知（已废止）', cat:'科研学术 / 科研平台', unit:'国有资产委员会办公室',
+      status:'TRASH', ver:2, views:61, favs:0, updated:'2026-07-10 14:00', owner:'孙允棠', tags:['实验室安全'],
+      summary:'已由 2026 年 9 月新版通知替代，原件移入回收站留档。'}
+  ],
+  /* 用户（虚构）：工号 / 姓名 / 单位 / 角色 / 状态 / 最近登录 */
+  users:[
+    { no:'1996021', name:'赵慕辰', dept:'信息化中心',   role:'SYS_ADMIN', status:'ACTIVE',   last:'2026-09-23 08:12' },
+    { no:'2009042', name:'王砚秋', dept:'教务处',       role:'DOC_ADMIN', status:'ACTIVE',   last:'2026-09-23 09:03' },
+    { no:'2018013', name:'李承霖', dept:'软件学院',     role:'STAFF',     status:'ACTIVE',   last:'2026-09-22 21:47' },
+    { no:'2022087', name:'陈知远', dept:'化学与材料科学学院', role:'STAFF', status:'LOCKED',  last:'2026-09-19 16:25' },
+    { no:'2015309', name:'孙允棠', dept:'图书馆',       role:'STAFF',     status:'ACTIVE',   last:'2026-09-23 08:55' }
+  ],
+  /* 组织机构（三级：学校 → 机构类型 → 单位），单位与官网「机构设置」一致 */
+  org:[
+    { id:'o1', name:'党政管理机构', n:24, children:[
+      '学校办公室','党委组织部','党委宣传部','党委统战部','纪委办公室','教务处','科技处','社会科学处',
+      '人事处','学生处','财务处','审计处','安全工作处','发展规划处','研究生院','国际合作处',
+      '信息化中心','顶岗支教指导中心','离退休工作管理服务中心','工会','团委','机关党委']},
+    { id:'o2', name:'教学单位', n:27, children:[
+      '软件学院（网络教育学院）','数学科学学院','物理学院','化学与材料科学学院','生命科学学院','地理科学学院',
+      '文学院','历史文化学院','外国语学院','教育学院','教师教育学院','马克思主义学院','商学院',
+      '法政与公共管理学院','新闻传播学院','音乐学院','美术与设计学院','体育学院','家政学院','心理学系',
+      '计算机与网络空间安全学院','职业技术学院（中燃工学院）','国际文化交流学院','斯特灵数字教育学院',
+      '大学外语教学部','公共体育教学部','教育学部']},
+    { id:'o3', name:'直属单位', n:9, children:[
+      '图书馆','档案馆','博物馆','学报编辑部','校医院','后勤服务集团','信息化中心（网络服务）',
+      '基础教育发展研究中心（教育集团）','资产经营管理有限公司']},
+    { id:'o4', name:'附属单位', n:4, children:['汇华学院','附属中学','附属实验中学','附属民族学院']}
+  ],
+  /* 部门绑角色：部门成员自动继承 */
+  deptRoles:[
+    { dept:'信息化中心', roles:['SYS_ADMIN','STAFF'], members:6 },
+    { dept:'教务处',     roles:['DOC_ADMIN','STAFF'], members:23 },
+    { dept:'图书馆',     roles:['DOC_ADMIN','STAFF'], members:41 },
+    { dept:'档案馆',     roles:['DOC_ADMIN','STAFF'], members:12 },
+    { dept:'各教学单位', roles:['STAFF'],             members:1860 }
+  ],
+  /* 39 个权限点（真实数据，名称与库内 data.sql 一致） */
+  permTree:[
+    { id:'doc:center', name:'文档中心', type:'DIR', children:[
+      { id:'doc:mine', name:'我的文档', type:'MENU', children:[
+        {id:'doc:create',name:'新建文档'},{id:'doc:edit',name:'编辑文档'},{id:'doc:publish',name:'提交发布'},
+        {id:'doc:delete',name:'删除文档'},{id:'doc:restore',name:'恢复文档'}]},
+      { id:'doc:search', name:'文档检索', type:'MENU', children:[
+        {id:'doc:derive',name:'派生文档'},{id:'doc:favorite',name:'收藏文档'},{id:'doc:upload',name:'上传图片'}]},
+      { id:'doc:review', name:'审核队列', type:'MENU', children:[
+        {id:'doc:audit',name:'审核通过'},{id:'doc:reject',name:'驳回文档'}]},
+      { id:'doc:manage', name:'文档治理', type:'MENU', children:[
+        {id:'doc:archive',name:'归档文档'},{id:'doc:offline',name:'下架文档'}]},
+      { id:'doc:category', name:'分类与标签', type:'MENU', children:[
+        {id:'doc:category:edit',name:'维护分类'},{id:'doc:tag:edit',name:'维护标签'}]}]},
+    { id:'sys:center', name:'系统管理', type:'DIR', children:[
+      { id:'sys:user', name:'用户管理', type:'MENU', children:[
+        {id:'sys:user:add',name:'新增用户'},{id:'sys:user:edit',name:'编辑用户'},
+        {id:'sys:user:disable',name:'启停用户'},{id:'sys:user:reset',name:'重置密码'}]},
+      { id:'sys:role', name:'角色管理', type:'MENU', children:[
+        {id:'sys:role:add',name:'新增角色'},{id:'sys:role:edit',name:'编辑角色'},
+        {id:'sys:role:delete',name:'删除角色'},{id:'sys:role:grant',name:'角色授权'}]},
+      { id:'sys:perm', name:'权限管理', type:'MENU', children:[
+        {id:'sys:perm:add',name:'新增权限'},{id:'sys:perm:edit',name:'编辑权限'},{id:'sys:perm:delete',name:'删除权限'}]},
+      { id:'sys:dept', name:'组织机构', type:'MENU', children:[
+        {id:'sys:dept:add',name:'新增部门'},{id:'sys:dept:edit',name:'编辑部门'},{id:'sys:dept:delete',name:'删除部门'}]}]}
+  ],
+  roles:[
+    { code:'STAFF',     name:'教职工',       n:11, builtin:true, desc:'全校教职工：创建与维护本人文档、检索、派生、收藏' },
+    { code:'DOC_ADMIN', name:'文档管理员',   n:20, builtin:true, desc:'单位文档管理员：在教职工权限之上，负责本单位文档审核、归档与分类标签维护' },
+    { code:'SYS_ADMIN', name:'系统管理员',   n:39, builtin:true, desc:'信息化中心：全部 39 个权限点，含用户、角色、权限与组织机构管理' }
+  ],
+  reviewQueue:[
+    { id:'3155', title:'软件学院 2026 版软件工程专业培养方案', unit:'软件学院', owner:'李承霖', at:'2026-09-22 11:05', kind:'新建提交' },
+    { id:'3160', title:'关于做好 2026 年秋季学期实验室安全工作的通知', unit:'国有资产委员会办公室', owner:'陈知远', at:'2026-09-22 16:40', kind:'修订提交' },
+    { id:'3162', title:'数学科学学院 2026 年人才招聘公告', unit:'数学科学学院', owner:'孙允棠', at:'2026-09-23 08:30', kind:'新建提交' }
+  ],
+  notices:[
+    { t:'系统将于 9 月 28 日 22:00—24:00 停机维护', at:'今天 09:10', kind:'维护' },
+    { t:'新版《公文格式规范》已发布，请各单位参照执行', at:'昨天 16:20', kind:'制度' },
+    { t:'本学期文档审核时限调整为 3 个工作日', at:'09-19', kind:'流程' }
+  ],
+  stats:{ published:1286, mine:12, draft:3, favorites:26, review:3, week:24 }
 };
-var IDENT = {
-  staff:    { name:'普通员工',  role:'STAFF',     count:11, avatar:'普', crumb:'文档检索' },
-  docadmin: { name:'文档管理员', role:'DOC_ADMIN', count:20, avatar:'文', crumb:'文档检索' },
-  admin:    { name:'系统管理员', role:'SYS_ADMIN', count:39, avatar:'系', crumb:'文档检索' }
+
+/* ===========================================================================
+   C) 导航：五组。删掉「系统管理」聚合板块，用户/角色与权限/组织机构各自独立；
+      「我的资料」对所有身份可见
+   =========================================================================== */
+var NAV = [
+  { group:'', items:[ {id:'home', label:'工作台', icon:'home'} ] },
+  { group:'文档', items:[
+    { id:'search', label:'文档检索', icon:'search', perm:'doc:search' },
+    { id:'mine',   label:'我的文档', icon:'folder', perm:'doc:mine' },
+    { id:'edit',   label:'新建文档', icon:'plus',   perm:'doc:create' }
+  ]},
+  { group:'审核与治理', items:[
+    { id:'review',     label:'待我审核',   icon:'check',  perm:'doc:review', badge:'review' },
+    { id:'governance', label:'内容治理',   icon:'shield', perm:'doc:manage' },
+    { id:'taxonomy',   label:'分类与标签', icon:'tag',    perm:'doc:category' }
+  ]},
+  { group:'组织与权限', items:[
+    { id:'users', label:'用户管理',   icon:'users', perm:'sys:user' },
+    { id:'roles', label:'角色与权限', icon:'key',   perm:'sys:role' },
+    { id:'org',   label:'组织机构',   icon:'org',   perm:'sys:dept' }
+  ]},
+  { group:'个人', items:[ {id:'me', label:'我的资料', icon:'user'} ] }
+];
+var VIEW_PERM = {
+  home:null, search:'doc:search', mine:'doc:mine', edit:'doc:create', detail:null,
+  review:'doc:review', governance:'doc:manage', taxonomy:'doc:category',
+  users:'sys:user', roles:'sys:role', org:'sys:dept', me:null, kit:null, e403:null, login:null
 };
-/* 视图 → 需要的路由级权限点（spec §1 路由总表） */
-var VIEW_PERM = { docs:'doc:search', my:'doc:mine', review:'doc:review', adminDocs:'doc:manage', system:'sys:center', kit:null, login:null, '403':null };
-var TITLES = { login:'登录', docs:'文档检索', detail:'文档详情', edit:'Markdown 编辑器', my:'我的文档',
-               review:'审核队列', adminDocs:'文档治理', system:'系统管理', kit:'设计系统与状态一览', '403':'403 无权限' };
+var TITLES = {
+  home:'工作台', search:'文档检索', detail:'文档详情', edit:'新建 / 编辑文档', mine:'我的文档',
+  review:'待我审核', governance:'内容治理', taxonomy:'分类与标签',
+  users:'用户管理', roles:'角色与权限', org:'组织机构', me:'我的资料',
+  kit:'设计系统与主题', e403:'无访问权限', login:'登录'
+};
 
-var role = 'admin', view = 'docs';
-
-function has(p){ return PERMS[role].indexOf(p) >= 0; }
-
-function applyPerms(){
-  var list = PERMS[role];
-  /* 单个权限：data-perm="code" */
-  [].forEach.call(document.querySelectorAll('[data-perm]'), function(el){
-    var ok = list.indexOf(el.getAttribute('data-perm')) >= 0;
-    el.classList.toggle('hidden', !ok);
-  });
-  /* 任一权限命中：data-perm-any="a,b"（有就显示，全无则隐藏） */
-  [].forEach.call(document.querySelectorAll('[data-perm-any]'), function(el){
-    var codes = el.getAttribute('data-perm-any').split(',');
-    var ok = codes.some(function(c){ return list.indexOf(c.trim()) >= 0; });
-    el.classList.toggle('hidden', !ok);
-  });
-  /* 对应的「无权限提示」：data-noperm="code" / data-noperm-any="a,b" 反向显示 */
-  [].forEach.call(document.querySelectorAll('[data-noperm]'), function(el){
-    var ok = list.indexOf(el.getAttribute('data-noperm')) >= 0;
-    el.classList.toggle('hidden', ok);
-  });
-  [].forEach.call(document.querySelectorAll('[data-noperm-any]'), function(el){
-    var codes = el.getAttribute('data-noperm-any').split(',');
-    var any = codes.some(function(c){ return list.indexOf(c.trim()) >= 0; });
-    el.classList.toggle('hidden', any);
-  });
-  /* 顶栏与侧栏身份区 */
-  var id = IDENT[role];
-  document.getElementById('userName').textContent = id.name;
-  document.getElementById('userAvatar').textContent = id.avatar;
-  document.getElementById('roleBadge').textContent = id.role;
-  document.getElementById('navRoleName').textContent = id.name;
-  document.getElementById('navPermCount').textContent = id.count;
-  document.getElementById('roleSel').value = role;
+/* ===========================================================================
+   D) 渲染工具
+   =========================================================================== */
+var role = 'admin', view = 'home', theme = 'ink';
+function P(r){ return DATA.perms[r || role]; }
+function has(p){ return P().indexOf(p) >= 0; }
+function esc(s){
+  return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
+function statusBadge(s){
+  var m = { PUBLISHED:['published','已发布'], DRAFT:['draft','草稿'],
+            ARCHIVED:['archived','已归档'], TRASH:['trash','回收站'],
+            ACTIVE:['active','正常'], LOCKED:['locked','冻结'], DISABLED:['disabled','停用'] };
+  var v = m[s] || ['plain', s];
+  return '<span class="badge ' + v[0] + '">' + v[1] + '</span>';
+}
+function icon(name, cls){
+  var p = {
+    home:'M3 10.5 12 3l9 7.5V21H3z', search:'M10.5 4a6.5 6.5 0 1 0 0 13 6.5 6.5 0 0 0 0-13zM20 20l-4.4-4.4',
+    folder:'M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z',
+    plus:'M12 5v14M5 12h14', check:'M4 12.5 9.5 18 20 6.5',
+    shield:'M12 3l7 3v6c0 4.2-2.9 7.6-7 9-4.1-1.4-7-4.8-7-9V6z',
+    tag:'M3 12V4h8l10 10-8 8z', users:'M8 11a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7zM2 20c0-3.3 2.7-6 6-6s6 2.7 6 6',
+    key:'M15 8a4 4 0 1 1-3.4 6.1L4 21.5 2.5 20l1.5-1.5L2 16.5l2-2 2 2 5.6-5.6A4 4 0 0 1 15 8z',
+    org:'M12 3v4M6 21v-6h12v6M4 21V11h16v10M9 7h6v4H9z',
+    user:'M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM4 21c0-4.4 3.6-8 8-8s8 3.6 8 8',
+    bell:'M6 9a6 6 0 1 1 12 0v5l2 3H4l2-3zM10 20a2 2 0 0 0 4 0'
+  }[name] || 'M12 3v18M3 12h18';
+  return '<svg class="' + (cls || 'ico') + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="' + p + '"/></svg>';
+}
+function starfield(n){ var s=''; for(var i=0;i<n;i++) s += '<div class="sk-line' + (i%3===1?' w60':(i%3===2?' w80':'')) + '"></div>'; return s; }
 
-function go(name){
-  var need = VIEW_PERM[name];
-  if (need && !has(need)){
-    document.getElementById('perm403Text').textContent = '缺少权限：' + need;
-    name = '403';
-  }
-  view = name;
-  [].forEach.call(document.querySelectorAll('.view'), function(el){ el.classList.add('hidden'); });
-  var el = document.getElementById('view-' + name);
-  if (el) el.classList.remove('hidden');
-  var isLogin = (name === 'login');
-  document.getElementById('appShell').classList.toggle('hidden', isLogin);
-  document.getElementById('crumbText').textContent = TITLES[name] || name;
-  [].forEach.call(document.querySelectorAll('.nav-item'), function(a){
-    a.classList.toggle('active', a.getAttribute('data-go') === name);
+/* ===========================================================================
+   E) 各视图
+   =========================================================================== */
+var V = {};
+
+V.home = function(){
+  var id = DATA.identities[role], d = DATA.docs, h = new Date().getHours();
+  var greet = h < 6 ? '凌晨好' : h < 11 ? '上午好' : h < 14 ? '中午好' : h < 18 ? '下午好' : '晚上好';
+  var myDocs = d.filter(function(x){ return x.owner === id.name; });
+  return ''
+  + '<div class="page-head"><div>'
+  +   '<h1>' + greet + '，' + esc(id.name) + '</h1>'
+  +   '<div class="desc">' + esc(id.dept) + ' · ' + esc(id.title) + '　｜　今天有 '
+  +     (has('doc:review') ? '<b>' + DATA.stats.review + '</b> 篇待你审核，' : '')
+  +     '本周全校新增 <b>' + DATA.stats.week + '</b> 篇文档。</div>'
+  + '</div><div class="acts">'
+  +   (has('doc:create') ? '<button class="btn btn-primary" data-go="edit">新建文档</button>' : '')
+  +   '<button class="btn" data-go="search">检索全校文档</button>'
+  + '</div></div>'
+  + '<div class="grid g4 mb16">'
+  +   '<div class="stat"><div class="k">全校已发布文档</div><div class="v">' + DATA.stats.published.toLocaleString() + '<small>篇</small></div><div class="d">本周新增 <b>+' + DATA.stats.week + '</b></div></div>'
+  +   '<div class="stat s2"><div class="k">我的文档</div><div class="v">' + DATA.stats.mine + '<small>篇</small></div><div class="d">其中草稿 ' + DATA.stats.draft + ' 篇待完成</div></div>'
+  +   (has('doc:review')
+      ? '<div class="stat s3"><div class="k">待我审核</div><div class="v">' + DATA.stats.review + '<small>篇</small></div><div class="d">最早提交于 09-22 11:05</div></div>'
+      : '<div class="stat s3"><div class="k">我的收藏</div><div class="v">' + DATA.stats.favorites + '<small>篇</small></div><div class="d">在「我的文档 → 收藏」查看</div></div>')
+  +   '<div class="stat s4"><div class="k">' + (has('doc:review') ? '我的收藏' : '本月阅读') + '</div><div class="v">' + (has('doc:review') ? DATA.stats.favorites : '86') + '<small>' + (has('doc:review') ? '篇' : '次') + '</small></div><div class="d">较上周 ' + (has('doc:review') ? '+3' : '+12%') + '</div></div>'
+  + '</div>'
+  + '<div class="grid g-side">'
+  +   '<div>'
+  +     '<div class="card"><div class="card-hd"><h3>我的草稿</h3><span class="sub">接着写</span>'
+  +       '<div class="acts"><button class="link" data-go="mine">全部我的文档</button></div></div>'
+  +       '<table class="tbl"><thead><tr><th>标题</th><th class="w-fix">状态</th><th class="w-fix2">最近修改</th><th class="w-fix"></th></tr></thead><tbody>'
+  +       myDocs.map(function(x){
+            return '<tr><td><span class="title">' + esc(x.title) + '</span><span class="sub">' + esc(x.cat) + '</span></td>'
+              + '<td>' + statusBadge(x.status) + '</td><td class="t3">' + esc(x.updated) + '</td>'
+              + '<td class="acts"><button class="link" data-go="edit">继续编辑</button></td></tr>';
+          }).join('')
+  +       '</tbody></table>'
+  +       '<div class="pager"><span>共 ' + myDocs.length + ' 篇</span><div class="spacer"></div><button class="pg on">1</button></div>'
+  +     '</div>'
+  +     (has('doc:review')
+        ? '<div class="card"><div class="card-hd"><h3>待我审核</h3><span class="sub">按提交时间排序</span>'
+          + '<div class="acts"><button class="btn btn-sm" data-go="review">进入审核台</button></div></div>'
+          + '<div class="list">' + DATA.reviewQueue.map(function(q){
+              return '<div class="list-item"><span class="dot ' + (q.kind === '修订提交' ? 'warning' : 'primary') + '"></span>'
+                + '<div class="body"><div class="title sm">' + esc(q.title) + '</div>'
+                + '<div class="xs t3 mt4">' + esc(q.unit) + ' · ' + esc(q.owner) + ' · ' + esc(q.kind) + ' · ' + esc(q.at) + '</div></div>'
+                + '<button class="btn btn-sm" data-go="review">去审核</button></div>';
+            }).join('') + '</div></div>'
+        : '')
+  +   '</div>'
+  +   '<div>'
+  +     '<div class="card"><div class="card-hd"><h3>常用分类</h3></div><div class="card-bd tight">'
+  +       DATA.categories.slice(0,6).map(function(c){
+            return '<div class="row navrow"><span class="sm">' + esc(c.name) + '</span><span class="spacer xs t3">' + c.n + ' 篇</span></div>';
+          }).join('')
+  +     '</div></div>'
+  +     '<div class="card"><div class="card-hd"><h3>通知</h3></div><div class="card-bd tight">'
+  +       DATA.notices.map(function(n){
+            return '<div class="row navrow"><span class="badge plain">' + esc(n.kind) + '</span>'
+              + '<span class="sm ellip">' + esc(n.t) + '</span><span class="spacer xs t3">' + esc(n.at) + '</span></div>';
+          }).join('')
+  +     '</div></div>'
+  +   '</div>'
+  + '</div>';
+};
+
+V.search = function(){
+  /* 检索接口只返回「已发布」文档（后端 DocumentServiceImpl.search() 硬编码 PUBLISHED）。
+     草稿与他人未发布内容不出现在检索页 —— 它们归「我的文档」与「内容治理」。 */
+  var rows = DATA.docs.filter(function(d){ return d.status === 'PUBLISHED'; });
+  return ''
+  + '<div class="page-head"><div><h1>文档检索</h1>'
+  + '<div class="desc">按关键词、分类、标签与发文单位组合检索。检索接口只返回「已发布」文档；草稿与他人未发布内容不在检索范围内。</div></div>'
+  + '<div class="acts">' + (has('doc:create') ? '<button class="btn btn-primary" data-go="edit">新建文档</button>' : '') + '</div></div>'
+  + '<div class="card mb16"><div class="card-bd">'
+  +   '<div class="filter">'
+  +     '<div class="field wide"><label class="label">关键词</label><input class="input" value="" placeholder="标题或摘要，如：国家自然科学基金、实习支教"></div>'
+  +     '<div class="field"><label class="label">分类</label><select class="select"><option>全部分类</option>'
+  +       DATA.categories.map(function(c){ return '<option>' + esc(c.name) + '</option>'; }).join('') + '</select></div>'
+  +     '<div class="field"><label class="label">发文单位</label><select class="select"><option>全部单位</option>'
+  +       ['学校办公室','教务处','科技处','社会科学处','人事处','学生处','研究生院','信息化中心','图书馆','档案馆','后勤服务集团','软件学院','数学科学学院'].map(function(u){ return '<option>' + esc(u) + '</option>'; }).join('') + '</select></div>'
+  +     '<div class="field wide"><label class="label">标签（可多选）</label><div class="chip-pick">'
+  +       DATA.tags.map(function(t,i){ return '<span class="tag' + (i < 2 ? ' on' : '') + '">' + esc(t) + '</span>'; }).join('')
+  +     '</div></div>'
+  +     '<div class="field"><label class="label">更新时间</label><select class="select"><option>不限</option><option>近一周</option><option>近一月</option><option>本学期</option></select></div>'
+  +     '<div class="field"><label class="label">排序</label><select class="select"><option>更新时间 ↓</option><option>发布时间 ↓</option><option>阅读量 ↓</option><option>收藏数 ↓</option></select></div>'
+  +     '<div class="filter-acts"><button class="btn">重置</button><button class="btn btn-primary">检索</button></div>'
+  +   '</div>'
+  + '</div></div>'
+  + '<div class="card"><div class="card-hd"><h3>检索结果</h3><span class="sub">共 ' + rows.length + ' 篇</span>'
+  +   '<div class="acts xs t3">仅显示你有权查看的文档</div></div>'
+  +   '<table class="tbl"><thead><tr><th>文档</th><th class="w-fix2">发文单位</th><th class="w-fix2">分类</th>'
+  +   '<th class="w-fix">状态</th><th class="w-fix">阅读</th><th class="w-fix2">更新时间</th><th class="w-fix3"></th></tr></thead><tbody>'
+  +   rows.map(function(d){
+        return '<tr>'
+        + '<td><a class="title" data-go="detail">' + esc(d.title) + '</a><span class="sub">' + esc(d.summary) + '</span>'
+        +   (d.tags.length ? '<span class="mt8 row wrap">' + d.tags.map(function(t){ return '<span class="tag">' + esc(t) + '</span>'; }).join('') + '</span>' : '')
+        + '</td>'
+        + '<td class="sm t2">' + esc(d.unit) + '</td>'
+        + '<td class="sm t2">' + esc(d.cat) + '</td>'
+        + '<td>' + statusBadge(d.status) + '</td>'
+        + '<td class="num t2">' + d.views + '</td>'
+        + '<td class="sm t3">' + esc(d.updated) + '</td>'
+        + '<td class="acts">'
+        +   (has('doc:favorite') ? '<button class="link">收藏</button>' : '')
+        +   (has('doc:derive') ? '<button class="link">派生</button>' : '')
+        +   '<button class="link" data-go="detail">查看</button>'
+        + '</td></tr>';
+      }).join('')
+  +   '</tbody></table>'
+  +   '<div class="pager"><span>共 ' + rows.length + ' 条 · 每页 10 条</span><div class="spacer"></div>'
+  +   '<button class="pg">上一页</button><button class="pg on">1</button><button class="pg">2</button><button class="pg">下一页</button></div>'
+  + '</div>';
+};
+
+V.detail = function(){
+  var d = DATA.docs[1];
+  return ''
+  + '<div class="crumb mb12">文档检索 / ' + esc(d.cat) + '</div>'
+  + '<div class="page-head"><div>'
+  +   '<div class="row wrap mb8"><h1>' + esc(d.title) + '</h1>' + statusBadge(d.status) + '<span class="badge plain">v' + d.ver + '</span></div>'
+  +   '<div class="row wrap xs t2">'
+  +     '<span>发文单位：' + esc(d.unit) + '</span><span>·</span><span>分类：' + esc(d.cat) + '</span>'
+  +     '<span>·</span><span>拟稿：' + esc(d.owner) + '</span><span>·</span><span>更新时间：' + esc(d.updated) + '</span>'
+  +     '<span>·</span><span>阅读 ' + d.views + '</span><span>·</span><span>收藏 ' + d.favs + '</span>'
+  +   '</div>'
+  +   '<div class="row wrap mt8">' + d.tags.map(function(t){ return '<span class="tag">' + esc(t) + '</span>'; }).join('') + '</div>'
+  + '</div><div class="acts">'
+  +   (has('doc:favorite') ? '<button class="btn">收藏</button>' : '')
+  +   (has('doc:derive') ? '<button class="btn">派生</button>' : '')
+  +   (has('doc:edit') ? '<button class="btn">编辑</button>' : '')
+  +   '<button class="btn">版本历史（' + d.ver + '）</button>'
+  + '</div></div>'
+  + '<div class="grid g-side">'
+  +   '<div>'
+  +     '<div class="card"><div class="card-bd"><div class="md">'
+  +       '<h1>河北师范大学实习支教工作管理办法</h1>'
+  +       '<p><strong>第一章　总则</strong></p>'
+  +       '<p>第一条　为规范我校师范生顶岗实习支教工作，保障支教质量与师生安全，依据教育部及河北省有关文件，结合学校实际，制定本办法。</p>'
+  +       '<p>第二条　实习支教坚持「以师为本、按需施教、协同育人」的原则，由教务处统一组织，各学院具体实施。</p>'
+  +       '<h2>第二章　组织与职责</h2>'
+  +       '<ul>'
+  +         '<li><strong>教务处</strong>：制定年度计划、统筹基地建设、组织驻县教师选派与考核。</li>'
+  +         '<li><strong>各学院</strong>：负责支教生的选拔、培训、思想教育与成绩认定。</li>'
+  +         '<li><strong>驻县教师</strong>：负责支教生的日常管理、教学指导与安全联络，每周向教务处报送简报。</li>'
+  +       '</ul>'
+  +       '<blockquote>本办法自 2026 年秋季学期起执行，原《实习支教工作实施细则》（2021 年）同时废止。</blockquote>'
+  +       '<h2>第三章　时间安排</h2>'
+  +       '<table><thead><tr><th>阶段</th><th>时间</th><th>责任单位</th></tr></thead><tbody>'
+  +       '<tr><td>动员与选拔</td><td>每年 5 月</td><td>各学院</td></tr>'
+  +       '<tr><td>岗前培训</td><td>6 月中旬</td><td>教务处、教师教育学院</td></tr>'
+  +       '<tr><td>进驻支教点</td><td>9 月上旬</td><td>各学院、驻县教师</td></tr>'
+  +       '</tbody></table>'
+  +       '<p>附件：<a href="#">实习支教考核表.docx</a>　<a href="#">驻县教师工作简报模板.docx</a></p>'
+  +     '</div></div></div>'
+  +     '<div class="card"><div class="card-hd"><h3>版本历史</h3><span class="sub">每次提交自动留痕</span></div>'
+  +       '<table class="tbl"><thead><tr><th class="w-fix">版本</th><th class="w-fix2">变更类型</th><th>说明</th><th class="w-fix2">操作人</th><th class="w-fix2">时间</th></tr></thead><tbody>'
+  +       '<tr><td>v3</td><td><span class="badge primary">修订发布</span></td><td class="sm">第二章增补驻县教师职责与周报要求</td><td class="sm">王砚秋</td><td class="sm t3">2026-09-15 15:40</td></tr>'
+  +       '<tr><td>v2</td><td><span class="badge plain">审核通过</span></td><td class="sm">按教务处意见修改时间安排表</td><td class="sm">王砚秋</td><td class="sm t3">2026-09-12 10:22</td></tr>'
+  +       '<tr><td>v1</td><td><span class="badge plain">创建</span></td><td class="sm">由 2021 年细则改版起草</td><td class="sm">王砚秋</td><td class="sm t3">2026-09-08 14:03</td></tr>'
+  +       '</tbody></table></div>'
+  +   '</div>'
+  +   '<div class="side-sticky">'
+  +     '<div class="card"><div class="card-hd"><h3>本文目录</h3></div><div class="card-bd">'
+  +       '<div class="toc"><a>第一章　总则</a><a>第二章　组织与职责</a><a>第三章　时间安排</a></div>'
+  +     '</div></div>'
+  +     '<div class="card"><div class="card-hd"><h3>文档信息</h3></div><div class="card-bd"><div class="kv">'
+  +       '<div class="k">发文单位</div><div>' + esc(d.unit) + '</div>'
+  +       '<div class="k">文号</div><div class="mono">校教〔2026〕18 号</div>'
+  +       '<div class="k">分类</div><div>' + esc(d.cat) + '</div>'
+  +       '<div class="k">拟稿</div><div>' + esc(d.owner) + '</div>'
+  +       '<div class="k">审核</div><div>教务处 · 王砚秋</div>'
+  +       '<div class="k">生效日期</div><div>2026-09-15</div>'
+  +       '<div class="k">阅读 / 收藏</div><div>' + d.views + ' / ' + d.favs + '</div>'
+  +     '</div></div></div>'
+  +     '<div class="card"><div class="card-hd"><h3>相关文档</h3></div><div class="card-bd tight">'
+  +       ['师范专业认证材料清单（2026）','顶岗支教驻县教师管理办法','教育实习成绩评定标准']
+          .map(function(t){ return '<div class="row navrow"><span class="sm">' + esc(t) + '</span></div>'; }).join('')
+  +     '</div></div>'
+  +   '</div>'
+  + '</div>';
+};
+
+V.edit = function(){
+  return ''
+  + '<div class="page-head"><div><h1>新建文档</h1>'
+  + '<div class="desc">左侧写作，右侧设置分类与发布范围。保存草稿不对外可见；提交后由本单位文档管理员审核。</div></div>'
+  + '<div class="acts"><button class="btn">取消</button>'
+  + (has('doc:create') ? '<button class="btn">保存草稿</button>' : '')
+  + (has('doc:publish') ? '<button class="btn btn-primary">提交审核</button>' : '')
+  + '</div></div>'
+  + '<div class="editor">'
+  +   '<div>'
+  +     '<div class="pane mb16"><div class="card-bd tight"><input class="input input-title" value="关于做好 2026 年秋季学期实验室安全工作的通知" placeholder="请输入文档标题"></div></div>'
+  +     '<div class="pane">'
+  +       '<div class="toolbar-md">'
+  +         '<button class="tool" title="加粗"><b>B</b></button><button class="tool" title="斜体"><i>I</i></button>'
+  +         '<button class="tool" title="标题">H1</button><button class="tool" title="标题">H2</button>'
+  +         '<span class="tool sep"></span>'
+  +         '<button class="tool" title="无序列表">•</button><button class="tool" title="有序列表">1.</button>'
+  +         '<button class="tool" title="引用">❝</button><button class="tool" title="代码">&lt;/&gt;</button>'
+  +         '<span class="tool sep"></span>'
+  +         '<button class="tool" title="链接">🔗</button>'
+  +         (has('doc:upload') ? '<button class="tool" title="插入图片">🖼</button>' : '')
+  +         '<button class="tool" title="表格">▦</button>'
+  +         '<span class="spacer"></span>'
+  +         '<button class="tool" title="预览模式">编辑 / 预览</button>'
+  +       '</div>'
+  +       '<textarea class="ta" id="ed">' + `# 关于开展 2026 年秋季学期实验室安全检查的通知
+
+各学院、各有关单位：
+
+为落实教育部实验室安全管理的有关要求，现就本学期实验室安全检查工作安排如下。
+
+## 一、检查范围
+
+- 全校教学实验室、科研实验室与危化品暂存间
+- 压力容器、气瓶、高温设备等重点风险源
+
+## 二、时间安排
+
+| 阶段 | 时间 | 责任单位 |
+| --- | --- | --- |
+| 单位自查 | 9 月 25 日 — 10 月 10 日 | 各学院 |
+| 学校抽查 | 10 月 13 日 — 10 月 24 日 | 国有资产委员会办公室 |
+| 整改复查 | 11 月上旬 | 国有资产委员会办公室 |
+
+## 三、工作要求
+
+> 各单位自查报告请于 10 月 10 日前在平台内提交，逾期将纳入年度考核。
+
+联系人：实验室管理科　电话：0311-8078xxxx
+
+![上传中 42%](uploading)
+</textarea>`
+  +     '</div>'
+  +   '</div>'
+  +   '<div>'
+  +     '<div class="pane mb16"><div class="pane-hd">发布设置</div><div class="card-bd">'
+  +       '<div class="field mb12"><label class="label">分类 <span class="req">*</span></label>'
+  +       '<select class="select"><option>科研学术 / 科研平台</option>'
+  +       DATA.categories.map(function(c){ return '<option>' + esc(c.name) + '</option>'; }).join('') + '</select>'
+  +       '<div class="hint">用于全校检索与归档</div></div>'
+  +     '<div class="field mb12"><label class="label">发文单位</label>'
+  +       '<select class="select"><option>软件学院（网络教育学院）</option><option>国有资产委员会办公室</option><option>教务处</option><option>科技处</option></select></div>'
+  +     '<div class="field mb12"><label class="label">标签（最多 5 个）</label><div class="chip-pick">'
+  +       DATA.tags.map(function(t,i){ return '<span class="tag' + (i === 6 ? ' on' : '') + '">' + esc(t) + '</span>'; }).join('') + '</div></div>'
+  +     '<div class="field mb12"><label class="label">摘要</label><textarea class="textarea" rows="3">检查范围、时间安排与自查报告提交要求。</textarea></div>'
+  +     '<div class="field"><label class="label">可见范围</label>'
+  +       '<select class="select"><option>全校可见（发布后）</option><option>仅本单位可见</option><option>指定单位可见</option></select>'
+  +       '<div class="hint">草稿始终仅本人可见</div></div>'
+  +     '</div></div>'
+  +     '<div class="pane"><div class="pane-hd">实时预览</div><div class="preview"><div class="md" id="edPreview"></div></div></div>'
+  +   '</div>'
+  + '</div>';
+};
+
+V.mine = function(){
+  var mine = DATA.docs.filter(function(d){ return d.owner === DATA.identities[role].name; });
+  var tabs = [['全部','6'],['草稿','3'],['已发布','2'],['已归档','1']];
+  if (has('doc:favorite')) tabs.push(['我的收藏','26']);
+  if (has('doc:restore')) tabs.push(['回收站','1']);
+  return ''
+  + '<div class="page-head"><div><h1>我的文档</h1>'
+  + '<div class="desc">你创建与参与的全部文档：草稿接着写、已发布可修订、误删可在回收站恢复。</div></div>'
+  + '<div class="acts">' + (has('doc:create') ? '<button class="btn btn-primary" data-go="edit">新建文档</button>' : '') + '</div></div>'
+  + '<div class="card">'
+  +   '<div class="tabs">' + tabs.map(function(t,i){
+        return '<button class="tab' + (i === 0 ? ' active' : '') + '">' + t[0] + '<span class="n">' + t[1] + '</span></button>';
+      }).join('') + '</div>'
+  +   '<div class="toolbar"><input class="input grow" placeholder="在标题与摘要中搜索">'
+  +     '<select class="select select-compact"><option>全部单位</option><option>软件学院</option><option>教务处</option></select>'
+  +     '<select class="select select-compact"><option>按更新时间 ↓</option><option>按创建时间 ↓</option></select></div>'
+  +   '<table class="tbl"><thead><tr><th>文档</th><th class="w-fix">状态</th><th class="w-fix">版本</th>'
+  +     '<th class="w-fix">阅读</th><th class="w-fix2">更新时间</th><th class="w-fix3"></th></tr></thead><tbody>'
+  +   (mine.length ? mine.map(function(d){
+        var acts = [];
+        if (has('doc:edit') && d.status !== 'ARCHIVED') acts.push('<button class="link" data-go="edit">编辑</button>');
+        if (has('doc:publish') && d.status === 'DRAFT') acts.push('<button class="link">提交审核</button>');
+        if (has('doc:restore') && d.status === 'TRASH') acts.push('<button class="link">恢复</button>');
+        if (has('doc:delete')) acts.push('<button class="link danger">' + (d.status === 'TRASH' ? '彻底删除' : '删除') + '</button>');
+        return '<tr><td><a class="title" data-go="detail">' + esc(d.title) + '</a><span class="sub">' + esc(d.summary) + '</span></td>'
+          + '<td>' + statusBadge(d.status) + '</td><td class="t2">v' + d.ver + '</td><td class="num t2">' + d.views + '</td>'
+          + '<td class="sm t3">' + esc(d.updated) + '</td><td class="acts">' + acts.join('') + '</td></tr>';
+      }).join('') : '')
+  +   '</tbody></table>'
+  +   (mine.length ? '<div class="pager"><span>共 ' + mine.length + ' 条</span><div class="spacer"></div><button class="pg on">1</button></div>'
+      : '<div class="empty"><div class="mark">▤</div><h4>你还没有创建过文档</h4><p>写第一篇文档，把经验沉淀下来</p>'
+        + (has('doc:create') ? '<button class="btn btn-primary mt12" data-go="edit">新建文档</button>' : '') + '</div>')
+  + '</div>';
+};
+
+V.review = function(){
+  return ''
+  + '<div class="page-head"><div><h1>待我审核</h1>'
+  + '<div class="desc">你负责范围内待审的文档。通过后可写审核意见；驳回需填写理由，理由会回传到拟稿人。</div></div>'
+  + '<div class="acts"><button class="btn">批量通过</button></div></div>'
+  + '<div class="grid g3 mb16">'
+  +   '<div class="stat"><div class="k">待审核</div><div class="v">' + DATA.reviewQueue.length + '<small>篇</small></div><div class="d">最早等待 1 天 6 小时</div></div>'
+  +   '<div class="stat s4"><div class="k">本周已通过</div><div class="v">18<small>篇</small></div><div class="d">平均处理 4.2 小时</div></div>'
+  +   '<div class="stat s2"><div class="k">本周已驳回</div><div class="v">4<small>篇</small></div><div class="d">驳回理由均已填写</div></div>'
+  + '</div>'
+  + '<div class="grid g-list">'
+  +   '<div class="card"><div class="card-hd"><h3>待审列表</h3></div>'
+  +     '<div class="list">' + DATA.reviewQueue.map(function(q,i){
+          return '<div class="list-item"><div class="body">'
+            + '<div class="sm strong">' + esc(q.title) + '</div>'
+            + '<div class="xs t3 mt4">' + esc(q.unit) + '</div>'
+            + '<div class="xs t3 mt4">' + esc(q.owner) + ' · ' + esc(q.kind) + '</div>'
+            + '<div class="xs t3 mt4">' + esc(q.at) + '</div></div></div>';
+        }).join('') + '</div></div>'
+  +   '<div class="drawer">'
+  +     '<div class="drawer-hd"><h3>' + esc(DATA.reviewQueue[0].title) + '</h3></div>'
+  +     '<div class="card-bd">'
+  +       '<div class="kv mb12"><div class="k">提交单位</div><div>' + esc(DATA.reviewQueue[0].unit) + '</div>'
+  +       '<div class="k">拟稿人</div><div>' + esc(DATA.reviewQueue[0].owner) + '</div>'
+  +       '<div class="k">提交时间</div><div>' + esc(DATA.reviewQueue[0].at) + '</div></div>'
+  +       '<div class="sec-title">本次变更</div>'
+  +       '<div class="alert a-info mb12"><span class="ico">i</span><span>与上一版相比：新增第三章「时间安排」表格；修订责任单位表述 3 处。</span></div>'
+  +       '<div class="md sm"><h3>一、检查范围</h3><p>全校教学实验室、科研实验室与危化品暂存间。</p></div>'
+  +     '</div>'
+  +     '<div class="drawer-ft">'
+  +       (has('doc:reject') ? '<button class="btn">驳回</button>' : '')
+  +       (has('doc:audit') ? '<button class="btn btn-primary">通过并发布</button>' : '')
+  +     '</div>'
+  +   '</div>'
+  + '</div>';
+};
+
+V.governance = function(){
+  return ''
+  + '<div class="page-head"><div><h1>内容治理</h1>'
+  + '<div class="desc">全校文档的归档、下架与彻底删除。归档后仍可检索但标记为历史版本；彻底删除不可恢复。</div></div>'
+  + '<div class="acts"><button class="btn">导出清单</button></div></div>'
+  + '<div class="alert a-warn mb16"><span class="ico">!</span><span><b>接口缺口（待拍板）：</b>当前后端没有「按状态列出全校文档」的接口——'
+  +   '<span class="mono">GET /api/documents</span> 只返回已发布（其他状态直接 400），'
+  +   '<span class="mono">GET /api/review/documents</span> 只允许已发布/已归档。'
+  +   '所以下面的「草稿 / 回收站」筛选与行属于设计意图，落地前需二选一：① 后端补一个 <span class="mono">doc:manage</span> 的全状态列表接口（推荐）；② 治理页只治理已发布与已归档。</span></div>'
+  + '<div class="card"><div class="toolbar">'
+  +   '<select class="select select-compact"><option>全部状态</option><option>已发布</option><option>已归档</option><option>草稿</option><option>回收站</option></select>'
+  +   '<select class="select select-compact"><option>全部单位</option><option>学校办公室</option><option>教务处</option><option>科技处</option><option>软件学院</option></select>'
+  +   '<input class="input grow" placeholder="搜索标题或拟稿人">'
+  +   '<button class="btn btn-sm">查询</button></div>'
+  +   '<table class="tbl"><thead><tr><th>文档</th><th class="w-fix2">发文单位</th><th class="w-fix">状态</th>'
+  +   '<th class="w-fix">版本</th><th class="w-fix">阅读</th><th class="w-fix3"></th></tr></thead><tbody>'
+  +   DATA.docs.map(function(d){
+        var acts = [];
+        if (has('doc:archive')) acts.push(d.status === 'ARCHIVED' ? '<button class="link">恢复上架</button>' : '<button class="link">归档</button>');
+        if (has('doc:offline')) acts.push('<button class="link">下架</button>');
+        if (has('doc:delete')) acts.push('<button class="link danger">彻底删除</button>');
+        return '<tr><td><a class="title" data-go="detail">' + esc(d.title) + '</a><span class="sub">拟稿：' + esc(d.owner) + '</span></td>'
+          + '<td class="sm t2">' + esc(d.unit) + '</td><td>' + statusBadge(d.status) + '</td>'
+          + '<td class="t2">v' + d.ver + '</td><td class="num t2">' + d.views + '</td>'
+          + '<td class="acts">' + acts.join('') + '</td></tr>';
+      }).join('')
+  +   '</tbody></table>'
+  +   '<div class="pager"><span>共 ' + DATA.docs.length + ' 条</span><div class="spacer"></div><button class="pg on">1</button></div>'
+  + '</div>';
+};
+
+V.taxonomy = function(){
+  var cats = DATA.categories.map(function(c,i){
+    return '<div class="node lv1' + (i === 0 ? ' on' : '') + '"><span class="caret">' + (i === 0 ? '▾' : '▸') + '</span>'
+      + '<span>' + esc(c.name) + '</span><span class="cnt">' + c.n + ' 篇</span></div>'
+      + (i === 0 ? c.children.map(function(s){
+          return '<div class="node lv2"><span class="caret"></span><span>' + esc(s.name) + '</span><span class="cnt">' + s.n + ' 篇</span></div>';
+        }).join('') : '');
+  }).join('');
+  return ''
+  + '<div class="page-head"><div><h1>分类与标签</h1>'
+  + '<div class="desc">分类体系对应学校机构与业务条线，用于全校检索与归档；标签是跨分类的横向聚合，由发文单位在编辑文档时创建。</div></div>'
+  + '<div class="acts">'
+  +   (has('doc:category:edit') ? '<button class="btn">新增一级分类</button>' : '')
+  +   (has('doc:tag:edit') ? '<button class="btn btn-primary">新增标签</button>' : '')
+  + '</div></div>'
+  + '<div class="grid g-list">'
+  +   '<div class="card"><div class="card-hd"><h3>分类树</h3><span class="sub">10 类 · 41 个子类</span></div>'
+  +     '<div class="card-bd tight tree">' + cats + '</div>'
+  +     (has('doc:category:edit')
+        ? '<div class="drawer-ft"><button class="link">改名</button><button class="link">调整顺序</button><button class="link danger">删除</button></div>'
+        : '<div class="card-bd tight"><div class="noperm">你没有分类维护权限（<span class="mono">doc:category:edit</span>），此处仅可浏览</div></div>')
+  +   '</div>'
+  +   '<div class="card"><div class="card-hd"><h3>标签</h3><span class="sub">按使用次数排序</span>'
+  +     '<div class="acts"><input class="input input-compact" placeholder="搜索标签"></div></div>'
+  +     '<table class="tbl"><thead><tr><th>标签</th><th class="w-fix">使用次数</th><th class="w-fix2">最近使用</th><th class="w-fix3"></th></tr></thead><tbody>'
+  +     [['国家自然科学基金',112,'2026-09-18'],['实习支教',86,'2026-09-15'],['十五五规划',74,'2026-09-20'],
+        ['职称评审',58,'2026-09-12'],['课程思政',46,'2026-09-11'],['实验室安全',41,'2026-09-22'],
+        ['师范专业认证',33,'2026-09-09'],['雄安新区',21,'2026-08-28'],['京津冀协同',18,'2026-08-19'],['国家社科基金',15,'2026-07-30']]
+        .map(function(t){
+          return '<tr><td><span class="tag">' + esc(t[0]) + '</span></td><td class="num t2">' + t[1] + '</td>'
+            + '<td class="sm t3">' + t[2] + '</td><td class="acts">'
+            + (has('doc:tag:edit') ? '<button class="link">改名</button><button class="link">合并</button><button class="link danger">删除</button>' : '<span class="link muted">只读</span>')
+            + '</td></tr>';
+        }).join('')
+  +     '</tbody></table>'
+  +     '<div class="pager"><span>共 10 个标签</span><div class="spacer"></div><button class="pg on">1</button></div>'
+  +   '</div>'
+  + '</div>';
+};
+
+V.users = function(){
+  var id = DATA.identities[role];
+  return ''
+  + '<div class="page-head"><div><h1>用户管理</h1>'
+  + '<div class="desc">全校账号：查询、开通、变更所属单位与角色、冻结或停用、重置密码。账号可与学校统一身份认证对接。</div></div>'
+  + '<div class="acts">'
+  +   '<button class="btn">批量导入</button>'
+  +   (has('sys:user:add') ? '<button class="btn btn-primary">新增用户</button>' : '')
+  + '</div></div>'
+  + '<div class="card"><div class="toolbar">'
+  +   '<input class="input grow" placeholder="工号 / 姓名 / 手机号">'
+  +   '<select class="select select-compact"><option>全部单位</option>' + DATA.org[0].children.slice(0,6).map(function(u){ return '<option>' + esc(u) + '</option>'; }).join('') + '</select>'
+  +   '<select class="select select-compact"><option>全部角色</option>' + DATA.roles.map(function(r){ return '<option>' + esc(r.name) + '</option>'; }).join('') + '</select>'
+  +   '<select class="select select-compact"><option>全部状态</option><option>正常</option><option>冻结</option><option>停用</option></select>'
+  +   '<button class="btn btn-sm">查询</button></div>'
+  +   '<table class="tbl"><thead><tr><th class="w-fix2">工号</th><th class="w-fix2">姓名</th><th>所属单位</th>'
+  +   '<th class="w-fix2">角色</th><th class="w-fix">状态</th><th class="w-fix3">最近登录</th><th class="w-fix3"></th></tr></thead><tbody>'
+  +   DATA.users.map(function(u){
+        var acts = [];
+        if (has('sys:user:edit')) acts.push('<button class="link">编辑</button>');
+        if (has('sys:user:disable')) acts.push('<button class="link">' + (u.status === 'ACTIVE' ? '冻结' : '启用') + '</button>');
+        if (has('sys:user:reset')) acts.push('<button class="link">重置密码</button>');
+        return '<tr><td class="mono">' + esc(u.no) + (u.no === id.no ? ' <span class="badge plain">本人</span>' : '') + '</td>'
+          + '<td>' + esc(u.name) + '</td><td class="sm t2">' + esc(u.dept) + '</td>'
+          + '<td><span class="badge plain">' + esc(u.role) + '</span></td><td>' + statusBadge(u.status) + '</td>'
+          + '<td class="sm t3">' + esc(u.last) + '</td>'
+          + '<td class="acts">' + (acts.length ? acts.join('') : '<span class="link muted">只读</span>') + '</td></tr>';
+      }).join('')
+  +   '</tbody></table>'
+  +   '<div class="pager"><span>共 ' + DATA.users.length + ' 条 · 全校 2,847 个账号</span><div class="spacer"></div>'
+  +   '<button class="pg">上一页</button><button class="pg on">1</button><button class="pg">2</button><button class="pg">下一页</button></div>'
+  + '</div>';
+};
+
+V.roles = function(){
+  var tree = (function walk(nodes, lv){
+    return nodes.map(function(n){
+      var cls = lv === 0 ? 'lv1' : lv === 1 ? 'lv2' : 'lv3';
+      var box = lv === 0 ? 'half' : (lv === 1 ? 'on' : '');
+      var on = has(n.id);
+      if (lv === 2) box = on ? 'on' : '';
+      var row = '<div class="node ' + cls + '"><span class="checkbox ' + box + '"></span>'
+        + '<span>' + esc(n.name) + '</span><span class="code">' + esc(n.id) + '</span></div>';
+      if (n.children) row += walk(n.children, lv + 1);
+      return row;
+    }).join('');
+  })(DATA.permTree, 0);
+  return ''
+  + '<div class="page-head"><div><h1>角色与权限</h1>'
+  + '<div class="desc">角色是权限点的集合，用户通过「直接授予角色」或「所属单位继承角色」获得权限。授权保存后立即生效，无需重新登录。</div></div>'
+  + '<div class="acts"><button class="btn">权限点清单</button>'
+  +   (has('sys:role:add') ? '<button class="btn btn-primary">新增角色</button>' : '') + '</div></div>'
+  + '<div class="grid g-list">'
+  +   '<div class="card"><div class="card-hd"><h3>角色</h3><span class="sub">3 个内置角色</span></div>'
+  +     '<div class="card-bd tight">' + DATA.roles.map(function(r,i){
+          return '<div class="node lv1' + (i === 1 ? ' on' : '') + '"><span>' + esc(r.name) + '</span>'
+            + '<span class="cnt">' + r.n + ' 个权限</span></div>';
+        }).join('') + '</div>'
+  +     '<div class="card-bd"><div class="alert a-info"><span class="ico">i</span><span>内置角色不可删除、编码不可修改；如需限制范围，请新建自定义角色。</span></div></div>'
+  +   '</div>'
+  +   '<div class="card"><div class="card-hd"><h3>「文档管理员」的权限</h3><span class="sub">勾选即授权 · 39 个权限点</span>'
+  +     '<div class="acts">'
+  +     (has('sys:role:grant') ? '<button class="btn btn-sm">全选</button><button class="btn btn-sm">反选</button><button class="btn btn-primary btn-sm">保存授权</button>'
+        : '<span class="link muted">只读</span>') + '</div></div>'
+  +     '<div class="card-bd tight tree">' + tree + '</div>'
+  +     (has('sys:role:grant') ? '' : '<div class="card-bd tight"><div class="noperm">你没有授权权限（<span class="mono">sys:role:grant</span>）</div></div>')
+  +   '</div>'
+  + '</div>'
+  + '<div class="card"><div class="card-hd"><h3>权限点清单</h3><span class="sub">2 个目录 · 9 个菜单 · 28 个按钮</span></div>'
+  +   '<table class="tbl"><thead><tr><th>权限点</th><th class="w-fix2">编码</th><th class="w-fix">类型</th><th>授予角色</th><th class="w-fix3"></th></tr></thead><tbody>'
+  +   [['新建文档','doc:create','按钮','教职工 / 文档管理员 / 系统管理员'],
+     ['审核通过','doc:audit','按钮','文档管理员 / 系统管理员'],
+     ['归档文档','doc:archive','按钮','文档管理员 / 系统管理员'],
+     ['维护分类','doc:category:edit','按钮','文档管理员 / 系统管理员'],
+     ['用户管理','sys:user','菜单','系统管理员']]
+     .map(function(p){
+        return '<tr><td class="sm">' + esc(p[0]) + '</td><td class="mono">' + esc(p[1]) + '</td>'
+          + '<td><span class="badge plain">' + esc(p[2]) + '</span></td><td class="sm t2">' + esc(p[3]) + '</td>'
+          + '<td class="acts">' + (has('sys:perm:edit') ? '<button class="link">编辑</button>' : '<span class="link muted">只读</span>')
+          + (has('sys:perm:delete') ? '<button class="link danger">删除</button>' : '') + '</td></tr>';
+      }).join('')
+  +   '</tbody></table>'
+  +   '<div class="pager"><span>共 39 个权限点</span><div class="spacer"></div><button class="pg on">1</button><button class="pg">2</button><button class="pg">3</button><button class="pg">4</button></div>'
+  + '</div>';
+};
+
+V.org = function(){
+  var nodes = DATA.org.map(function(o,i){
+    return '<div class="node lv1"><span class="caret">▾</span><span>' + esc(o.name) + '</span><span class="cnt">' + o.n + ' 个单位</span></div>'
+      + o.children.slice(0, 5).map(function(c,j){
+          return '<div class="node lv2' + (i === 1 && j === 0 ? ' on' : '') + '"><span class="caret"></span><span>' + esc(c) + '</span>'
+            + '<span class="cnt">' + (12 + j * 7) + ' 人</span></div>';
+        }).join('')
+      + (o.children.length > 5 ? '<div class="node lv2"><span class="caret"></span><span class="t3">… 其余 ' + (o.children.length - 5) + ' 个单位</span></div>' : '');
+  }).join('');
+  return ''
+  + '<div class="page-head"><div><h1>组织机构</h1>'
+  + '<div class="desc">维护学校机构树（党政管理机构 / 教学单位 / 直属单位 / 附属单位），并给单位绑定角色 —— 单位成员自动继承该角色权限。</div></div>'
+  + '<div class="acts">'
+  +   (has('sys:dept:add') ? '<button class="btn">新增单位</button>' : '')
+  +   (has('sys:role:grant') ? '<button class="btn btn-primary">绑定角色</button>' : '')
+  + '</div></div>'
+  + '<div class="grid g-list">'
+  +   '<div class="card"><div class="card-hd"><h3>机构树</h3><span class="sub">' + DATA.school + '</span></div>'
+  +     '<div class="card-bd tight tree">' + nodes + '</div></div>'
+  +   '<div class="card"><div class="card-hd"><h3>软件学院（网络教育学院）</h3><span class="sub">教学单位</span></div>'
+  +     '<div class="card-bd">'
+  +       '<div class="kv mb16"><div class="k">单位全称</div><div>软件学院（网络教育学院）</div>'
+  +       '<div class="k">上级机构</div><div>河北师范大学 · 教学单位</div>'
+  +       '<div class="k">负责人</div><div>（演示数据未填）</div>'
+  +       '<div class="k">在编人数</div><div>64 人</div>'
+  +       '<div class="k">文档总量</div><div>64 篇</div>'
+  +       '<div class="k">绑定角色</div><div><span class="badge plain">STAFF 教职工</span></div></div>'
+  +       '<div class="alert a-info"><span class="ico">i</span><span>单位绑定角色后，该单位所有成员自动继承对应权限；个人还可被单独授予额外角色。</span></div>'
+  +     '</div>'
+  +     '<div class="card-hd"><h3>成员（前 5 位）</h3><div class="acts"><button class="link">查看全部 64 人</button></div></div>'
+  +     '<table class="tbl"><thead><tr><th class="w-fix2">工号</th><th class="w-fix2">姓名</th><th>角色</th><th class="w-fix">状态</th></tr></thead><tbody>'
+  +     '<tr><td class="mono">2018013</td><td>李承霖</td><td><span class="badge plain">STAFF</span></td><td>' + statusBadge('ACTIVE') + '</td></tr>'
+  +     '<tr><td class="mono">2018044</td><td>周慕青</td><td><span class="badge plain">STAFF</span></td><td>' + statusBadge('ACTIVE') + '</td></tr>'
+  +     '<tr><td class="mono">2019026</td><td>郑修远</td><td><span class="badge plain">STAFF + DOC_ADMIN</span></td><td>' + statusBadge('ACTIVE') + '</td></tr>'
+  +     '<tr><td class="mono">2020112</td><td>许清和</td><td><span class="badge plain">STAFF</span></td><td>' + statusBadge('ACTIVE') + '</td></tr>'
+  +     '<tr><td class="mono">2021350</td><td>林知白</td><td><span class="badge plain">STAFF</span></td><td>' + statusBadge('LOCKED') + '</td></tr>'
+  +     '</tbody></table></div>'
+  +   '</div>'
+  + '<div class="card"><div class="card-hd"><h3>单位绑定角色一览</h3><span class="sub">部门继承是权限的第二个来源</span></div>'
+  +   '<table class="tbl"><thead><tr><th>单位</th><th>绑定角色</th><th class="w-fix2">成员数</th><th class="w-fix3"></th></tr></thead><tbody>'
+  +   DATA.deptRoles.map(function(d){
+        return '<tr><td>' + esc(d.dept) + '</td><td>' + d.roles.map(function(r){ return '<span class="badge plain">' + esc(r) + '</span> '; }).join('') + '</td>'
+          + '<td class="num t2">' + d.members.toLocaleString() + '</td>'
+          + '<td class="acts">' + (has('sys:role:grant') ? '<button class="link">调整</button>' : '<span class="link muted">只读</span>') + '</td></tr>';
+      }).join('')
+  +   '</tbody></table></div>';
+};
+
+V.me = function(){
+  var id = DATA.identities[role], mine = P();
+  var all = [];
+  (function flat(ns){ ns.forEach(function(n){ all.push(n); if (n.children) flat(n.children); }); })(DATA.permTree);
+  var owned = all.filter(function(p){ return mine.indexOf(p.id) >= 0; });
+  return ''
+  + '<div class="page-head"><div><h1>我的资料</h1>'
+  + '<div class="desc">你的账号、单位、角色与权限来源。非管理员也能在这里看清自己「为什么能看这些、为什么不能看那些」。</div></div></div>'
+  + '<div class="grid g-side">'
+  +   '<div>'
+  +     '<div class="card"><div class="card-bd">'
+  +       '<div class="row gap16">'
+  +         '<div class="avatar avatar-lg">' + esc(id.name.charAt(0)) + '</div>'
+  +         '<div><div class="row gap8"><h3>' + esc(id.name) + '</h3>' + statusBadge('ACTIVE') + '</div>'
+  +         '<div class="sm t2 mt4">' + esc(id.dept) + ' · ' + esc(id.title) + '　｜　工号 ' + esc(id.no) + '</div></div>'
+  +         '<div class="spacer"></div>'
+  +         '<button class="btn">编辑资料</button></div>'
+  +       '<div class="divider"></div>'
+  +       '<div class="kv">'
+  +         '<div class="k">所属单位</div><div>' + esc(id.dept) + '</div>'
+  +         '<div class="k">工号</div><div class="mono">' + esc(id.no) + '</div>'
+  +         '<div class="k">校内邮箱</div><div>' + esc(id.no) + '@hebtu.edu.cn</div>'
+  +         '<div class="k">联系电话</div><div>138****' + (1000 + parseInt(id.no.slice(-2), 10)) + '</div>'
+  +         '<div class="k">最近登录</div><div>2026-09-23 08:12 · 裕华校区</div>'
+  +       '</div>'
+  +     '</div></div>'
+  +     '<div class="card"><div class="card-hd"><h3>我的角色</h3><span class="sub">权限的两个来源</span></div>'
+  +       '<div class="card-bd">'
+  +         '<div class="feat"><span class="n">1</span><div><b>直接授予：' + esc(id.roleName) + '（' + esc(id.role) + '）</b>'
+  +           '<div class="xs t3 mt4">由信息化中心在「用户管理」中授予，含 ' + id.perms + ' 个权限点。</div></div></div>'
+  +         '<div class="feat"><span class="n">2</span><div><b>单位继承：' + esc(id.dept) + '</b>'
+  +           '<div class="xs t3 mt4">' + (role === 'admin' ? '该单位绑定 SYS_ADMIN + STAFF 两个角色'
+              : role === 'docadmin' ? '该单位绑定 DOC_ADMIN + STAFF 两个角色'
+              : '该单位绑定 STAFF 角色') + '，你自动继承其中权限。</div></div></div>'
+  +         '<div class="alert a-info mt12"><span class="ico">i</span><span>权限变更后立即生效，无需重新登录；已登录的会话会在下一次请求时使用新权限。</span></div>'
+  +       '</div></div>'
+  +     '<div class="card"><div class="card-hd"><h3>我的权限（' + owned.length + ' / 39）</h3>'
+  +       '<span class="sub">打勾的是你拥有的权限点</span></div>'
+  +       '<div class="card-bd"><div class="chip-pick">'
+  +         all.filter(function(p){ return p.type !== 'DIR'; }).map(function(p){
+              var on = mine.indexOf(p.id) >= 0;
+              return '<span class="tag' + (on ? ' on' : '') + '" title="' + esc(p.id) + '">'
+                + (on ? '✓ ' : '· ') + esc(p.name) + '</span>';
+            }).join('')
+  +       '</div>'
+  +       '<div class="hint mt12">灰色的权限点表示当前身份没有；如需申请，请联系本单位文档管理员或信息化中心。</div>'
+  +       '</div></div>'
+  +   '</div>'
+  +   '<div>'
+  +     '<div class="card"><div class="card-hd"><h3>账号安全</h3></div><div class="card-bd">'
+  +       '<div class="row navrow"><span class="sm">修改密码</span><span class="spacer"></span>'
+  +         '<button class="btn btn-sm is-disabled" title="需后端补接口">修改</button></div>'
+  +       '<div class="noperm mt8">后端当前只有管理员重置密码（<span class="mono">PUT /api/users/{id}/password</span>），'
+  +         '自助改密需要新增 <span class="mono">PUT /api/auth/password</span> —— 已记入待拍板清单。</div>'
+  +       '<div class="divider"></div>'
+  +       '<div class="row navrow"><span class="sm">登录记录</span><span class="spacer"></span><button class="link">查看</button></div>'
+  +       '<div class="row navrow"><span class="sm">登录设备管理</span><span class="spacer"></span><button class="link">查看</button></div>'
+  +       '<div class="row navrow"><span class="sm">退出登录</span><span class="spacer"></span><button class="link danger">退出</button></div>'
+  +     '</div></div>'
+  +     '<div class="card"><div class="card-hd"><h3>我的内容</h3></div><div class="card-bd tight">'
+  +       '<div class="row navrow"><span class="sm">我的文档</span><span class="spacer xs t3">' + DATA.stats.mine + ' 篇</span><button class="link" data-go="mine">进入</button></div>'
+  +       (has('doc:favorite') ? '<div class="row navrow"><span class="sm">我的收藏</span><span class="spacer xs t3">' + DATA.stats.favorites + ' 篇</span><button class="link" data-go="mine">进入</button></div>' : '')
+  +       '<div class="row navrow"><span class="sm">我参与审核</span><span class="spacer xs t3">' + (has('doc:review') ? DATA.stats.review + ' 篇待办' : '无此权限') + '</span>'
+  +         (has('doc:review') ? '<button class="link" data-go="review">进入</button>' : '<span class="link muted">—</span>') + '</div>'
+  +     '</div></div>'
+  +   '</div>'
+  + '</div>';
+};
+
+V.e403 = function(){
+  var need = VIEW_PERM[arguments[0]] || null;
+  return ''
+  + '<div class="card"><div class="card-bd pad-403">'
+  +   '<div class="empty"><div class="mark">🔒</div>'
+  +   '<h4>你没有访问这个页面的权限</h4>'
+  +   '<p>' + (need ? '缺少权限点：<span class="mono">' + esc(need) + '</span>' : '该页面需要更高权限') + '</p>'
+  +   '<div class="row mt16 center">'
+  +     '<button class="btn btn-primary" data-go="home">返回工作台</button>'
+  +     '<button class="btn" data-go="search">去文档检索</button>'
+  +     '<button class="btn" data-go="me">看我的权限</button>'
+  +   '</div>'
+  +   '<div class="hint mt12">路由守卫会把目标权限写进地址栏（<span class="mono">/403?perm=…</span>），'
+  +     '「我的资料」里能看到你实际拥有的 39 个权限点。</div>'
+  +   '</div></div></div>';
+};
+
+V.kit = function(){
+  var sw = function(name, val){
+    return '<div class="swatch"><div class="c" data-bg="' + esc(val) + '"></div><div class="n">' + esc(name) + '<span>' + esc(val) + '</span></div></div>';
+  };
+  return ''
+  + '<div class="page-head"><div><h1>设计系统与主题</h1>'
+  + '<div class="desc">5 套主题、令牌、组件与四态在这里集中展示，M5 前端按这里对齐即可。</div></div></div>'
+  + '<div class="card"><div class="card-hd"><h3>主题</h3><span class="sub">点击卡片即切换（顶栏下拉同效）</span></div>'
+  +   '<div class="card-bd"><div class="themes">'
+  +   THEMES.map(function(t){
+        return '<div class="tcard' + (t.id === theme ? ' on' : '') + '" data-theme-card="' + t.id + '">'
+          + '<div class="pv"><div class="bar" data-bg="' + t.sw[0] + '"></div>'
+          + '<div class="body" data-bg="' + t.sw[3] + '">'
+          +   '<div class="l1" data-bg="' + t.sw[1] + '"></div><div class="l2" data-bg="' + t.sw[4] + '"></div>'
+          + '</div></div>'
+          + '<div class="meta"><span class="nm">' + esc(t.name) + '</span>'
+          + '<span class="sw">' + t.sw.map(function(c){ return '<i data-bg="' + c + '"></i>'; }).join('') + '</span></div>'
+          + '<div class="meta xs t3">' + esc(t.tag) + '</div>'
+          + '<div class="card-bd xs t2 pad-top">' + esc(t.desc) + '</div>'
+          + '</div>';
+      }).join('')
+  +   '</div></div></div>'
+  + '<div class="grid g2">'
+  +   '<div class="card"><div class="card-hd"><h3>当前主题令牌</h3><span class="sub">值与 CSS 变量一一对应</span></div>'
+  +     '<div class="card-bd"><div class="swatch-row">'
+  +       sw('primary 主色','var(--primary)') + sw('accent 点缀','var(--accent)') + sw('bg 页面底','var(--bg)')
+  +       sw('surface 卡片','var(--surface)') + sw('border 描边','var(--border)') + sw('text 正文','var(--text)')
+  +     '</div>'
+  +     '<div class="hint mt12">语义：绿=已发布/正常，橙=草稿/待处理，蓝=已归档/中性，红=回收站/停用/危险。深色主题下四组语义色单独调校过，不会出现「亮黄底 + 白字」这类不可读组合。</div>'
+  +     '</div></div>'
+  +   '<div class="card"><div class="card-hd"><h3>状态徽标与标签</h3></div><div class="card-bd">'
+  +     '<div class="row wrap mb12">' + ['PUBLISHED','DRAFT','ARCHIVED','TRASH'].map(statusBadge).join('') + '<span class="xs t3">文档状态</span></div>'
+  +     '<div class="row wrap mb12">' + ['ACTIVE','LOCKED','DISABLED'].map(statusBadge).join('') + '<span class="xs t3">账号状态</span></div>'
+  +     '<div class="row wrap">' + DATA.tags.slice(0,4).map(function(t){ return '<span class="tag">' + esc(t) + '</span>'; }).join('') + '</div>'
+  +   '</div></div>'
+  + '</div>'
+  + '<div class="grid g2">'
+  +   '<div class="card"><div class="card-hd"><h3>按钮与表单</h3></div><div class="card-bd">'
+  +     '<div class="row wrap mb16"><button class="btn btn-primary">主操作</button><button class="btn">次操作</button>'
+  +       '<button class="btn btn-soft">弱操作</button><button class="btn btn-danger">危险操作</button>'
+  +       '<button class="btn" disabled>不可用</button><button class="link">文字链接</button></div>'
+  +     '<div class="grid g2"><div class="field"><label class="label">单位 <span class="req">*</span></label>'
+  +       '<select class="select"><option>软件学院（网络教育学院）</option><option>教务处</option></select></div>'
+  +       '<div class="field"><label class="label">工号</label><input class="input err" value="20180l3"><div class="errtxt">工号只能包含数字</div></div></div>'
+  +   '</div></div>'
+  +   '<div class="card"><div class="card-hd"><h3>四态与提示</h3></div><div class="card-bd">'
+  +     '<div class="alert a-ok mb8"><span class="ico">✓</span><span>已保存草稿。</span></div>'
+  +     '<div class="alert a-warn mb8"><span class="ico">!</span><span>这篇文档被驳回：请补充时间安排表。</span></div>'
+  +     '<div class="alert a-danger mb8"><span class="ico">!</span><span>仅回收站中的文档可以彻底删除。</span></div>'
+  +     '<div class="row wrap mb12"><span class="toast">已收藏</span><span class="toast warn">状态已变更，请刷新</span><span class="toast err">无权限执行该操作</span></div>'
+  +     '<div class="noperm">归档文档为只读，恢复上架后才能编辑</div>'
+  +   '</div></div>'
+  + '</div>'
+  + '<div class="card"><div class="card-hd"><h3>空态 / 加载 / 错误</h3></div><div class="card-bd grid g3">'
+  +   '<div class="card"><div class="empty"><div class="mark">▤</div><h4>没有匹配的文档</h4><p>换个关键词，或清空筛选条件</p><button class="btn btn-sm mt12">清空筛选</button></div></div>'
+  +   '<div class="card"><div class="sk">' + starfield(5) + '</div></div>'
+  +   '<div class="card"><div class="empty"><div class="mark">!</div><h4>加载失败</h4><p>服务器开小差了，请稍后重试</p><button class="btn btn-sm mt12">重新加载</button></div></div>'
+  + '</div></div>'
+  + '<div class="card"><div class="card-hd"><h3>权限对照（真实数据）</h3><span class="sub">库内 sys_role_permission 现查结果</span></div>'
+  +   '<table class="tbl"><thead><tr><th class="w-fix2">角色</th><th class="w-fix">权限点</th><th>能做什么</th><th>看不到什么</th></tr></thead><tbody>'
+  +   '<tr><td>教职工 STAFF</td><td class="num">11</td><td class="sm">工作台、文档检索、我的文档、编辑器（含上传图片、派生、收藏、回收站恢复）</td><td class="sm t2">审核台、内容治理、分类维护、所有管理功能</td></tr>'
+  +   '<tr><td>文档管理员 DOC_ADMIN</td><td class="num">20</td><td class="sm">在教职工之上：审核通过/驳回、归档与下架、分类与标签维护、内容治理</td><td class="sm t2">用户管理、角色与权限、组织机构</td></tr>'
+  +   '<tr><td>系统管理员 SYS_ADMIN</td><td class="num">39</td><td class="sm">全部功能，含用户、角色授权、权限点与组织机构管理</td><td class="sm t2">—</td></tr>'
+  +   '</tbody></table></div>'
+  + '<div class="card"><div class="card-hd"><h3>与前端的落地接口对照（现状）</h3></div><div class="card-bd">'
+  +   '<div class="feat"><span class="n">!</span><div><b>「内容治理」缺全状态列表接口</b>'
+  +     '<div class="xs t3 mt4">GET /api/documents 只返回已发布；GET /api/review/documents 只允许已发布/已归档 → 需补 doc:manage 的全状态列表接口，或把治理范围收窄。</div></div></div>'
+  +   '<div class="feat"><span class="n">!</span><div><b>「我的资料 → 修改密码」缺自助改密接口</b>'
+  +     '<div class="xs t3 mt4">现状只有管理员重置（PUT /api/users/{id}/password）。</div></div></div>'
+  +   '<div class="feat"><span class="n">!</span><div><b>分类与标签的写接口要不要给界面入口</b>'
+  +     '<div class="xs t3 mt4">后端已有 POST/PUT/DELETE /api/categories、/api/tags（权限点 doc:category:edit / doc:tag:edit）；UI 规格 §5.3 原判「不渲染入口」，本稿按校园口径<b>已渲染</b>，需你确认。</div></div></div>'
+  +   '<div class="feat"><span class="n">!</span><div><b>演示数据要按校园口径重新种子化</b>'
+  +     '<div class="xs t3 mt4">backend/sql/data.sql 现在还是「技术部/产品部」「前端开发/后端开发」「JPA 实体建模规范」等公司口径；'
+  +       '换成校内机构与公文分类需要改 data.sql，并同步 verify-m2 / verify-db-deep / verify-m4-http / TEST_CHECKLIST 中引用旧文案的断言。</div></div></div>'
+  + '</div></div>';
+};
+
+/* ===========================================================================
+   F) 外壳渲染与交互
+   =========================================================================== */
+function navFor(r){
+  var out = [];
+  NAV.forEach(function(g){
+    var items = g.items.filter(function(it){ return !it.perm || P(r).indexOf(it.perm) >= 0; });
+    if (items.length) out.push({ group:g.group, items:items });
   });
+  return out;
+}
+function renderNav(){
+  var html = '';
+  navFor(role).forEach(function(g){
+    if (g.group) html += '<div class="nav-group">' + esc(g.group) + '</div>';
+    g.items.forEach(function(it){
+      var badge = '';
+      if (it.badge === 'review' && has('doc:review')) badge = '<span class="cnt">' + DATA.stats.review + '</span>';
+      html += '<a class="nav-item' + (it.id === view ? ' active' : '') + '" data-go="' + it.id + '">'
+        + icon(it.icon) + '<span>' + esc(it.label) + '</span>' + badge + '</a>';
+    });
+  });
+  document.getElementById('nav').innerHTML = html;
+  var id = DATA.identities[role];
+  document.getElementById('sideFoot').innerHTML =
+    '<div>' + esc(id.name) + ' · ' + esc(id.dept) + '</div>'
+    + '<div class="mt4">有效权限 ' + id.perms + ' / 39</div>'
+    + '<div class="meter"><i data-pct="' + Math.round(id.perms / 39 * 100) + '"></i></div>';
+  document.getElementById('crumb').innerHTML = '首页 / <b>' + esc(TITLES[view] || view) + '</b>';
+  document.getElementById('userChip').innerHTML =
+    '<div class="avatar">' + esc(id.name.charAt(0)) + '</div>'
+    + '<div><div class="nm">' + esc(id.name) + '</div><div class="un">' + esc(id.dept) + '</div></div>';
+}
+function applyDynamicStyles(root){
+  /* 主题色卡等动态色值只通过这里注入（模板里只写 data-* 属性，不写内联样式字符串） */
+  [].forEach.call(root.querySelectorAll('[data-bg]'), function(el){
+    el.style.background = el.getAttribute('data-bg');
+  });
+  [].forEach.call(root.querySelectorAll('[data-pct]'), function(el){
+    el.style.width = el.getAttribute('data-pct') + '%';
+  });
+}
+function go(v){
+  var need = VIEW_PERM[v];
+  if (need && !has(need)){
+    var target = v;
+    v = 'e403';
+    view = v;
+    document.getElementById('content').innerHTML = V.e403(target);
+  } else {
+    view = v;
+    var fn = V[v] || V.home;
+    document.getElementById('content').innerHTML = fn();
+  }
+  var isLogin = (v === 'login');
+  document.getElementById('appShell').classList.toggle('hidden', isLogin);
+  document.getElementById('viewLogin').classList.toggle('hidden', !isLogin);
+  var host = isLogin ? document.getElementById('viewLogin') : document.getElementById('content');
+  applyDynamicStyles(host);
+  renderNav();
+  bindGo();
+  if (v === 'edit') renderEditor();
   window.scrollTo(0, 0);
 }
-
-/* ---- 登录页状态演示 ---- */
-function loginState(s){
-  var btn = document.getElementById('lgBtn');
-  var alertBox = document.getElementById('loginAlert');
-  var alertMsg = document.getElementById('loginAlertMsg');
-  var passErr = document.getElementById('lgPassErr');
-  var u = document.getElementById('lgUser'), p = document.getElementById('lgPass');
-  btn.className = 'btn btn-primary'; btn.textContent = '登录';
-  u.disabled = false; p.disabled = false;
-  alertBox.classList.add('hidden'); passErr.classList.add('hidden');
-  if (s === 'loading'){ btn.textContent = '登录中…'; btn.classList.add('disabled'); u.disabled = true; p.disabled = true; }
-  if (s === 'bad'){ alertMsg.textContent = '用户名或密码错误'; alertBox.classList.remove('hidden'); }
-  if (s === 'locked'){ alertMsg.textContent = '账号已冻结，请联系系统管理员'; alertBox.classList.remove('hidden'); }
-  if (s === 'disabled'){ alertMsg.textContent = '账号已停用，请联系系统管理员'; alertBox.classList.remove('hidden'); }
-}
-
-/* ---- 编辑器：极简 Markdown 渲染（够看清排版即可） ---- */
-function esc(s){ return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
-function md(src){
-  var blocks = [], out = esc(src);
-  out = out.replace(/```(\w*)\n([\s\S]*?)```/g, function(m, lang, code){
-    blocks.push('<pre><code>' + code.replace(/\n$/,'') + '</code></pre>');
-    return '\u0000' + (blocks.length - 1) + '\u0000';
+function bindGo(){
+  [].forEach.call(document.querySelectorAll('[data-go]'), function(el){
+    if (el.getAttribute('data-bound')) return;
+    el.setAttribute('data-bound', '1');
+    el.addEventListener('click', function(e){
+      e.preventDefault();
+      go(el.getAttribute('data-go'));
+    });
   });
+  [].forEach.call(document.querySelectorAll('[data-theme-card]'), function(el){
+    if (el.getAttribute('data-bound')) return;
+    el.setAttribute('data-bound', '1');
+    el.addEventListener('click', function(){ setTheme(el.getAttribute('data-theme-card')); });
+  });
+}
+function setTheme(id){
+  theme = id;
+  document.documentElement.setAttribute('data-theme', id);
+  var a = document.getElementById('pvTheme'), b = document.getElementById('themePick');
+  if (a) a.value = id;
+  if (b) b.value = id;
+  go(view);
+}
+/* 编辑器：极简 Markdown 实时预览（够看排版） */
+function mdRender(src){
+  var code = [], out = esc(src);
+  out = out.replace(/```([\s\S]*?)```/g, function(m, c){
+    code.push('<pre><code>' + c.replace(/^\n/, '').replace(/\n$/, '') + '</code></pre>');
+    return '\u0001' + (code.length - 1) + '\u0001';
+  });
+  out = out.replace(/^\|(.+)\|\s*$/gm, function(m, row){
+    if (/^\s*[-:|\s]+$/.test(row)) return '\u0002';
+    var cells = row.split('|').map(function(c){ return '<td>' + c.trim() + '</td>'; }).join('');
+    return '<tr>' + cells + '</tr>';
+  }).replace(/(<tr>[\s\S]*?<\/tr>)(?!\s*<tr>)/g, '<table>$1</table>').replace(/\u0002/g, '');
   out = out.replace(/^### (.*)$/gm, '<h3>$1</h3>')
            .replace(/^## (.*)$/gm, '<h2>$1</h2>')
            .replace(/^# (.*)$/gm, '<h1>$1</h1>')
            .replace(/^&gt; (.*)$/gm, '<blockquote>$1</blockquote>')
            .replace(/^\s*[-*] (.*)$/gm, '<li>$1</li>')
            .replace(/\*\*(.+?)\*\*/g, '<b>$1</b>')
-           .replace(/`([^`]+)`/g, '<code>$1</code>');
+           .replace(/`([^`]+)`/g, '<code>$1</code>')
+           .replace(/!\[([^\]]*)\]\(([^)]*)\)/g, '<span class="tag">🖼 $1</span>');
   out = out.replace(/(<li>[\s\S]*?<\/li>)(?!\s*<li>)/g, '<ul>$1</ul>');
   out = out.split(/\n{2,}/).map(function(p){
     var t = p.trim();
-    if (!t || /^<(h1|h2|h3|ul|pre|blockquote)/.test(t) || /^\u0000/.test(t)) return t;
-    return '<p>' + t.replace(/\n/g,'<br>') + '</p>';
+    if (!t || /^<(h1|h2|h3|ul|table|pre|blockquote)/.test(t) || /^\u0001/.test(t)) return t;
+    return '<p>' + t.replace(/\n/g, '<br>') + '</p>';
   }).join('\n');
-  return out.replace(/\u0000(\d+)\u0000/g, function(m, i){ return blocks[+i]; });
+  return out.replace(/\u0001(\d+)\u0001/g, function(m, i){ return code[+i]; });
 }
-function renderPreview(){
-  var src = document.getElementById('editorSrc').value;
-  document.getElementById('editorPreview').innerHTML = md(src);
+function renderEditor(){
+  var ta = document.getElementById('ed'), pv = document.getElementById('edPreview');
+  if (!ta || !pv) return;
+  pv.innerHTML = mdRender(ta.value);
+  if (!ta.getAttribute('data-bound')){
+    ta.setAttribute('data-bound', '1');
+    ta.addEventListener('input', function(){ pv.innerHTML = mdRender(ta.value); });
+  }
+}
+/* 登录页状态演示 */
+function loginState(s){
+  var btn = document.getElementById('lgBtn'), box = document.getElementById('lgAlert'), msg = document.getElementById('lgAlertMsg');
+  var u = document.getElementById('lgUser'), p = document.getElementById('lgPass');
+  btn.className = 'btn btn-primary btn-lg'; btn.textContent = '登 录';
+  btn.disabled = false; u.disabled = false; p.disabled = false;
+  box.classList.add('hidden');
+  if (s === 'loading'){ btn.textContent = '登录中…'; btn.disabled = true; u.disabled = true; p.disabled = true; }
+  if (s === 'bad'){ msg.textContent = '工号或密码错误，请重新输入'; box.classList.remove('hidden'); }
+  if (s === 'locked'){ msg.textContent = '账号已冻结，请联系信息化中心（0311-8078xxxx）'; box.classList.remove('hidden'); }
+  if (s === 'disabled'){ msg.textContent = '账号已停用，请联系信息化中心（0311-8078xxxx）'; box.classList.remove('hidden'); }
 }
 
-/* ---- 事件绑定 ---- */
-document.getElementById('roleSel').addEventListener('change', function(e){
-  role = e.target.value; applyPerms(); go(view);
-});
-[].forEach.call(document.querySelectorAll('[data-go]'), function(el){
-  el.addEventListener('click', function(e){ e.preventDefault(); go(el.getAttribute('data-go')); });
-});
-[].forEach.call(document.querySelectorAll('[data-lg]'), function(el){
-  el.addEventListener('click', function(){ loginState(el.getAttribute('data-lg')); });
-});
-document.getElementById('pwEye').addEventListener('click', function(){
-  var p = document.getElementById('lgPass');
-  var show = p.type === 'password';
-  p.type = show ? 'text' : 'password';
-  this.textContent = show ? '隐藏' : '显示';
-});
-document.getElementById('lgBtn').addEventListener('click', function(){ loginState('loading'); setTimeout(function(){ loginState('idle'); }, 1200); });
-document.getElementById('editorSrc').addEventListener('input', renderPreview);
+/* ===========================================================================
+   G) 初始化 + 自检出口
+   =========================================================================== */
+function boot(){
+  var ts = document.getElementById('pvTheme');
+  ts.innerHTML = THEMES.map(function(t){ return '<option value="' + t.id + '">' + esc(t.name) + '</option>'; }).join('');
+  var tp = document.getElementById('themePick');
+  tp.innerHTML = THEMES.map(function(t){ return '<option value="' + t.id + '">' + esc(t.name) + '</option>'; }).join('');
+  var vs = document.getElementById('pvView');
+  vs.innerHTML = ['home','search','detail','edit','mine','review','governance','taxonomy','users','roles','org','me','kit','e403']
+    .map(function(v){ return '<option value="' + v + '">' + esc(TITLES[v]) + '</option>'; }).join('');
+  ts.value = theme; tp.value = theme;
 
-/* ---- 初始化 ---- */
-applyPerms();
-go('docs');
-loginState('idle');
-renderPreview();
+  ts.addEventListener('change', function(e){ setTheme(e.target.value); });
+  tp.addEventListener('change', function(e){ setTheme(e.target.value); });
+  document.getElementById('pvRole').addEventListener('change', function(e){
+    role = e.target.value; go(view === 'login' ? 'home' : view);
+  });
+  vs.addEventListener('change', function(e){ go(e.target.value); });
+  [].forEach.call(document.querySelectorAll('[data-lg]'), function(el){
+    el.addEventListener('click', function(){ loginState(el.getAttribute('data-lg')); });
+  });
+  document.getElementById('pwEye').addEventListener('click', function(){
+    var p = document.getElementById('lgPass'), show = p.type === 'password';
+    p.type = show ? 'text' : 'password'; this.textContent = show ? '隐藏' : '显示';
+  });
+  document.getElementById('lgBtn').addEventListener('click', function(){
+    loginState('loading'); setTimeout(function(){ loginState('idle'); }, 1100);
+  });
+  loginState('idle');
+  go('home');
+  go('login');
+}
+/* 自检出口：供 docs/02-design/ui-preview.smoke.mjs 打桩调用 */
+window.__PREVIEW__ = {
+  setRole:function(r){ role = r; return role; },
+  setTheme:function(t){ theme = t; return theme; },
+  go:go,
+  getView:function(){ return view; },
+  has:has,
+  navFor:navFor,
+  render:function(v){ var f = V[v] || V.home; return f(); },
+  renderRaw:function(v, arg){ return V[v] ? V[v](arg) : ''; },
+  THEMES:THEMES,
+  DATA:DATA,
+  TITLES:TITLES,
+  VIEW_PERM:VIEW_PERM,
+  mdRender:mdRender,
+  loginState:loginState,
+  boot:boot
+};
+if (document.getElementById('nav')) boot();
 </script>
 </body>
 </html>
