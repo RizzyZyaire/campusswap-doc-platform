@@ -84,8 +84,8 @@
 | `verify-m3-http.ps1` | 142 | **PASS=142 FAIL=0**（含 §8b 自助改密） |
 | `verify-m4.ps1` | 30 | PASS=30 FAIL=0 |
 | `verify-m4-http.ps1 -AppLog` | 218 | **PASS=218 FAIL=0**（含 17 项 SQL 预算、§US-04b、§US-07b） |
-| `ui-preview.smoke.mjs` | 161 | TOTAL pass=161 fail=0 |
-| **合计** | **产品 504 + 预览 161 = 665** | **0 失败** |
+| `ui-preview.smoke.mjs` | 200 | TOTAL pass=200 fail=0（v6 视觉复核后；当时为 161） |
+| **合计** | **产品 504 + 预览 200（v6 后）= 704** | **0 失败** |
 
 重种子后的实库实测（`reseed-campus.ps1` + 复核 SQL，`ANALYZE TABLE doc_document` 之后）：
 

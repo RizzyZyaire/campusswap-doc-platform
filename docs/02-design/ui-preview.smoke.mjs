@@ -150,9 +150,62 @@ t('检索页排序含「相关度」（全文检索时可用）', /相关度 ↓
 t('检索页筛选按 created_at 口径（创建时间，不再是更新时间）', /<label class="label">创建时间<\/label>/.test(api.render('search')))
 t('预览不再出现「发文单位 / 提交单位」字样', !/发文单位|提交单位/.test(all + api.render('kit')))
 t('数据层不再带 unit 字段（doc_document 无单位列）', !/unit:/.test(html))
-t('登录下拉的所属单位与用户数据一致', ['赵慕辰 · 信息化中心', '王砚秋 · 信息化中心', '李承霖 · 软件学院（网络教育学院）'].every((s) => html.includes(s)))
-t('版本号三处一致（标题 / 文件头 / 预览条 = v5）', (html.match(/界面预览稿 v5/g) || []).length === 3 && !/界面预览稿 v[234]/.test(html))
+t('登录下拉的所属单位与用户数据一致', ['系统管理员 · 信息化中心 · 赵慕辰', '文档管理员 · 信息化中心 · 王砚秋', '教职工 · 软件学院（网络教育学院） · 李承霖'].every((s) => html.includes(s)))
+t('预览稿版本号统一为 v6（标题/页头/预览条）', (html.match(/界面预览稿 v6/g) || []).length === 2 && html.includes('预览稿 v6 · 假数据')
+  && !/界面预览稿 v[1-5]/.test(html.replace(/<!--[\s\S]*?-->/g, '')))
 t('我的文档页不再有「单位」筛选', !/<label class="label">单位<\/label>/.test(api.render('mine')))
+
+console.log('=== ⑤b v6：预览条 / 选择器位置 / 三版式首页 / 退出登录 ===')
+/* ①预览条：白底白字的胶囊必须消失，chip 必须有底色与文字色 */
+const pvbarCss = (html.split('.pvbar{')[1] || '').split('}')[0]
+t('预览条跟随主题（不再写死黑底）', /background:var\(--surface\)/.test(pvbarCss) && !/#0B1114/.test(pvbarCss))
+t('预览条胶囊有底色与文字色（白底白字 bug 已修）', /\.pvbar \.pvchip\{[^}]*background:var\(--accent-soft\)/.test(html) && /\.pvbar \.pvchip\{[^}]*color:var\(--accent\)/.test(html))
+t('预览条不再有 .tag 白字胶囊', !/\.pvbar \.tag\{/.test(html))
+t('旧提示语已删除', !/切身份看菜单与按钮增减/.test(html))
+t('预览条写明「只属于预览稿」', /只属于预览稿/.test(html))
+/* ②主题选择器位置：只在预览条一份，浮动按钮与工作区右上角那处都取消 */
+t('主题选择器在预览条里（常驻，登录页也能换）', /<div class="pvbar">[\s\S]*?id="themeBtn"[\s\S]*?<\/div>\s*<!--/.test(html) || (html.indexOf('id="themeBtn"') > html.indexOf('class="pvbar"') && html.indexOf('id="themeBtn"') < html.indexOf('id="viewLogin"')))
+t('主题选择器不再放在工作区右上角', !/class="top-right">[\s\S]{0,200}id="themeBtn"/.test(html))
+t('登录页浮动换肤按钮已取消', !html.includes('id="themeFab"') && !html.includes('theme-fab'))
+t('选择器仍保留可视化色卡弹层', html.includes('id="themePop"') && html.includes('class="theme-grid"') && /id="themeName"/.test(html))
+/* ③直达下拉按权限分组 */
+/* 计数不是猜的：教职工可达的 8 个视图 = home/search/detail/edit/mine/me/kit/e403；
+   被拦的 6 个 = review/governance/taxonomy/users/roles/org（与 nav 的 5 项菜单不同，detail 与 kit 不占菜单位） */
+api.setRole('staff')
+const optStaff = api.buildViewOptions()
+t('直达下拉：教职工分组计数正确', optStaff.ok === 8 && optStaff.denied === 6, JSON.stringify(optStaff))
+api.setRole('admin')
+const optAdmin = api.buildViewOptions()
+t('直达下拉：系统管理员全部可达', optAdmin.ok === 14 && optAdmin.denied === 0, JSON.stringify(optAdmin))
+t('直达下拉用 optgroup 标注有无权限', html.includes('function buildViewOptions') && /无权限（/.test(html) && /有权限（/.test(html))
+/* ④首页三版式 */
+t('首页三版式都在', api.HOME_VARIANTS.length === 3 && api.HOME_VARIANTS.map((x) => x.id).join('') === 'abc')
+for (const v of ['a', 'b', 'c']) {
+  api.setHomeVariant(v)
+  const out = api.render('home')
+  t(`首页版式 ${v} 渲染`, out.length > 800 && new RegExp('class="hero hv-' + v + '"').test(out), out.length + ' 字符')
+  t(`首页版式 ${v} 带切换器`, /class="hv-switch"/.test(out) && (out.match(/data-hv=/g) || []).length === 3)
+  t(`首页版式 ${v} div 配对`, divBalanced(stripData(out)), (stripData(out).match(/<div\b/g) || []).length + '/' + (stripData(out).match(/<\/div>/g) || []).length)
+  t(`首页版式 ${v} 无占位垃圾`, !/undefined|\[object Object\]|NaN/.test(stripData(out)))
+}
+t('首页版式 B 是通栏大图（照片铺满）', /\.hero\.hv-b \.shot\{position:absolute;inset:0/.test(html))
+t('首页版式 C 是细照片带（浅色信息卡）', /\.hero\.hv-c \.shot\{order:-1[^}]*height:138px/.test(html))
+api.setHomeVariant('b')
+/* ⑤退出登录 */
+t('侧栏底部常驻退出登录', /class="side-logout" data-go="login"/.test(html) && /\.side-logout\{/.test(html))
+t('退出登录会回到登录页', /data-go="login"/.test(html) && /document\.getElementById\('viewLogin'\)/.test(html))
+t('登录按钮点完进工作台', /getElementById\('lgBtn'\)[\s\S]{0,160}go\('home'\)/.test(html))
+/* ⑥看得更清楚：2px 描边 + 悬停抬起 + 按钮悬停变色 */
+t('卡片描边加粗到 2px', /\.card\{[\s\S]{0,160}border:2px solid var\(--border\)/.test(html))
+t('卡片悬停抬起 + 描边转主题色', /\.card:hover\{[\s\S]{0,200}transform:translateY\(-2px\)/.test(html) && /\.card:hover\{[\s\S]{0,200}color-mix\(in srgb,var\(--accent\)/.test(html))
+t('按钮悬停变色', /\.btn:hover\{[\s\S]{0,160}background:var\(--primary-soft\)/.test(html))
+t('链接悬停变色', /\.link:hover\{[^}]*color:var\(--accent\)/.test(html))
+t('横幅也是 2px 描边并参与悬停', /\.hero\{[^}]*border:2px solid var\(--border\)/.test(html) && /\.hero:hover\{/.test(html))
+/* ⑦换图 */
+t('师大蓝换成校训石碑', /师大蓝 · 校训石碑/.test(api.render('kit')))
+t('青瓷换成华砚湖畔（不再是玉兰特写）', /青瓷 · 华砚湖畔/.test(api.render('kit')) && !/玉兰与蓝天/.test(api.render('kit')))
+t('墨玉青换成天下石牌坊（不再与师大蓝重复时光塔）', /墨玉青 · 天下石牌坊/.test(api.render('kit')) && !/墨玉青 · 时光塔下/.test(api.render('kit')))
+t('画廊说明写明不放大', /裁剪宽度 ≥ 输出宽度/.test(api.render('kit')))
 t('设计系统页列出后端差异清单', /演示数据已按校园口径重新种子化/.test(api.render('kit')) && /分类体系：设计 10 类 41 子类/.test(api.render('kit')))
 t('预览数据与新版种子同口径', /驻县教师职责/.test(api.render('detail')) && api.DATA.users.every((u) => !/技术部|产品部|教务处/.test(u.dept)))
 
@@ -173,7 +226,7 @@ t('每套主题都定义了非纯白页面底色', api.THEMES.every((x) => {
   return !!found && found.toUpperCase() !== '#FFFFFF'
 }))
 t('右上角有可视化主题选择器', html.includes('id="themeBtn"') && html.includes('id="themePop"') && html.includes('class="theme-grid"'))
-t('登录页有浮动换肤按钮', html.includes('id="themeFab"'))
+t('主题选择器在常驻预览条里（登录页也能换肤）', html.indexOf('id="themeBtn"') > html.indexOf('class="pvbar"') && html.indexOf('id="themeBtn"') < html.indexOf('id="viewLogin"'))
 t('主题选择器不再是文字下拉', !html.includes('id="pvTheme"') && !html.includes('id="themePick"'))
 for (const th of api.THEMES) {
   t(`CSS 里有 [data-theme="${th.id}"]`, html.includes(`html[data-theme="${th.id}"]`))
