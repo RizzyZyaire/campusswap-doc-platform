@@ -97,7 +97,7 @@ index  ft=1 ft_cols=title,summary,content_md
 EXPLAIN  type=fulltext  key=ft_doc_search  Extra=Using where; Ft_hints: no_ranking
 ```
 
-提交与推送：**待回填**（提交后补 commit 号与远端一致性校验）。
+提交与推送：**已提交并推送（`8e3c34f`，2026-09-23 16:45，38 文件 / +1655 −144；远端 `origin/main` 与本机 HEAD 逐字一致，工作区干净）**。
 
 ### 5.1 收口期修掉的两个真问题（都有实测依据）
 

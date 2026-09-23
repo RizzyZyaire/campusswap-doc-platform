@@ -84,7 +84,14 @@
 - **做了什么**：30 个文档域接口（Document 15 / Review 5 / Category 4 / Tag 4 / File 1 / Stat 1）；版本快照 9 种类型；状态机 T2/T3/T5~T11 全分支；图片三重白名单上传；统计三计数单 SQL。
 - **关键技术点**：① 列表用 **Criteria + DTO 构造器投影**（SQL 里根本不出现 `content_md`）；② 回收站 / 收藏走**原生 SQL**（`@SQLRestriction` 会自动加 `deleted = 0`，而回收站要的正是 `deleted = 1`）；③ 列序与类型容错集中在 `DocumentColumns`（MySQL `INT UNSIGNED` → Long、`DATETIME` → Timestamp）；④ `PageableExecutionUtils` 在末页省掉 count。
 - **证据**：`verify-m4-http.ps1` 152/152（含 10 项 SQL 预算断言）、`verify-m4.ps1` 30/30、`TEST_CHECKLIST.md` 21/21。
-- **实测 SQL 条数（常数）**：检索 3（末页）/ 4（满页）/ 5（带分类筛选）、我的 3、回收站 1、收藏 3、审核队列 3、分类树 1、标签 1、统计 1。
+  （2026-09-23 M5 前置增补后复跑为 **218/218**、静态 30/30，见下一条。）
+- **实测 SQL 条数（常数）**：检索 3（末页）/ 4（满页）/ 5（带分类筛选）、我的 3、回收站 **1~3**（空 1 / 有行 3 / 满页 +1）、收藏 3、审核队列 3、分类树 1、标签 1、统计 1。
+
+### M5 前置 · 三项后端变更 —— `8e3c34f`（2026-09-23）
+- **做了什么**：① `GET /api/documents/manage`（端点 57）治理全状态列表；② `PUT /api/auth/password`（端点 56）自助改密；③ 全文检索分支（ngram 索引 + `highlight`/`matchedIn` + `sort=relevance`）；配套校园口径重种子化和 6 个检查器增补 84 项。
+- **关键技术点**：原生 SQL 绕过 `@SQLRestriction`；数据查询与 count 查询**绑定器分开**（count 里没有 `LOCATE(:tN)`）；高亮窗口在 SQL 里 `SUBSTRING` 截 160 字（正文整列不出库）；布尔符号当分隔符且丢弃 1 字词。
+- **证据**：产品机检 **504 项**（原 420）+ 预览稿自检 161 项，全部 0 失败；`ddl-auto=validate` 启动通过；`EXPLAIN` 实测 `type=fulltext / key=ft_doc_search`。
+- **收口记录**：`docs/03-qa-review/M5PREP-CLOSURE.md`（含只读探针 12 项、7 处文档-实现偏差、种子 TRASH 缺陷与"回收站预算假象"的连带发现）。
 
 ### 老师框架对账（2026-09-23，未改代码）
 - **做了什么**：逐行读老师示例工程 `backend(2)` 的 security 包，产出 `docs/03-qa-review/DIFF-VS-TEACHER.md`（20 行对账表 + 三条路线 + 工作量）。
