@@ -10,10 +10,12 @@
 > # 起服务（dev 10087；重种子后建议带 validate 起一次，验证实体↔实库逐列对齐）
 > cd backend; $env:JAVA_HOME='D:\DevEnv\02_JDK\jdk-17.0.5'
 > .\mvnw.cmd spring-boot:run "-Dspring-boot.run.arguments=--spring.jpa.hibernate.ddl-auto=validate"
-> # 接口验收（218 项，含 17 项 SQL 条数预算）
-> powershell -NoProfile -ExecutionPolicy Bypass -File docs/03-qa-review/verify-m4-http.ps1 -AppLog "$env:TEMP\campusswap-app.log"
+> # 接口验收（221 项，含 17 项 SQL 条数预算 + 3 项陈旧表单断言）
+> powershell -NoProfile -ExecutionPolicy Bypass -File docs/03-qa-review/verify-m4-http.ps1 -AppLog D:\DevEnv\logs\campusswap-app.log
 > # 静态自检
 > powershell -NoProfile -ExecutionPolicy Bypass -File docs/03-qa-review/verify-m4.ps1
+> # 白盒测试（4 类 6 用例；需 MySQL + Redis 在跑，且**不要**在环境里留 DB_PASSWORD，见 COURSEWARE-CLOSURE §3.6）
+> cd backend; .\mvnw.cmd test
 > ```
 > 表中「证据」列写的是 `脚本.检查名`，全部可在脚本里检索到。
 

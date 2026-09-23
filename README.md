@@ -75,7 +75,9 @@ pnpm run typecheck && pnpm run lint
 powershell -File docs/03-qa-review/verify-m0.ps1            # 需求冻结 13 项
 powershell -File docs/03-qa-review/verify-m1.ps1            # 设计冻结 15 项
 powershell -File docs/03-qa-review/verify-api-spec.ps1      # 接口契约 24 项
-$env:DB_PASSWORD='<密码>'; powershell -File docs/03-qa-review/verify-m2.ps1   # 数据库 16 项
+$env:MYSQL_ROOT_PASSWORD='<密码>'; powershell -File docs/03-qa-review/verify-m2.ps1   # 数据库 17 项
+#   注意：这个变量是 **root** 的口令（旧名 DB_PASSWORD 仍兼容，但别混用 —— 它同时被
+#   application-dev/prod.yml 当作 campusswap_dev 的口令读取，混用会让应用/测试连不上库）
 ```
 
 **内置演示账号**（`data.sql` 灌入，bcrypt 真哈希）：`admin/Admin@123`（SYS_ADMIN）、`docadmin/Doc@123456`（DOC_ADMIN）、`staff/Staff@123`（STAFF）。

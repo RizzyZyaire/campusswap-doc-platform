@@ -218,14 +218,17 @@ powershell -NoProfile -ExecutionPolicy Bypass -File D:\DevEnv\projects\campusswa
 powershell -NoProfile -ExecutionPolicy Bypass -File D:\DevEnv\projects\campusswap\docs\03-qa-review\verify-m3.ps1
 powershell -NoProfile -ExecutionPolicy Bypass -File D:\DevEnv\projects\campusswap\docs\03-qa-review\verify-m4.ps1
 
-# ③ 数据库机检（需要 DB_PASSWORD）
-$env:DB_PASSWORD = '123456'
+# ③ 数据库机检（需要 MYSQL_ROOT_PASSWORD —— 是 root 的口令，不是 dev 账号的）
+$env:MYSQL_ROOT_PASSWORD = '123456'
 powershell -NoProfile -ExecutionPolicy Bypass -File D:\DevEnv\projects\campusswap\docs\03-qa-review\verify-m2.ps1
 powershell -NoProfile -ExecutionPolicy Bypass -File D:\DevEnv\projects\campusswap\docs\03-qa-review\verify-db-deep.ps1
 
 # ④ 接口机检（需要 ① 在跑；退出码 = 失败数，0 = 全绿）
 powershell -NoProfile -ExecutionPolicy Bypass -File D:\DevEnv\projects\campusswap\docs\03-qa-review\verify-m3-http.ps1
-powershell -NoProfile -ExecutionPolicy Bypass -File D:\DevEnv\projects\campusswap\docs\03-qa-review\verify-m4-http.ps1 -AppLog "$env:TEMP\campusswap-app.log"
+powershell -NoProfile -ExecutionPolicy Bypass -File D:\DevEnv\projects\campusswap\docs\03-qa-review\verify-m4-http.ps1 -AppLog D:\DevEnv\logs\campusswap-app.log
+
+# ⑤ 白盒测试（2026-09-23 新增，4 类 6 用例；需 MySQL + Redis 在跑）
+cd D:\DevEnv\projects\campusswap\backend; .\mvnw.cmd test
 
 # ⑤ 直接看库
 D:\DevEnv\03_MySQL\bin\mysql.exe -uroot -p123456 campusswap_db

@@ -756,6 +756,13 @@ spring:
 ```
 或拆出 `application-local.yml`（写真实密码）并加入 `.gitignore`。**本作业仓库为 Public（已推送）**，因此数据库密码一律走环境变量 `${DB_PASSWORD:123456}`，仓库内任何位置都不得出现生产明文密码。
 
+> ⚠️ **撞名提醒（2026-09-23 实测踩到）**：`DB_PASSWORD` 在这个项目里有**两种含义** ——
+> `application-dev/prod.yml` 把它当 **`campusswap_dev` 的口令**，而机检脚本 `verify-m2.ps1` / `verify-db-deep.ps1`
+> 把它当 **root 的口令**。在同一个终端里"先跑机检、再起应用/跑 `mvnw test`"会因此连不上库
+> （测试侧 6 个用例全报 1045，而 HTTP 机检全绿，极具迷惑性）。
+> **正确做法**：机检用 `$env:MYSQL_ROOT_PASSWORD`（旧名仍兼容）；测试 profile 用专属变量
+> `CAMPUSSWAP_TEST_DB_USER` / `CAMPUSSWAP_TEST_DB_PASSWORD`。详见 `docs/03-qa-review/COURSEWARE-CLOSURE.md §3.6`。
+
 ### 9.4 提交前自检
 
 ```bash
