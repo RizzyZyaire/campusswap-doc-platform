@@ -823,8 +823,8 @@ var THEMES = [
 var DATA = {
   school:'河北师范大学',
   identities:{
-    staff:    { name:'李承霖', no:'2018013', dept:'软件学院', title:'专任教师',   role:'STAFF',     roleName:'教职工',       perms:11 },
-    docadmin: { name:'王砚秋', no:'2009042', dept:'教务处',   title:'教务科 · 文档管理员', role:'DOC_ADMIN', roleName:'文档管理员', perms:20 },
+    staff:    { name:'李承霖', no:'2018013', dept:'软件学院（网络教育学院）', title:'专任教师', role:'STAFF',     roleName:'教职工',       perms:11 },
+    docadmin: { name:'王砚秋', no:'2009042', dept:'信息化中心', title:'文档管理员', role:'DOC_ADMIN', roleName:'文档管理员', perms:20 },
     admin:    { name:'赵慕辰', no:'1996021', dept:'信息化中心', title:'系统管理员', role:'SYS_ADMIN', roleName:'系统管理员', perms:39 }
   },
   /* 真实权限集合（库内 sys_role_permission 现查结果，与 PRD §3.3 一致） */
@@ -861,33 +861,33 @@ var DATA = {
   tags:['国家自然科学基金','国家社科基金','十五五规划','职称评审','实习支教','课程思政','实验室安全','雄安新区','京津冀协同','师范专业认证'],
   /* 示例文档：题材取自官网真实通知，标题与数据为虚构 */
   docs:[
-    { id:'3128', title:'关于 2027 年度国家自然科学基金项目预申报的通知', cat:'科研学术 / 项目申报', unit:'科技处',
-      status:'PUBLISHED', ver:2, views:268, favs:12, updated:'2026-09-18 09:20', owner:'王砚秋', tags:['国家自然科学基金','十五五规划'],
-      summary:'请各学院于 10 月 20 日前完成预申报书填报，科技处统一组织形式审查与专家论证。'},
     { id:'3097', title:'河北师范大学实习支教工作管理办法（2026 年修订）', cat:'教务教学 / 实习支教', unit:'教务处',
-      status:'PUBLISHED', ver:3, views:412, favs:26, updated:'2026-09-15 15:40', owner:'王砚秋', tags:['实习支教','师范专业认证'],
-      summary:'明确顶岗支教的组织流程、驻县教师职责与考核办法，自 2026 年秋季学期起执行。'},
-    { id:'3155', title:'软件学院 2026 版软件工程专业培养方案', cat:'学院文档 / 软件学院', unit:'软件学院',
-      status:'DRAFT', ver:1, views:0, favs:0, updated:'2026-09-22 11:05', owner:'李承霖', tags:['课程思政'],
-      summary:'含培养目标、毕业要求、课程体系与学分构成，待学院教学委员会审议后提交教务处理。'},
-    { id:'3061', title:'关于 2026 年新入职教师培训工作的通知', cat:'人事人才 / 师资培训', unit:'人事处',
-      status:'PUBLISHED', ver:1, views:96, favs:3, updated:'2026-09-10 08:50', owner:'孙允棠', tags:[],
-      summary:'培训分集中培训与跟岗研修两个阶段，请各单位于 9 月 20 日前报送参训名单。'},
-    { id:'2944', title:'关于裕华校区启智园北侧道路临时封闭的通告', cat:'后勤保障 / 校园通告', unit:'后勤服务集团',
-      status:'ARCHIVED', ver:2, views:517, favs:4, updated:'2026-08-16 17:30', owner:'孙允棠', tags:['实验室安全'],
-      summary:'因管网改造施工，8 月 18 日至 9 月 5 日该路段封闭，机动车请绕行。'},
-    { id:'3102', title:'2026—2027 学年第一学期校领导接待日工作安排', cat:'党政公文 / 通知公告', unit:'学校办公室',
+      status:'PUBLISHED', ver:2, views:412, favs:26, updated:'2026-09-15 15:40', owner:'王砚秋', tags:['实习支教','课程思政'],
+      summary:'顶岗支教组织流程、驻县教师职责与考核办法，自 2026 年秋季学期起执行。'},
+    { id:'3128', title:'河北师范大学本科毕业论文（设计）工作管理规定', cat:'教务教学', unit:'教务处',
+      status:'PUBLISHED', ver:2, views:268, favs:12, updated:'2026-09-18 09:20', owner:'王砚秋', tags:[],
+      summary:'选题、开题、查重、答辩与成绩评定的全流程要求。'},
+    { id:'3155', title:'关于做好 2026 年秋季学期实验室安全检查工作的通知（草稿）', cat:'党政公文', unit:'国有资产委员会办公室',
+      status:'DRAFT', ver:1, views:0, favs:0, updated:'2026-09-22 11:05', owner:'李承霖', tags:['实验室安全'],
+      summary:'检查范围、时间安排与自查报告提交要求，待完善整改复查安排。'},
+    { id:'2944', title:'2025 年度国家自然科学基金项目结题工作的通知（已归档）', cat:'科研学术', unit:'科技处',
+      status:'ARCHIVED', ver:2, views:517, favs:0, updated:'2026-08-16 17:30', owner:'王砚秋', tags:['国家自然科学基金'],
+      summary:'结题材料清单、时间节点与形式审查要求，已过期归档留痕。'},
+    { id:'2871', title:'关于组织开展 2025 年实验室安全专项检查的通知（已废止）', cat:'科研学术', unit:'国有资产委员会办公室',
+      status:'TRASH', ver:2, views:61, favs:0, updated:'2026-07-10 14:00', owner:'李承霖', tags:['实验室安全'],
+      summary:'已由 2026 年 9 月新版通知替代，原件移入回收站留档。'},
+    { id:'3102', title:'2026—2027 学年第一学期校领导接待日工作安排', cat:'党政公文', unit:'学校办公室',
       status:'PUBLISHED', ver:1, views:143, favs:1, updated:'2026-09-02 10:10', owner:'王砚秋', tags:[],
       summary:'本学期校领导接待日定于每周三下午，地点在行政楼一层接待室。'},
-    { id:'2871', title:'关于组织开展 2026 年实验室安全专项检查的通知（已废止）', cat:'科研学术 / 科研平台', unit:'国有资产委员会办公室',
-      status:'TRASH', ver:2, views:61, favs:0, updated:'2026-07-10 14:00', owner:'孙允棠', tags:['实验室安全'],
-      summary:'已由 2026 年 9 月新版通知替代，原件移入回收站留档。'}
+    { id:'3061', title:'关于 2026 年新入职教师培训工作的通知', cat:'人事人才 / 师资培训', unit:'人事处',
+      status:'PUBLISHED', ver:1, views:96, favs:3, updated:'2026-09-10 08:50', owner:'孙允棠', tags:[],
+      summary:'培训分集中培训与跟岗研修两个阶段，请各单位于 9 月 20 日前报送参训名单。'}
   ],
   /* 用户（虚构）：工号 / 姓名 / 单位 / 角色 / 状态 / 最近登录 */
   users:[
     { no:'1996021', name:'赵慕辰', dept:'信息化中心',   role:'SYS_ADMIN', status:'ACTIVE',   last:'2026-09-23 08:12' },
-    { no:'2009042', name:'王砚秋', dept:'教务处',       role:'DOC_ADMIN', status:'ACTIVE',   last:'2026-09-23 09:03' },
-    { no:'2018013', name:'李承霖', dept:'软件学院',     role:'STAFF',     status:'ACTIVE',   last:'2026-09-22 21:47' },
+    { no:'2009042', name:'王砚秋', dept:'信息化中心',   role:'DOC_ADMIN', status:'ACTIVE',   last:'2026-09-23 09:03' },
+    { no:'2018013', name:'李承霖', dept:'软件学院（网络教育学院）', role:'STAFF', status:'ACTIVE', last:'2026-09-22 21:47' },
     { no:'2022087', name:'陈知远', dept:'化学与材料科学学院', role:'STAFF', status:'LOCKED',  last:'2026-09-19 16:25' },
     { no:'2015309', name:'孙允棠', dept:'图书馆',       role:'STAFF',     status:'ACTIVE',   last:'2026-09-23 08:55' }
   ],
@@ -910,11 +910,12 @@ var DATA = {
   ],
   /* 部门绑角色：部门成员自动继承 */
   deptRoles:[
-    { dept:'信息化中心', roles:['SYS_ADMIN','STAFF'], members:6 },
-    { dept:'教务处',     roles:['DOC_ADMIN','STAFF'], members:23 },
-    { dept:'图书馆',     roles:['DOC_ADMIN','STAFF'], members:41 },
-    { dept:'档案馆',     roles:['DOC_ADMIN','STAFF'], members:12 },
-    { dept:'各教学单位', roles:['STAFF'],             members:1860 }
+    { dept:'信息化中心',               roles:['DOC_ADMIN','STAFF'], members:3,  real:true },
+    { dept:'软件学院（网络教育学院）', roles:['STAFF'],             members:64, real:true },
+    { dept:'网络运行科',               roles:['STAFF'],             members:5,  real:true },
+    { dept:'教务处',                   roles:['DOC_ADMIN','STAFF'], members:23 },
+    { dept:'图书馆',                   roles:['DOC_ADMIN','STAFF'], members:41 },
+    { dept:'档案馆',                   roles:['DOC_ADMIN','STAFF'], members:12 }
   ],
   /* 39 个权限点（真实数据，名称与库内 data.sql 一致） */
   permTree:[
@@ -1149,7 +1150,7 @@ V.search = function(){
 };
 
 V.detail = function(){
-  var d = DATA.docs[1];
+  var d = DATA.docs[0];
   return ''
   + '<div class="crumb mb12">文档检索 / ' + esc(d.cat) + '</div>'
   + '<div class="page-head"><div>'
@@ -1557,10 +1558,10 @@ V.org = function(){
   +     '<tr><td class="mono">2021350</td><td>林知白</td><td><span class="badge plain">STAFF</span></td><td>' + statusBadge('LOCKED') + '</td></tr>'
   +     '</tbody></table></div>'
   +   '</div>'
-  + '<div class="card"><div class="card-hd"><h3>单位绑定角色一览</h3><span class="sub">部门继承是权限的第二个来源</span></div>'
+  + '<div class="card"><div class="card-hd"><h3>单位绑定角色一览</h3><span class="sub">单位继承是权限的第二个来源；标「示意」的行不在演示库种子中</span></div>'
   +   '<table class="tbl"><thead><tr><th>单位</th><th>绑定角色</th><th class="w-fix2">成员数</th><th class="w-fix3"></th></tr></thead><tbody>'
   +   DATA.deptRoles.map(function(d){
-        return '<tr><td>' + esc(d.dept) + '</td><td>' + d.roles.map(function(r){ return '<span class="badge plain">' + esc(r) + '</span> '; }).join('') + '</td>'
+        return '<tr><td>' + esc(d.dept) + (d.real ? '' : ' <span class="badge plain">示意</span>') + '</td><td>' + d.roles.map(function(r){ return '<span class="badge plain">' + esc(r) + '</span> '; }).join('') + '</td>'
           + '<td class="num t2">' + d.members.toLocaleString() + '</td>'
           + '<td class="acts">' + (has('sys:role:grant') ? '<button class="link">调整</button>' : '<span class="link muted">只读</span>') + '</td></tr>';
       }).join('')
@@ -1598,9 +1599,8 @@ V.me = function(){
   +         '<div class="feat"><span class="n">1</span><div><b>直接授予：' + esc(id.roleName) + '（' + esc(id.role) + '）</b>'
   +           '<div class="xs t3 mt4">由信息化中心在「用户管理」中授予，含 ' + id.perms + ' 个权限点。</div></div></div>'
   +         '<div class="feat"><span class="n">2</span><div><b>单位继承：' + esc(id.dept) + '</b>'
-  +           '<div class="xs t3 mt4">' + (role === 'admin' ? '该单位绑定 SYS_ADMIN + STAFF 两个角色'
-              : role === 'docadmin' ? '该单位绑定 DOC_ADMIN + STAFF 两个角色'
-              : '该单位绑定 STAFF 角色') + '，你自动继承其中权限。</div></div></div>'
+  +           '<div class="xs t3 mt4">' + (role === 'staff' ? '该单位绑定 STAFF 角色' : '该单位绑定 DOC_ADMIN + STAFF 两个角色')
+  +             '，你自动继承其中权限' + (role === 'admin' ? '；SYS_ADMIN 由信息化中心直接授予，不随单位继承。' : '。') + '</div></div></div>'
   +         '<div class="alert a-info mt12"><span class="ico">i</span><span>权限变更后立即生效，无需重新登录；已登录的会话会在下一次请求时使用新权限。</span></div>'
   +       '</div></div>'
   +     '<div class="card"><div class="card-hd"><h3>我的权限（' + owned.length + ' / 39）</h3>'
@@ -1737,9 +1737,13 @@ V.kit = function(){
   +     '<div class="xs t3 mt4">现状只有管理员重置（PUT /api/users/{id}/password）。</div></div></div>'
   +   '<div class="feat"><span class="n">!</span><div><b>分类与标签的写接口要不要给界面入口</b>'
   +     '<div class="xs t3 mt4">后端已有 POST/PUT/DELETE /api/categories、/api/tags（权限点 doc:category:edit / doc:tag:edit）；UI 规格 §5.3 原判「不渲染入口」，本稿按校园口径<b>已渲染</b>，需你确认。</div></div></div>'
-  +   '<div class="feat"><span class="n">!</span><div><b>演示数据要按校园口径重新种子化</b>'
-  +     '<div class="xs t3 mt4">backend/sql/data.sql 现在还是「技术部/产品部」「前端开发/后端开发」「JPA 实体建模规范」等公司口径；'
-  +       '换成校内机构与公文分类需要改 data.sql，并同步 verify-m2 / verify-db-deep / verify-m4-http / TEST_CHECKLIST 中引用旧文案的断言。</div></div></div>'
+  +   '<div class="feat"><span class="n">!</span><div><b>分类体系：设计 10 类 41 子类，演示库种子只含 4 类</b>'
+  +     '<div class="xs t3 mt4">演示库（backend/sql/data.sql）为保住机检计数断言，只放「教务教学 / 党政公文 / 实习支教（子类）/ 科研学术」四类；'
+  +       '完整分类体系见 UI 规格 §8.9，要入库需改 data.sql 并同步 verify-m2 的 C14 计数断言。</div></div></div>'
+  +   '<div class="feat"><span class="n">!</span><div><b>演示数据已按校园口径重新种子化</b>'
+  +     '<div class="xs t3 mt4">单位＝信息化中心 / 软件学院（网络教育学院）/ 网络运行科（两级树）；'
+  +       '账号＝赵慕辰（系统管理员）/ 王砚秋（文档管理员）/ 李承霖（教职工）；'
+  +       '文档＝实习支教办法、本科毕业论文规定、实验室安全检查通知等 5 篇，覆盖四种状态。姓名为虚构演示数据。</div></div></div>'
   + '</div></div>';
 };
 

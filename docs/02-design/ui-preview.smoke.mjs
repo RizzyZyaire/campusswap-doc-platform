@@ -141,7 +141,8 @@ t('公司口径残留清零（业务页 + 数据层）', !/前端开发|后端�
 t('检索页只出现已发布文档', !/badge draft|badge trash|badge archived/.test(api.render('search')))
 t('内容治理页标注接口缺口', /接口缺口/.test(api.render('governance')))
 t('我的资料页标注自助改密缺口', /自助改密|PUT \/api\/auth\/password/.test(api.render('me')))
-t('设计系统页列出后端差异清单', /演示数据要按校园口径重新种子化/.test(api.render('kit')))
+t('设计系统页列出后端差异清单', /演示数据已按校园口径重新种子化/.test(api.render('kit')) && /分类体系：设计 10 类 41 子类/.test(api.render('kit')))
+t('预览数据与新版种子同口径', /驻县教师职责/.test(api.render('detail')) && api.DATA.users.every((u) => !/技术部|产品部|教务处/.test(u.dept)))
 
 console.log('=== ⑥ 主题与 CSS 一致性 ===')
 t('6 套主题', api.THEMES.length === 6, api.THEMES.map((x) => x.name).join(' / '))
