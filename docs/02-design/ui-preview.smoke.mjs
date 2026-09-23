@@ -172,13 +172,33 @@ const tokenCount = api.THEMES.map((th) => {
 t('三套新主题令牌数一致（≥24）', (() => { const n = ['hebtu', 'gingko', 'celadon'].map((id) => api.THEMES.findIndex((x) => x.id === id)).map((i) => tokenCount[i]); return new Set(n).size === 1 && n[0] >= 24 })(), tokenCount.join(','))
 t('含深色主题', api.THEMES.some((x) => x.id === 'night'))
 
-console.log('=== ⑦ 视觉资源（校徽 / 题字 / 风景） ===')
+console.log('=== ⑦ 视觉资源（校徽 / 题字 / 六张主题照片） ===')
 t('校徽已内联（data URI）', /<img class="brand-logo" src="data:image\/png;base64,/.test(html))
 t('校训题字已内联', html.includes('alt="校训：怀天下 求真知"'))
-t('校园风景已内联（横幅 + 登录页）', (html.match(/data:image\/jpeg;base64,/g) || []).length >= 2)
 t('favicon 用校徽', /<link rel="icon" href="data:image\/png;base64,/.test(html))
+t('六套主题各有独立横幅照片', ['hebtu', 'gingko', 'celadon', 'ink', 'jiang', 'night'].every((id) => html.includes(`--photo-${id}:url(`) && html.includes(`html[data-theme="${id}"] .hero .shot{background-image:var(--photo-${id})}`)))
+const jpegCount = (html.match(/data:image\/jpeg;base64,/g) || []).length
+t('共 8 张 JPEG 且每张只内联一次（不重复膨胀）', jpegCount === 8, '出现 ' + jpegCount + ' 次 = 6 张主题照片 + 登录页 + 画廊小图')
+t('横幅是「左渐变 + 右照片」两栏，不是整张铺底', html.includes('<div class="lead">') && html.includes('<div class="shot">') && !/class="photo"/.test(html))
+t('登录页背景换成竖构图新图', html.includes('background-image:url("data:image/jpeg;base64,') && !html.includes('__ASSET_CAMPUS__'))
 t('没有残留 __ASSET_ 占位符', !html.includes('__ASSET_'))
 t('没有「师」字假 Logo', !html.includes('<div class="brand-mark">师</div>'))
+
+console.log('=== ⑦b 侧边栏对比度（亮堂 ≠ 全白侧栏） ===')
+const sidebarBgs = api.THEMES.map((x) => {
+  const re = new RegExp('html\\[data-theme="' + x.id + '"]\\{([^}]*)\\}', 'g')
+  let m, found = null
+  while ((m = re.exec(html))) { const b = m[1].match(/--sidebar-bg:\s*(#[0-9A-Fa-f]{6})/); if (b) found = b[1] }
+  return { id: x.id, bg: found }
+})
+const lum = (hex) => {
+  const c = [1, 3, 5].map((i) => parseInt(hex.substr(i, 2), 16) / 255).map((v) => (v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4)))
+  return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]
+}
+for (const s of sidebarBgs) {
+  t(`侧栏 ${s.id} 是主题色而非白色`, !!s.bg && lum(s.bg) < 0.35, `--sidebar-bg=${s.bg} 亮度=${s.bg ? lum(s.bg).toFixed(3) : 'N/A'}`)
+}
+t('六套侧栏颜色互不相同', new Set(sidebarBgs.map((s) => s.bg)).size === 6)
 
 console.log('=== ⑧ 标记卫生 ===')
 t('正文无内联 style 属性', !/\sstyle\s*=/.test(html))
