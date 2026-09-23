@@ -119,3 +119,21 @@ EXPLAIN  type=fulltext  key=ft_doc_search  Extra=Using where; Ft_hints: no_ranki
 2. **SQL 条数点数不能靠固定 sleep**：日志经 PowerShell 重定向写出时可能半刷新，固定 600ms 会读到**上一批**语句
    （实测出现过 `sql.manage-trash = 12` 而非 3 的假象，正是 §5.1 第 1 条的同一个回收站预算项）。
    修法：`Count-Sql` 改成"连续两次读数一致才计数"（最多等 15×400ms）。
+
+### 5.3 收口后的数据卫生（交付态 = 干净种子库）
+
+HTTP 机检会写入测试数据（临时用户 / 部门 / 分类 / 标签 / 文档 / 上传图片），所以验收跑完后又用
+`schema.sql` + `data.sql` 重灌了一次，得到**干净的校园口径演示库**，并复验：
+
+| 复验项 | 结果 |
+|---|---|
+| `verify-m2.ps1`（重灌后） | **17/17 ALL GREEN** |
+| `verify-db-deep.ps1`（重灌后） | **9/9 ALL GREEN** |
+| `GET /api/documents/manage?status=TRASH` | `total=1` |
+| `GET /api/documents/trash`（**种子缺陷修复的直接效果**） | `total=1`（修复前恒为 0） |
+| 实库计数 | dept=3 / cat=4 / tag=5 / usr=3 / doc=5 / ver=9 / perm=39 / role=3 / fav=3 / tagRel=5 |
+| Redis | 清掉 `login:*` / `perm:*` / `user:tokens:*` 残留（避免脏 token 指向已删的测试用户） |
+
+dev 服务仍在 10087 运行（本会话后台任务，`%TEMP%\campusswap-app.log`），方便你直接接 Apifox 或浏览器验收；
+不需要时把那个进程停掉即可（`Get-NetTCPConnection -LocalPort 10087` 查 pid）。
+
