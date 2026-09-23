@@ -81,9 +81,11 @@ $exp = @'
 53|DELETE|/api/tags/{id}|doc:tag:edit
 54|POST|/api/upload/image|doc:upload
 55|GET|/api/stats/overview|doc:center
+56|PUT|/api/auth/password|LOGIN
+57|GET|/api/documents/manage|doc:manage
 '@
 $expRows = ($exp -split "`n") | Where-Object { $_.Trim() -ne '' }
-Chk 'C-expected-count-55' ($expRows.Count -eq 55) ("expected list has {0} rows" -f $expRows.Count)
+Chk 'C-expected-count-57' ($expRows.Count -eq 57) ("expected list has {0} rows" -f $expRows.Count)
 
 # --- 4. parse the section 3 master table --------------------------------------
 $i3 = $t.IndexOf('## 3. ')
@@ -102,7 +104,7 @@ foreach ($ln in ($sec3 -split "`n")) {
     }
   }
 }
-Chk 'D-master-table-55-rows' ($rows.Count -eq 55) ("parsed {0} rows from section 3" -f $rows.Count)
+Chk 'D-master-table-57-rows' ($rows.Count -eq 57) ("parsed {0} rows from section 3" -f $rows.Count)
 
 $mismatch = @()
 for ($i = 0; $i -lt [Math]::Min($rows.Count, $expRows.Count); $i++) {
@@ -127,16 +129,16 @@ Chk 'F-no-empty-cells' ($emptyCells.Count -eq 0) ("rows with empty perm/dto/vo/e
 $i5 = $t.IndexOf('## 5. ')
 $sec4 = $t.Substring($i4, $i5 - $i4)
 $heads = ([regex]::Matches($sec4, '(?m)^#### 4\.\d+\.\d+ ')).Count
-Chk 'G-detail-blocks-55' ($heads -eq 55) ("found {0} interface headings in section 4" -f $heads)
+Chk 'G-detail-blocks-57' ($heads -eq 57) ("found {0} interface headings in section 4" -f $heads)
 foreach ($kw in @('**' + 'USE', '**' + 'PERM', '**' + 'ERR')) { }
 $cntPerm = ([regex]::Matches($sec4, [regex]::Escape('**' + (-join @([char]0x6743,[char]0x9650,[char]0x70B9)) + '**' + [char]0xFF1A))).Count
 $cntIn = ([regex]::Matches($sec4, [regex]::Escape('**' + (-join @([char]0x5165,[char]0x53C2)) + '**'))).Count
 $cntOut = ([regex]::Matches($sec4, [regex]::Escape('**' + (-join @([char]0x51FA,[char]0x53C2)) + '**'))).Count
 $cntUse = ([regex]::Matches($sec4, [regex]::Escape('**' + (-join @([char]0x7528,[char]0x9014,[char]0x4E0E,[char]0x4EF7,[char]0x503C)) + '**'))).Count
 $cntErr = ([regex]::Matches($sec4, [regex]::Escape(-join @([char]0x9519,[char]0x8BEF,[char]0x7801)))).Count
-Chk 'H-perm-points-55' ($cntPerm -eq 55) ("perm-point markers: {0}" -f $cntPerm)
-Chk 'I-purpose-55' ($cntUse -eq 55) ("purpose markers: {0}" -f $cntUse)
-Chk 'J-input-output-55' (($cntIn -eq 55) -and ($cntOut -eq 55)) ("input markers: {0}, output markers: {1}" -f $cntIn, $cntOut)
+Chk 'H-perm-points-57' ($cntPerm -eq 57) ("perm-point markers: {0}" -f $cntPerm)
+Chk 'I-purpose-57' ($cntUse -eq 57) ("purpose markers: {0}" -f $cntUse)
+Chk 'J-input-output-57' (($cntIn -eq 57) -and ($cntOut -eq 57)) ("input markers: {0}, output markers: {1}" -f $cntIn, $cntOut)
 Chk 'K-errorcode-mentions' ($cntErr -ge 110) ("error-code mentions in section 4: {0} (>=110 expected: table header + rows)" -f $cntErr)
 
 # --- 6. banned aliases: body vs appendix --------------------------------------
@@ -177,10 +179,10 @@ Chk 'N-story-coverage-8' ($missStory.Count -eq 0) ("stories missing in section 5
 $i7 = $t.IndexOf('## 7. ')
 $sec6 = $t.Substring($i6, $i7 - $i6)
 $nums = @{}
-foreach ($m in [regex]::Matches($sec6, '\d+')) { $v = [int]$m.Value; if (($v -ge 1) -and ($v -le 55)) { $nums[$v] = $true } }
+foreach ($m in [regex]::Matches($sec6, '\d+')) { $v = [int]$m.Value; if (($v -ge 1) -and ($v -le 57)) { $nums[$v] = $true } }
 $missNum = @()
-for ($i = 1; $i -le 55; $i++) { if (-not $nums.ContainsKey($i)) { $missNum += $i } }
-Chk 'O-page-mapping-covers-55' ($missNum.Count -eq 0) ("interface numbers missing in section 6: " + $(if ($missNum.Count) { ($missNum | Select-Object -First 20) -join ',' } else { 'none' }))
+for ($i = 1; $i -le 57; $i++) { if (-not $nums.ContainsKey($i)) { $missNum += $i } }
+Chk 'O-page-mapping-covers-57' ($missNum.Count -eq 0) ("interface numbers missing in section 6: " + $(if ($missNum.Count) { ($missNum | Select-Object -First 20) -join ',' } else { 'none' }))
 
 # --- 8. state machine edges ----------------------------------------------------
 $i8 = $t.IndexOf('## 8. ')

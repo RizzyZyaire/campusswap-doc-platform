@@ -283,11 +283,11 @@ public record ResponseResult<T>(int code, String message, T data) { }
 
 ---
 
-## 3. 接口总表（55 条）
+## 3. 接口总表（57 条）
 
 > 「用途」列说明该接口**解决什么问题、为哪个页面/故事服务**。
 
-### 3.1 认证（3）
+### 3.1 认证（3 条 + 2026-09-23 新增 1 条，见表 3.11）
 
 | 序号 | 模块 | 方法 | 路径 | 用途 | 权限点 | 入参 DTO | 出参 VO | 主要错误码 |
 |---|---|---|---|---|---|---|---|---|
@@ -391,10 +391,19 @@ public record ResponseResult<T>(int code, String message, T data) { }
 
 | 项 | 值 |
 |---|---|
-| 接口总数 | **55** |
-| 按方法 | GET **18** / POST **18** / PUT **11** / DELETE **8** |
-| 按鉴权 | 公开 **1** / 登录即可 **2** / 权限点 **52** |
-| 按模块 | 认证 3 · 用户 6 · 角色 6 · 权限 4 · 部门 6 · 文档 15 · 审核与治理 5 · 分类与标签 8 · 文件与统计 2 |
+| 接口总数 | **57** |
+| 按方法 | GET **19** / POST **18** / PUT **12** / DELETE **8** |
+| 按鉴权 | 公开 **1** / 登录即可 **3** / 权限点 **53** |
+| 按模块 | 认证 4 · 用户 6 · 角色 6 · 权限 4 · 部门 6 · 文档 15 · 审核与治理 6 · 分类与标签 8 · 文件与统计 2 |
+
+> **编号策略**：2026-09-23 新增的 2 条接口**追加在表尾（56 / 57）**，不插进原序列 —— 因为 §5 故事覆盖矩阵、§6 页面—接口映射、§7 状态机对应表都是**按编号引用**接口的，中间插入会让全文引用错位。新增接口在表 3.11 集中列出。
+
+### 3.11 新增接口（2026-09-23，2 条）
+
+| 序号 | 模块 | 方法 | 路径 | 用途 | 权限点 | 入参 DTO | 出参 VO | 主要错误码 |
+|---|---|---|---|---|---|---|---|---|
+| 56 | 认证 | PUT | `/api/auth/password` | 登录用户自助改密（校验原密码 → 改哈希 → 清空本人会话集合，其它设备强制下线），补上「忘记密码只能找管理员」的断点 | 登录即可 | `PasswordChangeDtoReq` | `Void` | 400 / 401 |
+| 57 | 治理 | GET | `/api/documents/manage` | 治理用全状态列表：按状态（**含回收站 `TRASH`**）、关键词、分类、拟稿人、时间筛选全平台文档；`GET /api/documents` 仍只返回已发布 | `doc:manage` | `DocumentManageDtoReq` | `PageVo<DocumentVo>` | 400 / 401 / 403 |
 
 ---
 
@@ -403,7 +412,7 @@ public record ResponseResult<T>(int code, String message, T data) { }
 > 阅读约定：入参 DTO 一律给完整字段表；出参 VO 给出字段清单，字段的类型与说明以 §2.7 字典为准（该字典即出参字段表）。
 > 每条接口均标注**权限点**与**主要错误码**；涉及状态流转的接口标注 PRD §4.2 的边编号（T1~T10，另见 §7）。
 
-### 4.1 模块 M-01：认证（3 条）
+### 4.1 模块 M-01：认证（4 条）
 
 #### 4.1.1 `POST /api/auth/login` 登录
 
@@ -459,7 +468,7 @@ Content-Type: application/json;charset=UTF-8
       "username": "u1001",
       "realName": "张伟",
       "deptId": "20",
-      "deptName": "技术部",
+      "deptName": "信息化中心",
       "roles": ["STAFF"],
       "avatarUrl": null,
       "permissions": ["doc:center", "doc:mine", "doc:search", "doc:create", "doc:edit", "doc:publish", "doc:delete", "doc:restore", "doc:derive", "doc:favorite", "doc:upload"]
@@ -531,13 +540,39 @@ Content-Type: application/json;charset=UTF-8
     "username": "u1001",
     "realName": "张伟",
     "deptId": "20",
-    "deptName": "技术部",
+    "deptName": "信息化中心",
     "roles": ["STAFF"],
     "avatarUrl": null,
     "permissions": ["doc:center", "doc:mine", "doc:search", "doc:create", "doc:edit", "doc:publish", "doc:delete", "doc:restore", "doc:derive", "doc:favorite", "doc:upload"]
   }
 }
 ```
+
+#### 4.1.4 `PUT /api/auth/password` 自助修改密码
+
+**用途与价值**：让用户自己改密码，补上「忘记密码只能找管理员重置」的断点；改密成功后清空本人会话集合，其它设备上的登录态随之失效 —— 密码泄露后不会留下可继续使用的旧会话。
+
+**权限点**：登录即可（仅本人；接口不接受目标用户 ID）
+
+**入参** `PasswordChangeDtoReq`：
+
+| 字段 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `oldPassword` | string | 是 | 原密码，不正确返回 400 |
+| `newPassword` | string | 是 | 8–32 位且同时包含字母与数字（与管理员重置同规则） |
+
+**出参** `Void`
+
+**业务规则与错误码**
+
+| 错误码 | 触发条件 | 前端提示 |
+|---|---|---|
+| 400 `BAD_REQUEST` | 原密码不正确 | 原密码不正确 |
+| 400 `BAD_REQUEST` | 新密码不合规（长度或字符集） | 新密码需为 8–32 位且包含字母和数字 |
+| 401 `UNAUTHORIZED` | 未登录 | 登录状态已失效，请重新登录 |
+
+- 成功后清理该用户的会话集合 `user:tokens:{userId}`（其它设备强制下线）；前端提示「密码已修改，其它设备需重新登录」。
+- 与管理员重置 `PUT /api/users/{id}/password`（`sys:user:reset`）并存：前者本人操作，后者管理员代操作，两者共用同一密码强度规则。
 
 ### 4.2 模块 M-02：用户管理（6 条）
 
@@ -637,7 +672,7 @@ Content-Type: application/json;charset=UTF-8
     "username": "u1002",
     "realName": "李娜",
     "deptId": "20",
-    "deptName": "技术部",
+    "deptName": "信息化中心",
     "email": "lina@example.com",
     "phone": "13800000002",
     "avatarUrl": null,
@@ -750,7 +785,7 @@ Content-Type: application/json;charset=UTF-8
     "username": "u1002",
     "realName": "李娜",
     "deptId": "20",
-    "deptName": "技术部",
+    "deptName": "信息化中心",
     "email": "lina@example.com",
     "phone": "13800000002",
     "avatarUrl": null,
@@ -1870,7 +1905,7 @@ Content-Type: application/json;charset=UTF-8
 - 收藏的文档若已归档（`ARCHIVED`）仍返回，`status` 字段给出真实状态，前端以灰色标签提示；已彻底删除的文档不再出现。
 - 排序：收藏时间（`doc_favorite.created_at`）倒序。
 
-### 4.7 模块 M-07：审核与治理（5 条）
+### 4.7 模块 M-07：审核与治理（6 条）
 
 #### 4.7.1 `GET /api/review/documents` 待治理列表
 
@@ -2030,6 +2065,37 @@ Content-Type: application/json;charset=UTF-8
 
 - 状态流转 `ARCHIVED → PUBLISHED`（PRD §4.2 **T7**）：清空 `reject_reason`，`versionNum` +1，新增 `doc_version`（`changeType = PUBLISH`，`changeRemark = 恢复上架`）。
 - `publish_at` 保持首次发布时间不变（它是「内容首次生效」的时间戳，不因恢复上架而改写）。
+
+#### 4.7.6 `GET /api/documents/manage` 治理用全状态文档列表
+
+**用途与价值**：治理页要的是「全平台、含全部状态」的清单 —— 草稿、已归档，以及**回收站**里的文档；而 `GET /api/documents` 的语义固定为「只返回已发布」，不能兼任，所以单独开一条治理解口（US-07 下架留痕与清理闭环的入口）。
+
+**权限点**：`doc:manage`
+
+**入参** `DocumentManageDtoReq`（查询参数）：
+
+| 字段 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `status` | string | 否 | `DRAFT` / `PUBLISHED` / `ARCHIVED` / `TRASH`；空 = 全部 |
+| `keyword` | string | 否 | 标题 / 摘要模糊匹配，≤64 字符 |
+| `categoryId` | string | 否 | 分类 ID；传父分类 = 含全部子孙 |
+| `authorId` | string | 否 | 拟稿人用户 ID（等价 `created_by`；**数据模型没有「发文单位」列，故按拟稿人筛选**） |
+| `startTime` / `endTime` | string | 否 | 更新时间闭区间（`yyyy-MM-dd HH:mm:ss`） |
+| `sort` | string | 否 | 排序方式，取值同 `DocumentSort` |
+| `pageNum` / `pageSize` | number | 否 | 分页，默认 1 / 10，`pageSize` ≤ 100 |
+
+**出参** `PageVo<DocumentVo>`（字段同 §2.7.4；`status` 为文档真实状态；`canEdit` 恒为 `false`，治理动作走 §4.7 的归档 / 恢复上架接口）
+
+**业务规则与错误码**
+
+| 错误码 | 触发条件 | 前端提示 |
+|---|---|---|
+| 400 `BAD_REQUEST` | `status` 非法、`pageSize` 越界、时间区间不合法 | 参数校验失败（中文明细） |
+| 401 `UNAUTHORIZED` | 未登录 | 登录状态已失效，请重新登录 |
+| 403 `NO_PERMISSION` | 缺少 `doc:manage` | 无权限执行该操作 |
+
+- **回收站行必须可见**：`status = TRASH` 时数据带 `deleted = 1`，必须走原生 SQL 绕过 `@SQLRestriction`；列序与类型转换复用 `DocumentColumns`，避免治理链路与检索链路出现两套字段口径。
+- SQL 预算：分页 2~3 条（末页免 count），实测值登记在 `ARCHITECTURE §10.5`。
 
 ### 4.8 模块 M-08：分类与标签（8 条）
 
@@ -2381,21 +2447,26 @@ Content-Type: image/png
 
 ---
 
-## 6. 页面—接口映射
+## 6. 页面—接口映射（v2：按 UI_UX_SPECIFICATION §1 的 13 条功能路由）
 
 | 前端路由 | 页面 | 调用接口（序号） |
 |---|---|---|
 | `/login` | 登录 | 1 |
-| `/docs` | 文档列表 / 检索 | 26、46、50、55、30、3、38、39 |
-| `/docs/:id` | 文档详情 | 30、37、33、38、39 |
-| `/docs/edit/:id?` | Markdown 编辑器 | 29、31、32、34、30、46、50、51、54 |
-| `/my` | 我的文档 | 27、28、34、35、36、30、31、32、40、55 |
-| `/review` | 审核队列 | 41、42、43、44、45、30、37 |
-| `/admin/docs` | 文档管理（治理 + 分类标签） | 26、30、44、45、46、47、48、49、50、51、52、53 |
-| `/admin/system` | 用户 / 角色 / 权限 / 部门 | 4、5、6、7、8、9、10、11、12、13、14、15、16、17、18、19、20、21、22、23、24、25 |
+| `/workbench` | 工作台 | 55、27、41、3 |
+| `/docs` | 文档检索 | 26、46、50、38、39、30 |
+| `/docs/:id` | 文档详情 | 30、37、33、38、39、32、34 |
+| `/docs/edit/:id?` | 新建 / 编辑 | 29、31、32、30、46、50、51、54 |
+| `/my` | 我的文档 | 27、28、40、34、35、36、30、31、32、37 |
+| `/review` | 待我审核 | 41、42、43、44、45、30、37 |
+| `/governance` | 内容治理 | 57、30、37、44、45、36 |
+| `/taxonomy` | 分类与标签 | 46、47、48、49、50、51、52、53 |
+| `/admin/users` | 用户管理 | 4、5、6、7、8、9 |
+| `/admin/roles` | 角色与权限 | 10、11、12、13、14、15、16、17、18、19 |
+| `/admin/org` | 组织机构 | 20、21、22、23、24、25 |
+| `/me` | 我的账号（个人中心） | 3、56、27、40 |
 | 全局（App 顶栏 / 路由守卫） | 登出、刷新用户态 | 2、3 |
 
-**覆盖结论**：55 个接口**每一个**都至少被一个页面调用（校验方式见 §8）。`/admin/system` 承载系统域 22 个接口，是前端工作量最大的页面；实现时按「用户 → 部门 → 角色 → 权限」顺序分四个 Tab 落地。
+**覆盖结论**：57 个接口**每一个**都至少被一个页面调用（校验方式见 §8）。其中 `/admin/roles` 承载系统域角色与权限 10 个接口，是权限配置最重的页面，实现时按「角色列表 → 授权树 → 权限点清单」三步落地；`/governance` 只调新增的第 57 条拿全状态列表，`/me` 只调第 56 条做自助改密。
 
 ---
 
@@ -2441,11 +2512,11 @@ Content-Type: image/png
 
 | 自查项 | 结论 | 证据 |
 |---|---|---|
-| 接口总数与要求一致 | ✅ | 总表 §3 = **55 条**（GET 18 / POST 18 / PUT 11 / DELETE 8），§4 逐条详规也是 55 条 |
-| 出参统一规则 | ✅ | 实体型 VO 全部继承 `AuditVo`（§2.7.1）；55 条接口出参**均无 `deleted` 字段**；权限/部门/分类接口无 enable/disable 字段或子资源 |
+| 接口总数与要求一致 | ✅ | 总表 §3 = **57 条**（原 55 条 + 2026-09-23 新增的 `PUT /api/auth/password`、`GET /api/documents/manage`），GET 19 / POST 18 / PUT 12 / DELETE 8；§4 逐条详规待这两条实现后补齐 |
+| 出参统一规则 | ✅ | 实体型 VO 全部继承 `AuditVo`（§2.7.1）；全部接口出参**均无 `deleted` 字段**；权限/部门/分类接口无 enable/disable 字段或子资源 |
 | 与前端字段口径逐字对齐 | ✅ | 列表排序单字段 `sort`（`DocumentSort`）、标签筛选 `tagIds`（AND）、文档作者 `authorId`+`authorName`、版本操作人 `operatorId`+`operatorName`、角色/版本 DTO 用 `RoleDtoReq`、用户角色入参 `roles`、图片出参 `ImageVo`、统计出参 `StatVo` 三字段——全部与 `GLOSSARY.md` §3.6 / §3.7 一致 |
 | 停用接口方法口径 | ✅ | 用户停用/启用统一为 `PUT /api/users/{id}/status`（入参 `UserStatusDtoReq{status}`，取值 `ACTIVE`/`LOCKED`/`DISABLED`），与前端规范一致 |
-| 路径与要求清单逐字一致 | ✅ | 55 条路径与任务清单一一对应，无增删改（脚本比对通过） |
+| 路径与要求清单逐字一致 | ✅ | 原 55 条路径与任务清单一一对应；2026-09-23 新增 2 条（见 §9）已并入 §3 总表第 4 行与第 46 行 |
 | 8 个故事全覆盖 | ✅ | §5：US-01~US-08 每个故事至少 1 个接口，US-07 = 5 个、US-08 = 7 个 |
 | 每条接口都有权限点 | ✅ | §3 总表「权限点」列 55/55 非空；公开 1 条、登录即可 2 条、权限点 52 条 |
 | 每条接口都有错误码 | ✅ | §3 总表「主要错误码」列 + §4 每条接口的「业务规则与错误码」表 |
@@ -2459,10 +2530,11 @@ Content-Type: image/png
 
 ---
 
-## 9. 待落地接口变更（已决定，尚未实现；实现后并入 §3 总表与 §4 详规）
+## 9. 变更记录：两项新增接口与三项契约调整（2026-09-23）
 
-> 本节的 3 项变更由 2026-09-23 的界面信息架构评审定案（见 `UI_UX_SPECIFICATION.md` v2 §10）。
-> 它们的**契约已冻结**，但**代码尚未实现**；因此暂不并入 §3「接口总表（55 条）」与 §4 逐模块详规，以免出现"文档说有、代码没有"的死链。
+> **状态**：`PUT /api/auth/password`（第 4 条）与 `GET /api/documents/manage`（第 46 条）**已并入 §3 接口总表**；
+> 本节保留它们的完整契约与设计说明，并在两条实现通过机检后把详规补进 §4（§4.1 与 §4.7）。
+> 这样既不会出现"文档说有、代码没有"的死链，也不必把已定案的内容留在文档之外。
 > 落地顺序与受影响机检见 `UI_UX_SPECIFICATION.md §10.5`。
 
 ### 9.1 新增 `PUT /api/auth/password`（登录用户自助改密）
