@@ -93,6 +93,19 @@
 - **证据**：产品机检 **504 项**（原 420）+ 预览稿自检 161 项，全部 0 失败；`ddl-auto=validate` 启动通过；`EXPLAIN` 实测 `type=fulltext / key=ft_doc_search`。
 - **收口记录**：`docs/03-qa-review/M5PREP-CLOSURE.md`（含只读探针 12 项、7 处文档-实现偏差、种子 TRASH 缺陷与"回收站预算假象"的连带发现）。
 
+### 课件 4.1 / 5.1 对齐 —— `404c66d`（2026-09-23 晚）
+- **做了什么（4 项）**：① **A1** 19 处 `@Modifying` 统一补 `clearAutomatically + flushAutomatically`（8 个仓储）；② **A2** 密码哈希改用官方 `PasswordEncoder`/`BCryptPasswordEncoder`（`config/PasswordEncoderConfig`）；③ **A3** 新增 JUnit 白盒 **4 类 6 用例**（本项目第一次有自动化测试，此前 `src/test` 是空包）；④ **B1①** `PUT /api/documents/{id}` 新增**必填** `versionNum`，与库中版本不一致 → **409**（陈旧表单防覆盖；`ARCHITECTURE §17 ADR-07` 已改写并保留原决策作废说明）。
+- **本轮抓到并修掉两个真实缺陷**（这段最值得讲）：
+  1. **只加 `clearAutomatically` 会丢数据**：`doc_document_tag_rel` 用 `@EmbeddedId`，`saveAll` 的新行不立即 INSERT；随后的标签计数批量更新查的是 `doc_tag`（查询空间不含关联表）→ Hibernate 不 flush → 紧接着的 `clear()` 把这批行丢掉。现象"标签计数 +1、关联表 0 行、详情 tags 为空"，被 `verify-m4-http.ps1` 两条断言当场抓到（216/218）。规则见 `ARCHITECTURE §10.6`，回归锁 `TagBindingConsistencyTest`。
+  2. **`DB_PASSWORD` 环境变量撞名**：机检脚本约定该变量是 **root** 口令，而 `application-test.yml` 里 Spring 把它当 **campusswap_dev** 的口令 → 测试 JVM 6 个用例全报 `1045 Access denied`，而 dev 应用靠旧连接池照常工作、9 个机检全绿，极具迷惑性。修法是测试侧改用专属变量名。复现与复验记录见 `COURSEWARE-CLOSURE.md §3.6`。
+- **读懂这轮代码的 4 个入口**（老师问"这代码你懂吗"就按这个顺序讲）：
+  1. `config/PasswordEncoderConfig.java` —— 为什么只引 `spring-security-crypto` 一个模块就够（不引 `-web/-config` → 不会带过滤器链、不触发自动配置）；为什么**敢**换（先跑只读探针 `docs/03-qa-review/probes/PwProbe.java`，证明库里既有的 `$2b$10$` 哈希能被官方编码器校验、`upgradeEncoding=false`）。
+  2. `src/test/java/com/campusswap/document/BulkUpdateStalenessTest.java` —— **对照实验**：同一个事务里"先读 → 批量自增 → 再读"，没带参数读到旧值（脏读），带参数读到新值。
+  3. `src/test/java/com/campusswap/document/ViewCountConcurrencyTest.java` —— 100 线程 `CountDownLatch` 同刻释放 → 断言恰好 +100；`application-test.yml` 把 Hikari 连接池放大到 **120** 是为了**真并发**（dev 的 10 会让 100 个线程排队，那是假测）。
+  4. `DocumentServiceImpl#update` 的版本比对 + `DocumentUpdateDtoReq#versionNum` —— 陈旧表单防覆盖；校验顺序（400 id 不一致 → 404 → 403 归属 → 409 归档/回收站 → 409 版本 → 写入）写死在 `API_SPECIFICATION §4.6.6`。
+- **一条可以背下来的经验**：`@Modifying` 的两个参数是**成对**的 —— `clearAutomatically` 防"读到旧值"，`flushAutomatically` 防"写丢数据"；**只写一个比不写更危险**。
+- **证据**：产品机检 **507**（m4-http 218 → 221）+ JUnit **6/6** + 预览稿自检 **211**，全部 0 失败；收口记录 `docs/03-qa-review/COURSEWARE-CLOSURE.md`。
+
 ### 老师框架对账（2026-09-23，未改代码）
 - **做了什么**：逐行读老师示例工程 `backend(2)` 的 security 包，产出 `docs/03-qa-review/DIFF-VS-TEACHER.md`（20 行对账表 + 三条路线 + 工作量）。
 - **发现的坑（重要）**：老师那份 `SecurityConfig` 引用的 `SmsCodeAuthenticationProvider`、`WeChatAuthenticationProvider` **两个类在工程里不存在**，pom 里也没有 security / jose4j 依赖，`UserController.login()` 是 `return "";` 的桩 → 它是"形态参考"，不是可运行基线。
@@ -242,7 +255,7 @@ D:\DevEnv\04_Redis\redis-cli.exe -p 6379 KEYS 'perm:*'
 
 M5 前端未开工（`frontend/` 只有骨架目录）；M6 测试与评审、M7 交付未做；Apifox 手动导入 + 发请求待你操作；防火墙 3306/6379 的入站放行规则未按建议收窄。
 
-**UI 规格 v2 重写已完成（2026-09-23）**：`docs/02-design/UI_UX_SPECIFICATION.md` 升到 **v2.1**（13 条功能路由 + 六套主题 + 视觉资源规范 + 逐页四态 + §2.5 视觉反馈规范 + §10 三处缺口处置决定与全文检索契约 + §11 落地检查清单），视觉以 `docs/02-design/UI-PREVIEW.html`（**v6**：首页三版式 A/B/C、主题选择器上移到常驻预览条最右、卡片 2px 描边 + 悬停上浮、侧栏底部退出登录、师大蓝/青瓷/墨玉青换新照片；v5 时三项后端变更已落地、检索页带正文命中高亮）为准，配套自检 `docs/02-design/ui-preview.smoke.mjs`（**200 项**）。
+**UI 规格 v2 重写已完成（2026-09-23）**：`docs/02-design/UI_UX_SPECIFICATION.md` 升到 **v2.2**（13 条功能路由 + 六套主题 + 视觉资源规范 + 逐页四态 + §2.5 视觉反馈规范 + §10 三处缺口处置决定与全文检索契约 + §8.5 编辑页 409 两种处置 + §11 落地检查清单），视觉以 `docs/02-design/UI-PREVIEW.html`（**v8.2**：v6 的首页三版式定为 **A 左文右图**、v7 的登录页固定时光塔、v8 的顶栏弹出面板与行级悬停、v8.2 的 409 版本冲突提示与契约登记）为准，配套自检 `docs/02-design/ui-preview.smoke.mjs`（**211 项**）。
 
 ### 9.3 三项后端变更的读码路线（老师问「这代码你懂吗」时按这个顺序讲）
 
