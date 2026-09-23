@@ -221,7 +221,11 @@ D:\DevEnv\04_Redis\redis-cli.exe -p 6379 KEYS 'perm:*'
 
 ## 9 欠账与 M5 开工前的两个待拍板点
 
-**欠账**：M5 前端未开工（`frontend/` 只有骨架目录）。**UI 规格 v2 重写已完成（2026-09-23）**：`docs/02-design/UI_UX_SPECIFICATION.md` 升到 v2.0（13 条功能路由 + 六套主题 + 视觉资源规范 + 逐页四态 + §10 三处缺口处置决定与全文检索契约 + §11 落地检查清单），视觉以 `docs/02-design/UI-PREVIEW.html`（v3：真实校徽/校训题字/校园风景 + 6 套主题 + 右上角可视化选色器）为准，配套自检 `docs/02-design/ui-preview.smoke.mjs`（139 项）。**M5 开工前的落地顺序见 UI 规格 §10.5 与 §11**：先做后端三项变更（治理页全状态列表接口 / 自助改密接口 / 全文检索 ngram 索引）→ 回写 API 文档与 OpenAPI → 校园口径重新种子化 → 再开前端。其余欠账：M6 测试与评审、M7 交付未做；Apifox 手动导入 + 发请求待你操作；防火墙 3306/6379 的入站放行规则未按建议收窄。
+**欠账**：M5 前端未开工（`frontend/` 只有骨架目录）。**UI 规格 v2 重写已完成（2026-09-23）**：`docs/02-design/UI_UX_SPECIFICATION.md` 升到 v2.0（13 条功能路由 + 六套主题 + 视觉资源规范 + 逐页四态 + §10 三处缺口处置决定与全文检索契约 + §11 落地检查清单），视觉以 `docs/02-design/UI-PREVIEW.html`（**v4**：七张校园照片按显示比例裁剪、六套主题各配一张横幅照片、侧栏统一主题色、右上角可视化选色器）为准，配套自检 `docs/02-design/ui-preview.smoke.mjs`（149 项）。
+
+**后端三项变更（进行中，2026-09-23 起）**：契约见 `API_SPECIFICATION.md §9`（改密接口 / 治理全状态列表 / 全文检索 ngram + highlight/matchedIn）与 `UI_UX_SPECIFICATION.md §10`；落地后需回写 API 文档总表与 `openapi-campusswap.json`、更新 `ARCHITECTURE §10.5` 预算表，然后做 `data.sql` 校园口径重种子化，最后全量重跑 9 个产品机检（420 项，其中 m3/m4 静态与 HTTP 项会因新接口而增加）。
+
+其余欠账：M6 测试与评审、M7 交付未做；Apifox 手动导入 + 发请求待你操作；防火墙 3306/6379 的入站放行规则未按建议收窄。
 
 **待拍板（M5 前）**：
 
