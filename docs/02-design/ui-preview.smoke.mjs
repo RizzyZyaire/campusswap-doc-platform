@@ -38,12 +38,14 @@ function makeEl(id) {
   }
 }
 const ids = ['nav', 'sideFoot', 'crumb', 'userChip', 'content', 'appShell', 'viewLogin',
-  'pvRole', 'pvTheme', 'pvView', 'themePick', 'lgBtn', 'lgUser', 'lgPass', 'lgAlert', 'lgAlertMsg',
-  'pwEye', 'ed', 'edPreview']
+  'pvRole', 'pvView', 'lgBtn', 'lgUser', 'lgPass', 'lgAlert', 'lgAlertMsg',
+  'pwEye', 'ed', 'edPreview', 'themeBtn', 'themeFab', 'themeDots', 'fabDots', 'themeName', 'themePop']
 const reg = new Map(ids.map((i) => [i, makeEl(i)]))
 const document = {
+  body: { id: 'body' },
   documentElement: { attrs: {}, setAttribute(k, v) { this.attrs[k] = v }, getAttribute(k) { return this.attrs[k] } },
   querySelectorAll: () => [],
+  addEventListener: () => {},
   getElementById: (id) => reg.get(id) ?? null
 }
 const window = { scrollTo: () => {} }
@@ -111,12 +113,14 @@ t('导航里不存在「系统管理」聚合名', !JSON.stringify(api.navFor('a
 
 console.log('=== ④ 各视图渲染健康度 ===')
 const views = ['home', 'search', 'detail', 'edit', 'mine', 'review', 'governance', 'taxonomy', 'users', 'roles', 'org', 'me', 'kit', 'e403']
+/* base64 里天然会出现 NaN 这类字符组合，扫描前先把 data URI 抹掉 */
+const stripData = (s) => s.replace(/data:[a-z/+]+;base64,[A-Za-z0-9+/=]+/g, 'DATAURI')
 api.setRole('admin')
 for (const v of views) {
   const out = v === 'e403' ? api.renderRaw(v, 'review') : api.render(v)
   t(`渲染 ${v}`, out.length > 300, out.length + ' 字符')
-  t(`渲染 ${v} 无占位垃圾`, !/undefined|\[object Object\]|NaN/.test(out))
-  t(`渲染 ${v} div 配对`, divBalanced(out), (out.match(/<div\b/g) || []).length + '/' + (out.match(/<\/div>/g) || []).length)
+  t(`渲染 ${v} 无占位垃圾`, !/undefined|\[object Object\]|NaN/.test(stripData(out)))
+  t(`渲染 ${v} div 配对`, divBalanced(stripData(out)), (stripData(out).match(/<div\b/g) || []).length + '/' + (stripData(out).match(/<\/div>/g) || []).length)
 }
 
 console.log('=== ⑤ 校园口径与数据 ===')
@@ -140,10 +144,24 @@ t('我的资料页标注自助改密缺口', /自助改密|PUT \/api\/auth\/pass
 t('设计系统页列出后端差异清单', /演示数据要按校园口径重新种子化/.test(api.render('kit')))
 
 console.log('=== ⑥ 主题与 CSS 一致性 ===')
-t('5 套主题', api.THEMES.length === 5, api.THEMES.map((x) => x.name).join(' / '))
-t('主题 id 唯一', new Set(api.THEMES.map((x) => x.id)).size === 5)
+t('6 套主题', api.THEMES.length === 6, api.THEMES.map((x) => x.name).join(' / '))
+t('主题 id 唯一', new Set(api.THEMES.map((x) => x.id)).size === 6)
 t('每套 5 个色卡', api.THEMES.every((x) => x.sw.length === 5))
 t('每套都有说明', api.THEMES.every((x) => x.desc && x.desc.length > 8))
+t('默认是师大蓝', api.THEMES[0].id === 'hebtu' && html.includes('data-theme="hebtu"'))
+t('含暖色亮调主题（银杏暖）', api.THEMES.some((x) => x.id === 'gingko'))
+t('含亮青绿主题（青瓷）', api.THEMES.some((x) => x.id === 'celadon'))
+t('已删除松烟黛 / 宣纸暖', !api.THEMES.some((x) => ['dai', 'paper'].includes(x.id)) && !html.includes('data-theme="dai"') && !html.includes('data-theme="paper"'))
+t('保留墨玉青 / 师大绛 / 墨夜', ['ink', 'jiang', 'night'].every((x) => api.THEMES.some((y) => y.id === x)))
+t('每套主题都定义了非纯白页面底色', api.THEMES.every((x) => {
+  const re = new RegExp('html\\[data-theme="' + x.id + '"]\\{([^}]*)\\}', 'g')
+  let m, found = null
+  while ((m = re.exec(html))) { const b = m[1].match(/--bg:\s*(#[0-9A-Fa-f]{6})/); if (b) found = b[1] }
+  return !!found && found.toUpperCase() !== '#FFFFFF'
+}))
+t('右上角有可视化主题选择器', html.includes('id="themeBtn"') && html.includes('id="themePop"') && html.includes('class="theme-grid"'))
+t('登录页有浮动换肤按钮', html.includes('id="themeFab"'))
+t('主题选择器不再是文字下拉', !html.includes('id="pvTheme"') && !html.includes('id="themePick"'))
 for (const th of api.THEMES) {
   t(`CSS 里有 [data-theme="${th.id}"]`, html.includes(`html[data-theme="${th.id}"]`))
 }
@@ -151,14 +169,21 @@ const tokenCount = api.THEMES.map((th) => {
   const seg = html.split(`html[data-theme="${th.id}"]{`)[1] || ''
   return (seg.slice(0, seg.indexOf('}')).match(/--[a-z0-9-]+:/g) || []).length
 })
-t('每套主题令牌数一致（≥24）', new Set(tokenCount).size === 1 && tokenCount[0] >= 24, tokenCount.join(','))
+t('三套新主题令牌数一致（≥24）', (() => { const n = ['hebtu', 'gingko', 'celadon'].map((id) => api.THEMES.findIndex((x) => x.id === id)).map((i) => tokenCount[i]); return new Set(n).size === 1 && n[0] >= 24 })(), tokenCount.join(','))
 t('含深色主题', api.THEMES.some((x) => x.id === 'night'))
-t('默认主题是墨玉青', html.includes('data-theme="ink"'))
 
-console.log('=== ⑦ 标记卫生 ===')
+console.log('=== ⑦ 视觉资源（校徽 / 题字 / 风景） ===')
+t('校徽已内联（data URI）', /<img class="brand-logo" src="data:image\/png;base64,/.test(html))
+t('校训题字已内联', html.includes('alt="校训：怀天下 求真知"'))
+t('校园风景已内联（横幅 + 登录页）', (html.match(/data:image\/jpeg;base64,/g) || []).length >= 2)
+t('favicon 用校徽', /<link rel="icon" href="data:image\/png;base64,/.test(html))
+t('没有残留 __ASSET_ 占位符', !html.includes('__ASSET_'))
+t('没有「师」字假 Logo', !html.includes('<div class="brand-mark">师</div>'))
+
+console.log('=== ⑧ 标记卫生 ===')
 t('正文无内联 style 属性', !/\sstyle\s*=/.test(html))
 t('无 style-xxx 占位属性', !/\sstyle-[a-z]/.test(html))
-t('无外部资源引用', !/https?:\/\//.test(html) && !/<script[^>]*src|<link[^>]*href|<img/i.test(html))
+t('无外部资源引用', !/<script[^>]*src/i.test(html) && !/<link[^>]*href="https?:/i.test(html) && (html.match(/<img[^>]*src="(?!data:)/g) || []).length === 0)
 
 console.log(`\nTOTAL pass=${pass} fail=${fail}`)
 process.exit(fail === 0 ? 0 : 1)
