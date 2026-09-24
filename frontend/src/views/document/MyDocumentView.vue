@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
-import { RouterLink } from 'vue-router'
+import { RouterLink, useRouter } from 'vue-router'
+import ImportMarkdownButton from '@/components/ImportMarkdownButton.vue'
 import Pager from '@/components/Pager.vue'
 import StateBlock from '@/components/StateBlock.vue'
 import StatusBadge from '@/components/StatusBadge.vue'
@@ -26,6 +27,34 @@ interface TabDef {
 
 const ui = useUiStore()
 const user = useUserStore()
+const router = useRouter()
+
+/**
+ * 上传的 Markdown 文件 → 直接建一篇草稿。
+ *
+ * <p>读取与格式校验在 `ImportMarkdownButton` 里；这里只负责"建草稿 + 跳去编辑器接着改"。
+ * 标题默认取文件名（去掉扩展名），摘要取正文第一段非标题文字（与编辑器里的口径一致）。</p>
+ *
+ * @param payload 文件名与正文
+ */
+async function onImported(payload: { name: string; text: string }): Promise<void> {
+  const title = payload.name.replace(/\.[^.]+$/, '').slice(0, 128)
+  const firstLine = payload.text.replace(/^#.*$/m, '').split('\n').find((l) => l.trim()) ?? ''
+  try {
+    const created = await docApi.createDocument({
+      title,
+      summary: firstLine.trim().slice(0, 120) || null,
+      contentMd: payload.text,
+      categoryId: null,
+      tagIds: [],
+      priceCents: 0
+    })
+    ui.ok(`已从「${payload.name}」建了一篇草稿，去补分类与标签吧`)
+    await router.push({ name: 'docs-edit', params: { id: created.id } })
+  } catch (e) {
+    ui.err(e instanceof ApiError ? e.message : '导入建草稿失败')
+  }
+}
 
 const tabs: TabDef[] = [
   { id: 'all', label: '全部' },
@@ -58,8 +87,7 @@ const statusOf = (tab: TabId): DocumentStatus | undefined => {
   return undefined
 }
 
-async function load(): Promise<void> {
-  loading.value = true
+async function load(): Promise<void> {  loading.value = true
   errorText.value = ''
   try {
     const kw = keyword.value.trim() || undefined
@@ -163,6 +191,8 @@ onMounted(load)
         <div class="desc">按状态分 tab 管理本人文档；回收站里的文档可恢复，或输入完整标题后彻底删除（不可恢复）。</div>
       </div>
       <div class="acts">
+        <!-- 两个入口：① 在网站上写（编辑器）；② 上传现成的 Markdown 文件直接建草稿（用户反馈"只有新建、没有上传"） -->
+        <ImportMarkdownButton v-if="user.hasPerm(PERM.docCreate)" label="上传 Markdown" @loaded="onImported" />
         <RouterLink v-if="user.hasPerm(PERM.docCreate)" class="btn btn-primary" to="/docs/edit">新建文档</RouterLink>
       </div>
     </div>

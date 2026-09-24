@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
+import ImportMarkdownButton from '@/components/ImportMarkdownButton.vue'
 import StateBlock from '@/components/StateBlock.vue'
 import { ApiError } from '@/api/request'
 import * as docApi from '@/api/documents'
@@ -307,6 +308,29 @@ async function saveAndPublish(): Promise<void> {
   }
 }
 
+/* ---------------- 导入 Markdown 文件（"上传文档"入口） ---------------- */
+
+/**
+ * 导入完成：把文件内容填进表单。
+ *
+ * <p>读取与格式校验都在 `ImportMarkdownButton` 里做了，这里只管"填进去 + 提示"。</p>
+ *
+ * @param payload 文件名与正文
+ */
+function onImported(payload: { name: string; text: string }): void {
+  if (form.contentMd.trim() && !window.confirm('当前正文不为空，导入会覆盖它，继续吗？')) return
+  form.contentMd = payload.text
+  // 标题：优先用文件名（去掉扩展名）；正文第一个 H1 与文件名不同则提示一句
+  const base = payload.name.replace(/\.[^.]+$/, '')
+  if (!form.title.trim()) form.title = base
+  if (!form.summary.trim()) {
+    const firstLine = form.contentMd.replace(/^#.*$/m, '').split('\n').find((l) => l.trim()) ?? ''
+    form.summary = firstLine.trim().slice(0, 120)
+  }
+  const h1 = /^#\s+(.+)$/m.exec(form.contentMd)?.[1]?.trim()
+  ui.ok(h1 && h1 !== form.title ? `已导入「${payload.name}」（正文标题是「${h1}」，需要的话改一下标题）` : `已导入「${payload.name}」，检查后保存即可`)
+}
+
 /* ---------------- 图片上传（工具栏 / 粘贴 / 拖拽 三入口） ---------------- */
 
 function insertAtCursor(text: string): void {
@@ -467,6 +491,7 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', onBeforeUnload)
         </div>
         <div class="acts">
           <RouterLink class="btn" :to="isEdit ? `/docs/${docId}` : '/my'">取消</RouterLink>
+          <ImportMarkdownButton v-if="!readOnly" label="导入文件" :readonly="readOnly" @loaded="onImported" />
           <button v-if="!readOnly" class="btn" :disabled="saving" @click="save">保存草稿</button>
           <button v-if="!readOnly && canPublish" class="btn btn-primary" :disabled="saving" @click="saveAndPublish">
             提交审核

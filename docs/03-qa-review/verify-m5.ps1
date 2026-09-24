@@ -127,6 +127,19 @@ Check 'D3b6 no leftover preview-bar (35px) offsets' `
     (($mainCss -like '*min-height: 100vh*') -and ($mainCss -like '*top: 0*')) 'styles/main.css'
 Check 'D3b7 hero banner overlay no longer swallows clicks' `
     (($mainCss -like '*hero .lead > **') -and ($mainCss -like '*hero .lead:after*')) 'styles/main.css'
+Check 'D3b8 topbar tint follows the theme primary (not the preview white)' `
+    (($mainCss -like '*var(--primary) 18%*') -and ($mainCss -like '*topbar .top-right*')) 'styles/main.css'
+Check 'D3b9 brand is a real button with no text caret' `
+    (($mainCss -like '*user-select: none*') -and ($shell -like '*class="brand"*')) 'layouts/AppShell.vue + main.css'
+Check 'D3b10 about modal renders the crest and platform facts' `
+    (($shell -like '*about-modal*') -and ($shell -like '*ABOUT_FACTS*') -and ($shell -like '*about-crest*')) 'layouts/AppShell.vue'
+Check 'D3b11 topbar ships the page-jump select (preview jump-to-page equivalent)' `
+    (($shell -like '*jumpOptions*') -and ($shell -like '*select-compact*') -and ($shell -like '*onJump*')) 'layouts/AppShell.vue'
+$importer = Join-Path $srcDir 'components\ImportMarkdownButton.vue'
+Check 'D3b12 markdown import component exists and is wired into editor + my documents' `
+    ((Test-Path -LiteralPath $importer) -and ((Read-All (Join-Path $srcDir 'views\document\DocumentEditView.vue')) -like '*ImportMarkdownButton*') -and ((Read-All (Join-Path $srcDir 'views\document\MyDocumentView.vue')) -like '*ImportMarkdownButton*')) 'components/ImportMarkdownButton.vue'
+Check 'D3b13 import accepts only markdown/plain text and says why' `
+    (((Read-All $importer) -like '*.markdown*') -and ((Read-All $importer) -like '*O7*')) 'components/ImportMarkdownButton.vue'
 $indexHtml = Read-All (Join-Path $frontend 'index.html')
 Check 'D3c index.html carries data-theme on <html>' ($indexHtml -like '*data-theme=*') 'index.html'
 
