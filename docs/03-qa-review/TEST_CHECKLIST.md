@@ -146,3 +146,82 @@
 | 模板里的类名都在产物 CSS 里存在（219 个） | `pnpm run check-classes` | 通过 |
 | 顶栏就是预览稿那套可视化色卡选择器；无预览条遗留的 35px 偏移 | D3b5/D3b6（+ 几何探针 `sidebarTop=0`） | 通过 |
 | `src/types` 无自造字段名（逐个回查 GLOSSARY） | D13 | 通过 |
+
+---
+
+# M6 例外路径回归记录（T6.3）
+
+<!-- M6-EXCEPTION-PATHS -->
+
+> **脚本**：`docs/03-qa-review/verify-m6-http.ps1`（**44 项，PASS=44 FAIL=0，exit 0**，纯 ASCII、可重跑、基本不改数据）
+> **环境**：dev 后端 10087 + 重灌后的种子库（45 篇）；`curl.exe` 直发以保留 4xx 响应体；中文期望值用码点构造（脚本保持纯 ASCII）。
+> **口径**：`code === HTTP status`，错误码名（如 `NO_PERMISSION`）**不**出现在响应体里，因此断言的是「状态码 + 服务端中文 `message` 逐字相等」。
+
+| 场景 | 请求 | 期望 | 实测 | 检查项 |
+|---|---|---|---|---|
+| AC-01.2 防用户名枚举 | `POST /api/auth/login` 密码错 / 用户不存在 | 401 + **两者文案完全相同** | 401 / 401，均为「用户名或密码错误」 | A1~A5 |
+| 未认证 401 | 无 token 调 `GET /api/stats/overview`、`POST /api/documents` | 401，且**不产生数据** | 401 / 401，`mine.total` 前后不变（19） | B1~B3 |
+| **越权改他人文档（IDOR）** | staff `PUT /api/documents/{他人已发布}` | **403** + 「无权限修改该文档」，**该行完全不变** | 403 + 文案逐字相等；`title/contentMd/versionNum` 前后一致 | C1~C4 |
+| 缺权限读治理/用户/权限树 | staff `GET /api/review/documents`、`/api/users`、`/api/permissions/tree` | 403 | 403 / 403 / 403 | C5~C7 |
+| **状态冲突：重复发布** | staff `POST /api/documents/{自己的已发布}/publish` | **409**，版本号不涨 | 409，`versionNum` 不变 | D1/D2/D5 |
+| 状态冲突：回收站文档发布 | staff `POST /api/documents/{自己的回收站}/publish` | 409 + 「回收站文档需先恢复为草稿」 | 409 + 文案逐字相等 | D3/D4 |
+| **非法参数 400** | 空标题 / 129 字标题 | 400 + 「文档标题不能为空且不超过128字」，**库中无新增** | 400/400 + 文案相等，`mine.total` 不变 | E1~E5 |
+| 非法参数 400（分页） | `pageNum=101` / `pageNum=0` / `pageSize=101` | 400 + 各自中文提示 | 400 +「页码不能超过100，请缩小筛选范围后再试」/「页码必须大于等于1」/「每页条数必须在1到100之间」 | E6~E9 |
+| 非法参数 400（枚举） | `mine?status=TRASH` | 400（`TRASH` 不是 `mine` 的合法筛选值） | 400 +「文档状态取值非法」 | E10 |
+| **重复收藏幂等** | 连续两次 `POST /api/documents/{id}/favorite`，再连续两次 `DELETE` | 两次都 200，`favorited` 与 `favoriteCount` **不重复变化** | 200/200（count 3→3）、200/200（count 2→2）；脚本按原状态回补收藏 | F1~F7 |
+| AC-08.3 权限树成环 | admin `PUT /api/permissions/{根DIR}` 把父节点设成自己的子节点 | 400 + 「不能将节点移动到其子节点下」，节点不动 | 400 + 文案逐字相等；`parentId=0`、子节点数 5 均不变 | G1~G5 |
+| 404 | `GET /api/documents/999999999` | 404 | 404 +「文档不存在或已被删除」 | H1/H2 |
+
+> **这条检查是 M6 的回归锁**：G1~G5 在修复前会失败（当时层级校验先报「权限层级不合法」，文案打不到），
+> 修复动作见 `CODE_REVIEW.md` §6（M6-D2）。M3 的检查器保持原样，不改写历史证据。
+
+---
+
+# M6 逐接口 SQL 条数点数（T6.7）
+
+<!-- M6-SQL-COUNTS -->
+
+> **工具**：`docs/03-qa-review/probe-sql-counts.mjs`（Node 24）—— 每个请求前后按**字节偏移**读取后端日志新增部分，数「`Hibernate:` 开头的行」。
+> **口径**：判据是**常数**（与 `pageSize`、数据量无关），对齐 `ARCHITECTURE.md` §10.5 预算表；分页 `count` 是独立一条，**末页跳过、满页才发**（`PageableExecutionUtils`）。
+> **两种数据量各点一遍**：种子库 45 篇（`sql-counts-seed.json`）与注入 20 000 篇压测数据后的 20 045 篇（`sql-counts-perf.json`），明细写在 `D:\DevEnv\logs\`。
+> **形状说明**：`SQL@1` = `pageNum=1&pageSize=1`（第 1 页恒满 → 必发 count）；`SQL@100` = `pageNum=1&pageSize=100`（是否满页取决于 `total`）。
+
+| 接口（角色） | 预算 §10.5 | 45 篇 @1 / @100 | 20 045 篇 @1 / @100 | 实测构成（20 045 篇） | 判定 |
+|---|---|---|---|---|---|
+| `GET /api/documents` 关键词为空（staff） | 3~5 | 4 / 3 | 4 / 4 | ① Criteria 分页（DTO 投影）② count ③ 作者名批量 ④ 分类名批量 | ✅ |
+| `GET /api/documents` 关键词≥2 字（全文分支，staff） | 3~5 | 4 / 3 | 4 / 4 | ① 原生 `MATCH…AGAINST` 分页 ② count ③ 作者名 ④ 分类名 | ✅ |
+| `GET /api/documents` 带 `categoryId`（staff） | 3~5 | 6 / 5 | 6 / 6 | ① 分类+子孙查询 ② 分类自身 ③ 分页 ④ count ⑤ 作者名 ⑥ 分类名 | ✅ |
+| `GET /api/documents/manage`（docadmin） | 3~5 | 4 / 3 | 4 / 4 | ① 原生全状态分页 ② count ③ 作者名 ④ 分类名 | ✅ |
+| `GET /api/documents/mine`（staff） | 3 | 4 / 3 | 4 / 4 | ① 分页 ② count ③ 作者名 ④ 分类名 | ✅ |
+| `GET /api/review/documents`（docadmin） | 3 | 4 / 3 | 4 / 4 | 同 mine（外加状态条件） | ✅ |
+| `GET /api/favorites`（staff） | 3 | 4 / 3 | 4 / 3 | ① 收藏 JOIN 文档分页 ② count（满页才发）③ 作者名 ④ 分类名 | ✅ |
+| `GET /api/users`（admin） | 4 | 5 / 4 | 5 / 4 | ① 用户分页 ② count ③ 部门名 ④ `sys_user_role` ⑤ `sys_role` | ✅ |
+| `GET /api/documents/{id}`（staff） | 5 | 4 | 4 | 非首次访问 4 条；**首次访问 5 条**（+1 阅读量自增，另用 admin/docadmin 各验一次） | ✅ |
+| `GET /api/roles`（admin） | 1 | 1 | 1 | 一次分页查询 | ✅ |
+| `GET /api/permissions/tree`（admin） | 1 | 1 | 1 | 一次查全 + 内存组树 | ✅ |
+| `GET /api/documents/trash`（staff） | 1~3 | 3 | 3 | ① 原生回收站分页 ② 作者名 ③ 分类名 | ✅ |
+| `GET /api/tags`（staff） | 1 | 2 | 2 | ① 标签分页 ② count（`pageSize=100`、共 20 条 → 满页） | ✅ |
+| `GET /api/depts/tree`（admin） | 1 | 1 | 1 | 一次查全 | ✅ |
+| `GET /api/categories/tree`（staff） | 1 | 1 | 1 | 一次查全 | ✅ |
+| `GET /api/roles/{id}/permissions`（admin） | 2 | 2 | 2 | ① 关联表一次查全 ② 权限名批量 | ✅ |
+| `GET /api/depts/{id}/roles`（admin） | 2 | 2 | 2 | ① 关联表一次查全 ② 角色名批量 | ✅ |
+| `GET /api/stats/overview`（staff） | 1 | 1 | 1 | 三个计数一条原生 SQL | ✅ |
+
+**汇总**：18 个读接口 × 2 种数据量 = 36 次点数，**全部在 §10.5 预算内，且逐条与数据量无关**
+（`probe-sql-counts.mjs --compare` 输出 `RESULT: 一致`；45 篇与 20 045 篇的差异只出现在「`pageSize=100` 那一档是否满页」上，差值恰为 1 条分页 `count`）。
+
+**结论（M6 DoD 的"零 N+1"）**：
+1. **条数与 `pageSize` 无关** —— 没有任何接口随页大小增长（最大 6 条，出现在带分类筛选的检索上，构成全是批量查询）；
+2. **条数与数据量无关** —— 45 篇 → 20 045 篇（444 倍）逐条不变，说明不存在"每行一条 SQL"的循环查库；
+3. **大文本不进列表** —— 抓到的列表 SQL 原文里只有展示列，没有 `content_md`（`verify-m4-http.ps1` 同步断言）；
+4. **写接口登记值**（不属本表口径）：`PUT /api/auth/password` 实测 2 条（取用户校验旧密码 + 更新哈希），踢会话是 Redis 操作不计入。
+
+> **重跑方式**：
+> ```powershell
+> powershell -NoProfile -ExecutionPolicy Bypass -File docs/03-qa-review/reload-db.ps1   # 先回种子库
+> F:\node\node.exe docs/03-qa-review/probe-sql-counts.mjs                                 # 种子库点数（CS_TAG=seed）
+> & "D:\DevEnv\03_MySQL\bin\mysql.exe" -uroot campusswap_db -e "source .../perf-fixture.sql"   # 注入 2 万篇
+> $env:CS_TAG='perf'; F:\node\node.exe docs/03-qa-review/probe-sql-counts.mjs             # 大数据量点数
+> F:\node\node.exe docs/03-qa-review/probe-sql-counts.mjs --compare D:\DevEnv\logs\sql-counts-seed.json D:\DevEnv\logs\sql-counts-perf.json
+> powershell -NoProfile -ExecutionPolicy Bypass -File docs/03-qa-review/reload-db.ps1   # 收工回种子库
+> ```

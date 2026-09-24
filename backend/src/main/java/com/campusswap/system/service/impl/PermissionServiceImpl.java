@@ -117,13 +117,18 @@ public class PermissionServiceImpl implements PermissionService {
         Permission node = getPermissionOrThrow(id);
         Long parentId = IdUtil.toLong(req.parentId(), "父节点ID");
         Permission parent = requireParent(parentId);
-        assertHierarchy(req.type(), parent);
-        assertPath(req.type(), req.path());
 
+        // 环检测必须放在层级/路径校验之前（2026-09-25 M6 代码审查修正）：
+        // 把节点移到自己的子孙下时，层级规则会先报「权限层级不合法」，把真正的原因
+        // 盖掉，也与 US-08 / AC-08.3 约定的提示「不能将节点移动到其子节点下」不符。
+        // 只是把提示顺序前移：原来会拒绝的形状仍然拒绝（都是 400），不会放宽任何校验。
         String oldPath = node.getAncestors() + "," + node.getId();
         if (parent != null && isSelfOrDescendant(parent, oldPath)) {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "不能将节点移动到其子节点下");
         }
+
+        assertHierarchy(req.type(), parent);
+        assertPath(req.type(), req.path());
 
         String newPath = childAncestors(parent) + "," + node.getId();
         node.setName(req.name().trim());

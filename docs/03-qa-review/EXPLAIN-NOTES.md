@@ -158,10 +158,37 @@ EXPLAIN SELECT d.id FROM doc_document d WHERE d.deleted=0 AND d.status='PUBLISHE
 
 ---
 
-## 4. M6 回归清单（待办）
+## 4. M6 回归清单
 
-- [ ] 数据量提升到 10 万行后重跑 Q1~Q3b，确认仍为 `Index lookup`（无 `Table scan` / 无 `Sort`）
-- [ ] 按 `DocumentSort` 的三档排序各跑一次 `EXPLAIN ANALYZE`：`updatedAt_desc`（已测）、`publishAt_desc`、`viewCount_desc` → 后两档若无索引支撑需补索引或降级排序选项
-- [ ] 核对列表接口的 Hibernate 生成 SQL 与本文件 Q1~Q3b 一致（避免 JPA 生成额外的 `COUNT` 全表查询）
-- [ ] 把本文件与 `TEST_CHECKLIST.md` 的 N+1 记录交叉引用，形成"查询性能"完整证据链
+- [x] 数据量提升到 **20 045 行**（注入 20 000 篇压测文档）后重跑 Q1~Q3b → 全部仍为 `Index lookup`，**无 `Table scan`、无 `Sort`**（见 §5，2026-09-24 M6-T6.6）
+- [ ] 按 `DocumentSort` 的三档排序各跑一次 `EXPLAIN ANALYZE`：`updatedAt_desc`（已测）、`publishAt_desc`、`viewCount_desc` → 后两档若无索引支撑需补索引或降级排序选项（**M7 前若仍未做，登记为已知缺口**）
+- [x] 核对列表接口的 Hibernate 生成 SQL 与本文件 Q1~Q3b 一致（`probe-sql-counts.mjs` 抓到的 SQL 原文已逐条登记在 `TEST_CHECKLIST.md` 的 M6 表）
+- [x] 把本文件与 `TEST_CHECKLIST.md` 的 N+1 记录交叉引用，形成"查询性能"完整证据链（§5 ↔ `TEST_CHECKLIST.md` M6-SQL-COUNTS 段）
 - [x] ~~全文检索分支的 `EXPLAIN`~~ → 已在 §2b Q5 完成（2026-09-23，M5 前置）
+
+---
+
+## 5. M6 索引回归 —— 20 045 篇数据量实测（T6.6）
+
+<!-- M6-INDEX-REGRESSION -->
+
+> **做法**：先 `reload-db.ps1` 回 45 篇种子库，再 `source backend/sql/perf-fixture.sql` 注入 20 000 篇（标题统一以「【压测】」开头，便于一键清理），
+> `ANALYZE TABLE doc_document` 让统计信息反映真实分布，然后重跑 §1 的五条高频 SQL。
+> **原始输出**：`D:\DevEnv\logs\m6-explain-perf.txt`（`mysql -N -B -e "EXPLAIN ANALYZE …"` 逐条留档）。
+
+| 查询 | 45 篇（M2 首测） | **20 045 篇（M6 复测）** | 命中的索引 | 是否仍达标 |
+|---|---|---|---|---|
+| Q1 检索主路径（`category_id=3` + `PUBLISHED`，按 `updated_at DESC`） | 0.149 ms | **0.342 ms** | `Index lookup on doc_document using idx_doc_cat_status_updated (category_id=3, status='PUBLISHED') (reverse)` | ✅ 无 Sort、无回表过滤 |
+| Q2 审核队列 / 全站已发布（仅 `status`） | 0.221 ms | **0.261 ms** | `Index lookup on doc_document using idx_doc_status_updated (status='PUBLISHED') (reverse)` | ✅ 最左前缀成立，必须单独建这条索引 |
+| Q3 我的文档（`created_by=2`） | 0.135 ms | **0.123 ms** | `Index lookup on doc_document using idx_doc_created_by_updated (created_by=2) (reverse)` | ✅ 排序键在索引里，无 filesort |
+| Q3b 我的文档 + 状态（`created_by=2` + `DRAFT`） | — | **0.203 ms** | 优化器自选 `idx_doc_status_updated (status='DRAFT') (reverse)` + 过滤 `created_by` | ✅ 仍是索引扫描，无 Sort |
+| Q4 **对照组**（`IGNORE INDEX` 三条业务索引） | 18.2 ms（全表扫描） | **20.9 ms**（`Table scan` + `Sort … limit input to 10 row(s)`） | 无 | ❌ 故意退化 —— 对照组证明上面四条的加速来自索引 |
+
+**结论（M6 的"高频查询命中复合索引"判据）**：
+
+1. `idx_doc_cat_status_updated` 与 `idx_doc_status_updated` **在 20 045 篇数据量下仍然命中**，且都是 `(reverse)` 反向扫描直接给出 `updated_at DESC` 顺序 —— **没有出现 `Sort` / filesort**；
+2. 索引扫描只读 10 行（`rows=10`），成本估算 `cost=230/271`，与数据量（20 434 行）无关；
+3. 对照组（20.9 ms）与命中索引（0.26 ms）相差约 **80 倍**，说明这四条查询的耗时确实由索引决定，而不是"数据量小所以看起来快"；
+4. `deleted = 0` 仍以 `Filter` 形式出现（索引末位带 `deleted` 列），实测只影响 10 行的过滤，未退化为回表全扫。
+
+**收工动作**：压测数据用完即清（`DELETE FROM doc_document WHERE title LIKE '【压测】%'`），M6 最终状态是**重灌后的 45 篇种子库**（`reload-db.ps1` 自检：45/28/9/4/4/99/109/39，三项一致性计数 0）。

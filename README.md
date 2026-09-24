@@ -3,7 +3,7 @@
 单位内部 **Markdown 文档管理平台**（课程大作业）。核心闭环：撰写文档 → 分类与标签 → 快速检索 → **基于已有文档派生新文档** → 版本管理 → 文档管理员审核/归档 → 全程 RBAC 控权。
 
 > 📘 **先读这份**：**[docs/MASTER-PLAN.md](docs/MASTER-PLAN.md)** —— 大作业执行手册（已冻结）：技术栈、硬约束、14 张表数据模型、M0~M7 执行计划（**61 个可勾选任务**）、Prompt 库、交付与 Git 规范。
-> 🔍 **质量证据**：`docs/03-qa-review/` 下有 **11 个可重跑的机检脚本**（`verify-m0/m1/m2/m3/m4/m5.ps1` + `verify-api-spec.ps1` + `verify-db-deep.ps1` + 两个 HTTP 接口脚本）+ `EXPLAIN-NOTES.md`（执行计划实测）+ `AUDIT-M0-M2.md`（复核与变异测试记录）+ 各里程碑收口记录（`M3/M4/M5-CLOSURE.md`、`COURSEWARE-CLOSURE.md`）。前端另有三件套：`pnpm run check-classes`（类名体检）、`scripts/shot.mjs`（带登录态截图）、`scripts/verify-edit-conflict.mjs`（409 端到端复现）。
+> 🔍 **质量证据**：`docs/03-qa-review/` 下有 **13 个可重跑的 `.ps1` 机检脚本 + 1 个 Node 逐接口 SQL 点数器**（`verify-m0/m1/m2/m3/m4/m5/m6.ps1`、`verify-api-spec.ps1`、`verify-db-deep.ps1`、`verify-m3-http/m4-http/m6-http.ps1`、`reload-db.ps1`、`probe-sql-counts.mjs`）+ `EXPLAIN-NOTES.md`（执行计划实测：M2 首测 + M6 在 20 045 篇数据量下的索引回归）+ `CODE_REVIEW.md`（对照执行手册 §2 的 33 项逐条自查）+ `AUDIT-M0-M2.md`（复核与变异测试记录）+ 各里程碑收口记录（`M3/M4/M5/M6-CLOSURE.md`、`COURSEWARE-CLOSURE.md`）。前端另有三件套：`pnpm run check-classes`（类名体检）、`scripts/shot.mjs`（带登录态截图）、`scripts/verify-edit-conflict.mjs`（409 端到端复现）。
 
 ## 技术栈
 
@@ -41,10 +41,10 @@ campusswap/
 - [x] **M0** 需求冻结：`docs/01-requirements/` 三剑客（8 故事 / 24 条 BDD / 39 权限点 / 14 表 / 24 条业务规则）
 - [x] **M1** 设计定稿：架构、接口规格（55 条接口）、UI/UX 规范（8 页 + 四态）
 - [x] **M2** 数据库：`backend/sql/schema.sql`（14 张表 + 20 索引）+ `data.sql` 种子数据
-- [x] **M3** 后端骨架 + RBAC（用户/角色/权限/部门；25 端点，静态 36 项 + 接口 125 项全绿）
-- [x] **M4** 文档业务（CRUD/版本/检索/派生/审核/回收站；30 端点，静态 30 项 + 接口 221 项全绿）
-- [x] **M5** 前端（Vue3 + TS，13 条功能路由 + 2 条异常路由，四态与权限逐页落地；机检 43 项全绿）
-- [ ] **M6** 测试与代码审查（含零 N+1 与索引回归）
+- [x] **M3** 后端骨架 + RBAC（用户/角色/权限/部门；25 端点，静态 36 项 + 接口 142 项全绿）
+- [x] **M4** 文档业务（CRUD/版本/检索/派生/审核/回收站；30 端点，静态 30 项 + 接口 222 项全绿）
+- [x] **M5** 前端（Vue3 + TS，13 条功能路由 + 2 条异常路由，四态与权限逐页落地；静态机检 62 项全绿）
+- [x] **M6** 测试与代码审查（24 条 BDD 断言的纯单测 30/30、例外路径 44 项、代码审查 33 项、20 045 篇下的索引回归、18 个读接口零 N+1；审查修掉 3 个真实缺陷）
 - [ ] **M7** 交付与上传
 
 ## 本地开发环境
@@ -84,11 +84,19 @@ $env:MYSQL_ROOT_PASSWORD='<密码>'; powershell -File docs/03-qa-review/verify-m
 powershell -File docs/03-qa-review/verify-db-deep.ps1       # 库结构与数据深检 9 项
 powershell -File docs/03-qa-review/verify-m3.ps1            # 后端骨架 36 项
 powershell -File docs/03-qa-review/verify-m4.ps1            # 文档域静态 30 项
-powershell -File docs/03-qa-review/verify-m5.ps1            # 前端静态 43 项（不需要后端）
-powershell -File docs/03-qa-review/verify-m3-http.ps1       # 接口回归 125 项（需后端在跑）
-powershell -File docs/03-qa-review/verify-m4-http.ps1 -AppLog D:\DevEnv\logs\campusswap-app.log   # 接口 + SQL 预算 221 项
+powershell -File docs/03-qa-review/verify-m5.ps1            # 前端静态 62 项（不需要后端）
+powershell -File docs/03-qa-review/verify-m6.ps1            # M6 测试与审查 50 项（单测覆盖/红线/文档锚点/证据 JSON）
+powershell -File docs/03-qa-review/verify-m3-http.ps1       # 接口回归 142 项（需后端在跑）
+powershell -File docs/03-qa-review/verify-m4-http.ps1 -AppLog D:\DevEnv\logs\campusswap-app.log   # 接口 + SQL 预算 222 项
+powershell -File docs/03-qa-review/verify-m6-http.ps1       # 例外路径 44 项（403/409/400/幂等/401/404/成环）
 node docs/02-design/ui-preview.smoke.mjs                    # 预览稿自检 211 项
+# 查询性能证据链：逐接口 SQL 条数点数（只读后端日志里的 Hibernate 行）+ 两种数据量对照
+node docs/03-qa-review/probe-sql-counts.mjs                 # 18 个读接口点数（CS_TAG=seed / perf）
+powershell -File docs/03-qa-review/reload-db.ps1            # 一条命令重灌种子库（HTTP 检查器跑完必做）
 ```
+
+> **跑批顺序**（`TEST_CHECKLIST.md` 顶部有完整说明）：重灌库 → 静态与 DB 检查器 → HTTP 检查器（**会改数据**）→ **再重灌库** → 才给人演示/截图。
+> 后端请用 `D:\DevEnv\scripts\campusswap-backend.cmd` 启动：它把 stdout 复制到 `D:\DevEnv\logs\campusswap-app.log`，SQL 预算断言与逐接口点数器都读这个文件。
 
 **内置演示账号**（`data.sql` 灌入，bcrypt 真哈希）：`admin/Admin@123`（SYS_ADMIN）、`docadmin/Doc@123456`（DOC_ADMIN）、`staff/Staff@123`（STAFF）。
 

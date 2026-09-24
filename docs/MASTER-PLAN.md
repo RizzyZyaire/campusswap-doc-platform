@@ -546,7 +546,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File docs/03-qa-review/verify-m4-
 
 ---
 
-### M5 前端实现（3~4 天）
+### M5 前端实现（3~4 天）　✅ 已完成（2026-09-23 起 `397d7c8`，UI 三轮返工至 `34eaf57`；机检 `verify-m5.ps1` 62 项，收口记录 `docs/03-qa-review/M5-CLOSURE.md`）
 
 **目标**：§6.1 的 8 个页面全部可用，通过类型检查与 lint。**前置**：M3/M4 接口可用。
 
@@ -577,15 +577,35 @@ powershell -NoProfile -ExecutionPolicy Bypass -File docs/03-qa-review/verify-m5.
 
 ### M6 测试与代码审查（1 天）
 
-- [ ] **T6.1** Service 层单测：与 `USER_STORIES.md` 的 BDD 断言 1:1 对应
-- [ ] **T6.2** `./mvnw clean test` 全绿
-- [ ] **T6.3** 异常路径回归（逐条留记录）：越权改他人文档→403、状态冲突→409、非法参数→400、重复收藏→幂等/409
-- [ ] **T6.4** `docs/03-qa-review/TEST_CHECKLIST.md` + `CODE_REVIEW.md`（对照 §2 逐条自查）
-- [ ] **T6.5** `docs/03-qa-review/tasks.md` 全部勾选 + 每项 3 句变动说明
-- [ ] **T6.6** **性能回归（课件 3.1 实践任务 5）**：注入测试数据（如 1 万篇文档）后重跑 `EXPLAIN ANALYZE`，把「是否仍命中 `idx_doc_cat_status_updated`／`idx_doc_status_updated`」写回 `EXPLAIN-NOTES.md`；核对 `EAGER` 计数 0、列表 SQL 条数为常数、`pageNum > 100` 被拒绝
+- [x] **T6.1** Service 层单测：与 `USER_STORIES.md` 的 BDD 断言 1:1 对应
+  - 实际做法：23 条逻辑断言直接调 Service 实现类（Mockito mock 仓储，`ArgumentCaptor` 断言写库字段/次数/Redis 键/版本留痕），5 条本质属校验层或 AOP 的（AC-02.2/02.3、07.2、07.3、08.2）就测那一层的对象（`jakarta.validation` Validator、`LoginInterceptor`、`PermissionAspect` 喂真实注解）。
+  - 产物：`backend/src/test/java/com/campusswap/{support,system,document}/` 下 **9 个文件 / 24 个 `@Test`**，`@DisplayName` 一律以 `AC-0X.Y` 开头，一条不重不漏（`verify-m6.ps1` A1/A2 机检）。
+  - 全部纯单元测试（`@ExtendWith(MockitoExtension.class)`，**0 个 `@SpringBootTest`**）：不连库、不连 Redis、毫秒级复跑；"库中无新增"这类落库证据由 HTTP 检查器承担（javadoc 里写明分工）。
+- [x] **T6.2** `./mvnw clean test` 全绿
+  - 实测 `Tests run: 30, Failures: 0, Errors: 0, Skipped: 0` + `BUILD SUCCESS`（Maven 退出码 0），30 = 新增 24 + 既有 4 个集成测试类的 6 条用例。
+  - 既有的 4 个集成测试类（`BulkUpdateStalenessTest` / `TagBindingConsistencyTest` / `ViewCountConcurrencyTest` / `PasswordHashCompatTest`）保持原样，`pom.xml`、yml、`backend/sql` 一字未改。
+  - 修复后复跑一次仍全绿（本轮共两次全量运行），日志留档 `D:\DevEnv\logs\m6-mvn-test.log`。
+- [x] **T6.3** 异常路径回归（逐条留记录）：越权改他人文档→403、状态冲突→409、非法参数→400、重复收藏→幂等/409
+  - 新增 `docs/03-qa-review/verify-m6-http.ps1`：**44 项，PASS=44 FAIL=0**（越权 403 且该行 18 个字段逐字不变、重复发布/回收站发布 409、空标题/129 字标题/`pageNum=101`/`pageSize=101`/枚举非法 400 各自中文文案、收藏与取消收藏两次调用幂等、401 无 token、404 不存在文档）。
+  - 结论口径：本项目 `code === HTTP status`，错误码名（`NO_PERMISSION` 等）不在响应体里，所以断言"状态码 + 服务端中文 `message` 逐字相等"；重复收藏按 `DocumentServiceImpl.favorite` 的**幂等**语义（200 + `favorited=true` + count 不重复变化），不是 409。
+  - 逐条记录写在 `TEST_CHECKLIST.md` 的 `M6-EXCEPTION-PATHS` 表（含请求、期望、实测、检查项编号）。
+- [x] **T6.4** `docs/03-qa-review/TEST_CHECKLIST.md` + `CODE_REVIEW.md`（对照 §2 逐条自查）
+  - 新增 `CODE_REVIEW.md`：§2.1 六红线（R1~R6）、§2.2 DDL 六条（DDL1~DDL6）、§2.3 分层五条 + 注释规范（L1~L5）、§2.4 前端四条（F1~F4）、§5.1 实体七戒律（E1~E7）、§5.1.1 查询性能六条（P1~P6），共 **33 项结论**，每项都带可复跑判据与实测值。
+  - `TEST_CHECKLIST.md` 增补 `M6-EXCEPTION-PATHS`（T6.3）与 `M6-SQL-COUNTS`（T6.7）两节，并把 M6 的机检数字并入汇总口径。
+  - 审查连带产出：**发现并修掉 3 个真实缺陷**（`StatController` 直连 Repository 的分层越界、AC-08.3 环提示被层级校验抢先、详情接口多 1 条重复查询），另有 4 项已知取舍登记在案（含理由、风险与兜底）。
+- [x] **T6.5** `docs/03-qa-review/tasks.md` 全部勾选 + 每项 3 句变动说明
+  - 本手册 §7 已冻结「看板的唯一真源就是 MASTER-PLAN，不再另建 `tasks.md`」；因此 T6.5 的落点是**本文件 M6 七项全部打勾 + 逐项变动说明**，并新增 `M6-CLOSURE.md` 作为里程碑收口记录（与 M3/M4/M5 同构）。
+  - 机检口径：`verify-m6.ps1` E1/E2 断言"**行首**未勾选的 T6 项计数 = 0"且"T6.1~T6.7 七项全部勾选"；E3/E4 断言 M5/M6 标题行登记了 7 位 commit 号。
+  - 每条变动说明都写"实际做法 + 实测数字 + 产物路径"，便于老师按行核对（不写"已完成"三个字了事）。
+- [x] **T6.6** **性能回归（课件 3.1 实践任务 5）**：注入测试数据（如 1 万篇文档）后重跑 `EXPLAIN ANALYZE`，把「是否仍命中 `idx_doc_cat_status_updated`／`idx_doc_status_updated`」写回 `EXPLAIN-NOTES.md`；核对 `EAGER` 计数 0、列表 SQL 条数为常数、`pageNum > 100` 被拒绝
+  - 注入 20 000 篇（`backend/sql/perf-fixture.sql`，标题前缀「【压测】」便于清理）→ 库内 20 045 篇，`ANALYZE TABLE` 后复跑：Q1 **0.342 ms** 命中 `idx_doc_cat_status_updated`、Q2 **0.261 ms** 命中 `idx_doc_status_updated`、Q3 **0.123 ms** 命中 `idx_doc_created_by_updated`、Q3b **0.203 ms**，**均无 `Sort` / 无 `Table scan`**；对照组 `IGNORE INDEX` 退化为全表扫描 + Sort **20.9 ms**（约 80×）。原始输出 `D:\DevEnv\logs\m6-explain-perf.txt`，结论写进 `EXPLAIN-NOTES.md` §5。
+  - `FetchType.EAGER` 全仓计数 **0**（`verify-m6.ps1` B1）；列表接口 SQL 条数在 45 篇与 20 045 篇下**逐条相同**（`probe-sql-counts.mjs --compare` 判定一致，±1 只来自分页 count 是否触发）。
+  - `pageNum > 100` → **400**「页码不能超过100，请缩小筛选范围后再试」（`verify-m6-http.ps1` E6/E7，`PageDtoReq` 的 `@Max(100)` 生效，禁无限 OFFSET 深分页）。
 
-**DoD**：单测全绿；异常路径有记录；审查清单无未通过项；**列表接口零 N+1（SQL 条数为常数）且高频查询命中复合索引**
-- [ ] **T6.7** **逐接口点数 SQL 条数**（对齐 `ARCHITECTURE §10.5` 预算表：检索/详情/我的/审核/收藏/用户/角色/树形/统计），把每个接口的实测条数写入 `docs/03-qa-review/TEST_CHECKLIST.md`，与 `EXPLAIN-NOTES.md` 的索引回归共同构成"查询性能"证据链
+**DoD 实测**：单测全绿（30/0/0/0 + BUILD SUCCESS）；异常路径有记录（`M6-EXCEPTION-PATHS` 44/44）；审查清单无未通过项（`CODE_REVIEW.md` 33 项 + `verify-m6.ps1` 30 项）；**列表接口零 N+1（18 个读接口 SQL 条数与数据量无关）且高频查询命中复合索引（20 045 篇实测 4 条查询全为 Index lookup、无 Sort）**。
+- [x] **T6.7** **逐接口点数 SQL 条数**（对齐 `ARCHITECTURE §10.5` 预算表：检索/详情/我的/审核/收藏/用户/角色/树形/统计），把每个接口的实测条数写入 `docs/03-qa-review/TEST_CHECKLIST.md`，与 `EXPLAIN-NOTES.md` 的索引回归共同构成"查询性能"证据链  - 新增点数器 `docs/03-qa-review/probe-sql-counts.mjs`：按**字节偏移**只读后端日志新增部分、数 `Hibernate:` 开头的行；请求串行、每次测量前排空日志（`Tee-Object` 写 UTF-16LE，脚本自动探测编码 —— 这两点都是本轮踩过的坑）。该脚本已实测能抓到 SQL 原文用于诊断。
+  - **18 个读接口 × 2 种数据量 = 36 次点数全部在预算内**，明细（含每条的 SQL 构成）写入 `TEST_CHECKLIST.md` 的 `M6-SQL-COUNTS` 表；机器可读证据 `D:\DevEnv\logs\sql-counts-{seed,perf}.json`。
+  - 顺带把"跑批顺序"落成脚本：新增 `docs/03-qa-review/reload-db.ps1`（一条命令重灌 schema+data 并自检计数），与 `EXPLAIN-NOTES.md` §5 的索引结论合并构成 M6 的查询性能证据链。
 
 ---
 

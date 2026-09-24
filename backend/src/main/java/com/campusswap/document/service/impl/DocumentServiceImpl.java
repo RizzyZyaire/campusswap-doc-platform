@@ -711,7 +711,11 @@ public class DocumentServiceImpl implements DocumentService {
                 doc.setViewCount(doc.getViewCount() + 1);
             }
         }
-        String categoryName = categoryNameOf(doc.getCategoryId());
+        // 分类名优先取已抓取的关联（findDetailById 用 join fetch 一次性带出了分类列），
+        // 避免再按 id 回查一次 doc_category —— M6 逐接口点数时发现详情接口因此多 1 条 SQL
+        // （6 条，预算 5）。未初始化/为空时才回退到按 id 查询，语义与原来完全一致。
+        Category category = doc.getCategory();
+        String categoryName = category != null ? category.getName() : categoryNameOf(doc.getCategoryId());
         String authorName = userService.realNameOf(doc.getCreatedBy());
         List<TagVo> tags = tagRepository.findTagsByDocumentId(doc.getId()).stream().map(TagVo::of).toList();
         boolean favorited = favoriteRepository.existsByUserIdAndDocumentId(viewerId, doc.getId());
