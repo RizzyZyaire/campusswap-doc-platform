@@ -575,7 +575,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File docs/03-qa-review/verify-m5.
 
 ---
 
-### M6 测试与代码审查（1 天）
+### M6 测试与代码审查（1 天）　✅ 已完成（2026-09-24，commit `1e01c8c`；机检 `verify-m6.ps1` 50 项 + `verify-m6-http.ps1` 44 项，收口记录 `docs/03-qa-review/M6-CLOSURE.md`，代码审查 `CODE_REVIEW.md`）
 
 - [x] **T6.1** Service 层单测：与 `USER_STORIES.md` 的 BDD 断言 1:1 对应
   - 实际做法：23 条逻辑断言直接调 Service 实现类（Mockito mock 仓储，`ArgumentCaptor` 断言写库字段/次数/Redis 键/版本留痕），5 条本质属校验层或 AOP 的（AC-02.2/02.3、07.2、07.3、08.2）就测那一层的对象（`jakarta.validation` Validator、`LoginInterceptor`、`PermissionAspect` 喂真实注解）。
