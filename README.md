@@ -61,7 +61,7 @@ campusswap/
 ```bash
 # 数据库初始化（本机已执行完毕；换机器时按序执行）
 mysql -uroot -p < backend/sql/schema.sql      # 建库 + 14 张表 + 20 个索引
-mysql -uroot -p < backend/sql/data.sql        # 种子数据（39 权限点 / 3 角色 / 3 账号）
+mysql -uroot -p < backend/sql/data.sql        # 种子数据（39 权限点 / 3 角色 / 3 账号 / 4 分类 / 20 标签 / 45 篇文档 / 99 条版本留痕）
 
 # 后端（M3/M4 已完成）
 cd backend && ./mvnw clean compile test

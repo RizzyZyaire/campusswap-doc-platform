@@ -113,10 +113,20 @@ Check 'D3b3 color-card vars live in theme.css (not tree-shaken by Tailwind)' `
     ($themeCss.Contains('.t-hebtu{--c1:')) 'styles/theme.css'
 Check 'D3b4 color-card vars are NOT in the tree-shaken components.css' `
     (-not $compCss.Contains('.t-hebtu{--c1:')) 'styles/components.css'
-Check 'D3b5 product topbar ships the preview theme picker (themepick)' `
-    ((Read-All (Join-Path $srcDir 'layouts\AppShell.vue')) -like '*themepick*') 'layouts/AppShell.vue'
+$pickerPath = Join-Path $srcDir 'components\ThemePicker.vue'
+$picker = ''
+if (Test-Path -LiteralPath $pickerPath) { $picker = Read-All $pickerPath }
+Check 'D3b5 theme picker component ships the preview colour cards' `
+    (($picker -like '*theme-pop*') -and ($picker -like '*theme-grid*') -and ($picker -like '*dots*')) 'components/ThemePicker.vue'
+$shell = Read-All (Join-Path $srcDir 'layouts\AppShell.vue')
+$loginView = Read-All (Join-Path $srcDir 'views\auth\LoginView.vue')
+Check 'D3b5b topbar uses the picker and it sits at the far right (after the identity chip)' `
+    (($shell -like '*<ThemePicker />*') -and ($shell.IndexOf('<ThemePicker />') -gt $shell.IndexOf('chipOpen = !chipOpen'))) 'layouts/AppShell.vue'
+Check 'D3b5c login page can change the theme too' ($loginView -like '*<ThemePicker />*') 'views/auth/LoginView.vue'
 Check 'D3b6 no leftover preview-bar (35px) offsets' `
     (($mainCss -like '*min-height: 100vh*') -and ($mainCss -like '*top: 0*')) 'styles/main.css'
+Check 'D3b7 hero banner overlay no longer swallows clicks' `
+    (($mainCss -like '*hero .lead > **') -and ($mainCss -like '*hero .lead:after*')) 'styles/main.css'
 $indexHtml = Read-All (Join-Path $frontend 'index.html')
 Check 'D3c index.html carries data-theme on <html>' ($indexHtml -like '*data-theme=*') 'index.html'
 

@@ -4,19 +4,18 @@ import { RouterLink, RouterView, useRoute, useRouter } from 'vue-router'
 import logo from '@/assets/brand/logo.png'
 import { useUiStore } from '@/stores/ui'
 import { useUserStore } from '@/stores/user'
-import { useThemeStore } from '@/stores/theme'
+import ThemePicker from '@/components/ThemePicker.vue'
 import { PERM, PERM_LABEL } from '@/utils/perm'
 import * as reviewApi from '@/api/review'
 
 /**
- * 产品外壳：左侧栏（导航随权限增减）+ 顶栏（主题 / 通知 / 身份框）+ 内容区。
- * 类名沿用预览稿组件层，视觉与 v8.2 预览稿一致。
+ * 产品外壳：左侧栏（导航随权限增减）+ 顶栏（搜索 / 通知 / 身份 / 主题选择器）+ 内容区。
+ * 类名沿用预览稿组件层，视觉与预览稿（v8.3）一致。
  */
 const route = useRoute()
 const router = useRouter()
 const user = useUserStore()
 const ui = useUiStore()
-const theme = useThemeStore()
 
 interface NavItem {
   id: string
@@ -71,7 +70,6 @@ const pageTitle = computed(() => (route.meta.title as string | undefined) ?? '')
 
 const bellOpen = ref(false)
 const chipOpen = ref(false)
-const themeOpen = ref(false)
 const keyword = ref('')
 
 /** 通知（后端暂无通知接口：静态三条 + 未读红点，口径与预览稿一致）。 */
@@ -89,20 +87,6 @@ function readAll(): void {
 function closePops(): void {
   bellOpen.value = false
   chipOpen.value = false
-  themeOpen.value = false
-}
-
-function toggleThemePop(): void {
-  const next = !themeOpen.value
-  closePops()
-  themeOpen.value = next
-}
-
-/** 选一套主题：换完顺手把面板收起来（预览稿也是点一下就生效并关闭）。 */
-function pickTheme(id: string): void {
-  theme.setTheme(id)
-  themeOpen.value = false
-  ui.ok(`已切换到「${theme.currentTheme.name}」`)
 }
 
 function submitSearch(): void {
@@ -187,42 +171,6 @@ const roleText = computed(() => (user.roles.length ? user.roles.join(' / ') : '�
             @keyup.enter="submitSearch"
           />
 
-          <!-- 主题选择器：与预览稿「通用：主题选择器（右上角，可视化色卡）」逐字同构 ——
-               按钮上是当前主题的三色点 + 中文名 + ▾，弹出的是 6 张「迷你界面」色卡。
-               样式来自 components.css（.themepick/.theme-btn/.dots/.theme-pop/.theme-grid/.tp），
-               每张卡的颜色由 .t-<主题id> 上的 --c1~--c5 给出（由 sync-preview 从预览稿生成）。 -->
-          <div class="themepick">
-            <button class="btn theme-btn" title="切换主题（6 套，即时生效）" @click="toggleThemePop">
-              <span class="dots" :class="`t-${theme.current}`"><i></i><i></i><i></i></span>
-              <span>{{ theme.currentTheme.name }}</span>
-              <span class="t3">▾</span>
-            </button>
-            <div v-if="themeOpen" class="theme-pop">
-              <h4>选择主题（{{ theme.themes.length }} 套 · 即时生效 · 记住本次选择）</h4>
-              <div class="theme-grid">
-                <div
-                  v-for="t in theme.themes"
-                  :key="t.id"
-                  class="tp"
-                  :class="[`t-${t.id}`, { on: t.id === theme.current }]"
-                  :title="t.desc"
-                  @click="pickTheme(t.id)"
-                >
-                  <div class="mini">
-                    <div class="sb"><i></i><i></i><i></i></div>
-                    <div class="ct"><i class="w70"></i><i></i><i class="w50"></i></div>
-                  </div>
-                  <div class="cap">
-                    <b>{{ t.name }}</b>
-                    <span class="xs t3">{{ t.tag }}</span>
-                    <span class="sw"><i></i><i></i><i></i><i></i><i></i></span>
-                    <span v-if="t.id === theme.current" class="ok">✓</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
           <div class="pop-host">
             <button class="btn btn-sm btn-ghost" title="通知" @click="bellOpen = !bellOpen; chipOpen = false">
               <span v-if="unreadCount" class="dot"></span>通知
@@ -263,6 +211,11 @@ const roleText = computed(() => (user.roles.length ? user.roles.join(' / ') : '�
               </div>
             </div>
           </div>
+
+          <!-- 主题选择器：**独立占顶栏最右**（用户要求：不要夹在通知与身份之间，要一眼看到）
+               与登录页共用同一个组件，色卡颜色由 sync-preview 从预览稿生成 -->
+          <span class="topbar-sep"></span>
+          <ThemePicker />
         </div>
       </header>
 

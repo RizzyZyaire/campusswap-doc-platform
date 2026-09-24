@@ -468,7 +468,13 @@ Check 'tag.delete.real.http' (Api -Method DELETE -Path ('/api/tags/' + $tagId) -
 Check 'tag.delete.again.http' (Api -Method DELETE -Path ('/api/tags/' + $tagId) -Token $docAdmin).Status 404
 Check 'tag.deleteB.http' (Api -Method DELETE -Path ('/api/tags/' + $tagBId) -Token $docAdmin).Status 200
 # soft delete must release the unique key: the same tag name can be created again (ARCHITECTURE rule 18)
-Check 'tag.recreate-after-delete.http' (Api -Method POST -Path '/api/tags' -Token $docAdmin -Body @{ name = ('m4tag2-' + $stamp) }).Status 200
+$tagRecreated = Api -Method POST -Path '/api/tags' -Token $docAdmin -Body @{ name = ('m4tag2-' + $stamp) }
+Check 'tag.recreate-after-delete.http' $tagRecreated.Status 200
+# cleanup: the recreated tag is the only row this script would otherwise leave in the demo DB
+# (it showed up as a stray chip named m4tag2-<stamp> in the UI tag filter -- found 2026-09-24)
+if ($tagRecreated.Status -eq 200) {
+    Check 'cleanup.tag.delete.http' (Api -Method DELETE -Path ('/api/tags/' + $tagRecreated.Data.data.id) -Token $docAdmin).Status 200
+}
 
 # -----------------------------------------------------------------------------
 Write-Host ''

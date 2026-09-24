@@ -133,11 +133,19 @@ $seeds = @(
   @{ n = 'depts';       sql = 'SELECT COUNT(*) FROM sys_dept';            want = '3'  },
   @{ n = 'users';       sql = 'SELECT COUNT(*) FROM sys_user';            want = '3'  },
   @{ n = 'categories';  sql = 'SELECT COUNT(*) FROM doc_category';        want = '4'  },
-  @{ n = 'tags';        sql = 'SELECT COUNT(*) FROM doc_tag';             want = '5'  },
-  @{ n = 'documents';   sql = 'SELECT COUNT(*) FROM doc_document';        want = '5'  },
-  @{ n = 'published';   sql = "SELECT COUNT(*) FROM doc_document WHERE status='PUBLISHED'"; want = '2' },
-  @{ n = 'versions';    sql = 'SELECT COUNT(*) FROM doc_version';         want = '9'  },
-  @{ n = 'favorites';   sql = 'SELECT COUNT(*) FROM doc_favorite';        want = '3'  }
+  @{ n = 'tags';        sql = 'SELECT COUNT(*) FROM doc_tag';             want = '20' },
+  @{ n = 'documents';   sql = 'SELECT COUNT(*) FROM doc_document';        want = '45' },
+  @{ n = 'published';   sql = "SELECT COUNT(*) FROM doc_document WHERE status='PUBLISHED'"; want = '28' },
+  @{ n = 'drafts';      sql = "SELECT COUNT(*) FROM doc_document WHERE status='DRAFT'";     want = '9'  },
+  @{ n = 'archived';    sql = "SELECT COUNT(*) FROM doc_document WHERE status='ARCHIVED'";  want = '4'  },
+  @{ n = 'trash';       sql = "SELECT COUNT(*) FROM doc_document WHERE status='TRASH'";     want = '4'  },
+  @{ n = 'versions';    sql = 'SELECT COUNT(*) FROM doc_version';         want = '99' },
+  @{ n = 'tag-rels';    sql = 'SELECT COUNT(*) FROM doc_document_tag_rel'; want = '109' },
+  @{ n = 'favorites';   sql = 'SELECT COUNT(*) FROM doc_favorite';        want = '39' },
+  # 2026-09-24: after the corpus grew to 45 docs, count-consistency itself is evidence of a self-consistent seed
+  @{ n = 'tag-use-count-consistent'; sql = 'SELECT COUNT(*) FROM doc_tag t WHERE t.use_count <> (SELECT COUNT(*) FROM doc_document_tag_rel r WHERE r.tag_id = t.id)'; want = '0' },
+  @{ n = 'favorite-count-consistent'; sql = 'SELECT COUNT(*) FROM doc_document d WHERE d.favorite_count <> (SELECT COUNT(*) FROM doc_favorite f WHERE f.document_id = d.id)'; want = '0' },
+  @{ n = 'version-num-consistent'; sql = 'SELECT COUNT(*) FROM doc_document d WHERE d.version_num <> (SELECT MAX(version_num) FROM doc_version v WHERE v.document_id = d.id)'; want = '0' }
 )
 $seedBad = @()
 foreach ($s in $seeds) {

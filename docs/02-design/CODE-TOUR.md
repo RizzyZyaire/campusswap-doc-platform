@@ -65,7 +65,7 @@
 - **你要能讲**：登录方案为什么这么定——依据老师的需求工程 SOP + "防 IDOR"红线 + Redis 会话口径，加上 JWT 不可撤销（要撤销就得在 Redis 存版本号比对，等于没省 Redis）。**这就是老师问"为什么不用我那套"的完整答案。**
 
 ### M2 数据库落地 —— `6397964`
-- **做了什么**：`backend/sql/{schema.sql,data.sql,perf-fixture.sql}`；14 张表 + 20 索引 + 种子数据（39 权限点三层树 / 3 角色 / 3 部门 / 4 分类 / 5 标签 / 5 篇覆盖四种状态的文档 / 9 条版本留痕 / 3 条收藏）。
+- **做了什么**：`backend/sql/{schema.sql,data.sql,perf-fixture.sql}`；14 张表 + 20 索引 + 种子数据（39 权限点三层树 / 3 角色 / 3 部门 / 4 分类 / 20 标签 / 45 篇覆盖四种状态的文档 / 99 条版本留痕 / 3 条收藏）。
 - **关键决策**：`ddl-auto: none`（表由 SQL 脚本建，Hibernate 只 `validate`）；软删除用 `deleted` 列 + 唯一列改写；树形用 `parentId + ancestors` 物化路径。
 - **证据**：`verify-m2.ps1` 16/16；`EXPLAIN-NOTES.md`（Q1 0.149 ms / Q2 0.221 ms / Q3 0.135 ms，对照组全表扫描 18.2 ms）。
 - **你要能讲**：索引要覆盖"WHERE + ORDER BY 的组合"，不是越多越好；排序键不进索引会退化成 filesort。
@@ -291,7 +291,7 @@ D:\DevEnv\04_Redis\redis-cli.exe -p 6379 KEYS 'perm:*'
 | 1 | 分类 / 标签的 6 个写接口要不要给界面入口 | **渲染入口**（院系与业务条线会变，管理员必须能自助维护） | `UI_UX_SPECIFICATION §10.3` + §8.9；预览稿已渲染「新增/改名/删除」 |
 | 2 | 治理页拿不到全状态列表（实锤的规格-后端不一致） | **补接口**：新增 `GET /api/documents/manage`（端点编号 **57**，权限 `doc:manage`），`GET /api/documents` 语义不变 | `DocumentManageDtoReq` / `DocumentManageQuery` / `DocumentQueryRepositoryImpl.searchManage` / `DocumentController#manage`；预览稿治理页的红色缺口提示改成「接口已就位（编号 57）」 |
 | 3 | 「我的资料 → 修改密码」缺自助改密接口 | **补接口**：新增 `PUT /api/auth/password`（端点编号 **56**，登录即可、仅本人）；改密成功后**全部会话失效**（含当前设备） | `PasswordChangeDtoReq` / `AuthController#changePassword` / `AuthServiceImpl#changePassword`；预览稿「我的资料」页同步 |
-| 4 | 演示数据公司口径 → 校园口径 | **已重种子化**：单位＝信息化中心 / 软件学院（网络教育学院）/ 网络运行科；分类＝教务教学 / 党政公文 / 实习支教（子类）/ 科研学术；文档 5 篇覆盖四状态 | `backend/sql/data.sql`（表数/行数形状不变，靠 scratch 库 `campusswap_seedcheck` 全量导入校验） |
+| 4 | 演示数据公司口径 → 校园口径 | **已重种子化**：单位＝信息化中心 / 软件学院（网络教育学院）/ 网络运行科；分类＝教务教学 / 党政公文 / 实习支教（子类）/ 科研学术；文档 45 篇覆盖四状态（2026-09-24 由 5 篇扩到 45 篇，见 `M5-CLOSURE §5`） | `backend/sql/data.sql`（表数不变，靠 scratch 库 `campusswap_seedcheck` 全量导入校验） |
 | 5 | `sys_user_permission`（用户级直授权）要不要给界面入口 | **不渲染**（维持 M3 决定）：权限树按角色授权已覆盖业务需要，直授权是接口能力，不做界面 | `UI_UX_SPECIFICATION §10.7`（本次新增决定记录）+ §2 一致性提示 |
 
 ### 9.2 仍未结清
