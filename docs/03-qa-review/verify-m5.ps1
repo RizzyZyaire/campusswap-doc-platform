@@ -96,14 +96,27 @@ Check 'D2d every view file is imported by the router' ($notRouted.Count -eq 0) (
 
 # --- D3: 6 themes wired end to end -----------------------------------------
 $themeCss = Read-All (Join-Path $stylesDir 'theme.css')
+$compCss = Read-All (Join-Path $stylesDir 'components.css')
+$mainCss = Read-All (Join-Path $stylesDir 'main.css')
 $themes = @('hebtu', 'gingko', 'celadon', 'ink', 'jiang', 'night')
 $themeHits = 0
 foreach ($t in $themes) { if ($themeCss.Contains('html[data-theme="' + $t + '"]')) { $themeHits++ } }
 Check 'D3a theme.css defines all 6 themes' ($themeHits -eq 6) ('themes=' + $themeHits)
 $themeStore = Read-All (Join-Path $srcDir 'stores\theme.ts')
-$storeHits = 0
-foreach ($t in $themes) { if ($themeStore -like ("*'" + $t + "'*")) { $storeHits++ } }
-Check 'D3b theme store lists the same 6 themes' ($storeHits -eq 6) ('themes=' + $storeHits)
+$themeMeta = Read-All (Join-Path $stylesDir 'theme-meta.ts')
+$metaHits = 0
+foreach ($t in $themes) { if ($themeMeta.Contains("id: '" + $t + "'")) { $metaHits++ } }
+Check 'D3b generated theme-meta.ts lists all 6 themes' ($metaHits -eq 6) ('themes=' + $metaHits)
+Check 'D3b2 theme store takes names/cards from the generated meta (no hand-copied list)' `
+    (($themeStore -like '*styles/theme-meta*') -and ($themeStore -like '*THEME_META*')) 'stores/theme.ts'
+Check 'D3b3 color-card vars live in theme.css (not tree-shaken by Tailwind)' `
+    ($themeCss.Contains('.t-hebtu{--c1:')) 'styles/theme.css'
+Check 'D3b4 color-card vars are NOT in the tree-shaken components.css' `
+    (-not $compCss.Contains('.t-hebtu{--c1:')) 'styles/components.css'
+Check 'D3b5 product topbar ships the preview theme picker (themepick)' `
+    ((Read-All (Join-Path $srcDir 'layouts\AppShell.vue')) -like '*themepick*') 'layouts/AppShell.vue'
+Check 'D3b6 no leftover preview-bar (35px) offsets' `
+    (($mainCss -like '*min-height: 100vh*') -and ($mainCss -like '*top: 0*')) 'styles/main.css'
 $indexHtml = Read-All (Join-Path $frontend 'index.html')
 Check 'D3c index.html carries data-theme on <html>' ($indexHtml -like '*data-theme=*') 'index.html'
 

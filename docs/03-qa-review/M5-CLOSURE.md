@@ -29,7 +29,7 @@
 
 | # | 命令 | 结果 |
 |---|---|---|
-| 1 | `powershell -NoProfile -ExecutionPolicy Bypass -File docs/03-qa-review/verify-m5.ps1` | **PASS=43 FAIL=0**（视图 / 路由 / 主题 / 红线 / `versionNum` 契约 / 下架无入口 / 39 权限码与库对齐 / token 单一出处 / 57 端点覆盖 / 生成物与素材清单 / M5 任务勾选） |
+| 1 | `powershell -NoProfile -ExecutionPolicy Bypass -File docs/03-qa-review/verify-m5.ps1` | **PASS=48 FAIL=0**（视图 / 路由 / 主题 / 红线 / `versionNum` 契约 / 下架无入口 / 39 权限码与库对齐 / token 单一出处 / 57 端点覆盖 / 生成物与素材清单 / M5 任务勾选） |
 | 2 | `cd frontend && pnpm run typecheck` | exit 0 |
 | 3 | `cd frontend && pnpm run lint` | exit 0（`--max-warnings 0`，禁 `any`、禁内联 `style`） |
 | 4 | `cd frontend && pnpm run build` | exit 0（`vue-tsc --noEmit && vite build`） |
@@ -39,7 +39,7 @@
 | 8 | 后端回归（重建演示库后） | m0 **13** / m1 **15** / api-spec **24** / m2 **17** / db-deep **9** / m3 **36** / m3-http **142** / m4 **30** / m4-http **221** 全绿；`mvnw test` **6/6** |
 | 9 | 截图自查（`D:\DevEnv\logs\shots\m5-*.png`） | 登录 / 工作台 / 检索（含命中高亮）/ 详情（发布态 + 草稿态）/ 编辑器（双栏 + **冲突横幅** + 恢复后）/ 我的文档 / 审核抽屉 / 治理 / 分类标签 / 用户 / 角色（权限树）/ 组织 / 我的资料 / 404 |
 
-> 截图是"人眼那一道"的补充：本轮的 4 个 UI 缺陷（见 §3 D5~D8）**全部是靠截图/裁剪发现的**，
+> 截图是"人眼那一道"的补充：本轮的 UI 缺陷（§3 D5~D8，以及交付后用户反馈带出的 D11/D12）**几乎都是靠截图/裁剪/几何探针发现的**，
 > 静态检查当时都是绿的 —— 这条经验值得写进 M6 的走查清单。
 
 ---
@@ -57,6 +57,9 @@
 | D7 | 登录页左侧塔图不显示（M5 早期） | `extract-preview.mjs` 早期把含 `var(--photo-*)` 的规则**整条丢弃**，`.login-aside .bg` 的定位一起没了 | 改为**改名保留**（`--photo-login-a → --login-photo`、`--photo-* → --hero-photo`） | 截图 `m5-login2.png` |
 | D8 | 编辑器"双栏"模式名不副实（上下堆叠）且右侧预览重复 | 布局按 `.editor` 单列堆叠 | 新增 `.md-wrap(.split)`，双栏时左右各半、并隐藏右栏预览 | 截图 `m5-edit3.png` |
 | D9 | `CHANGE_TYPE_TEXT` 在审核页模板里用到但**没 import** | `pnpm run build`（含 `vue-tsc`）拦住 | 补 import | build exit 0 |
+| **D11** | **页面顶部一条 35px 的空白带**（交付后用户实测反馈：「顶栏上方莫名一根白条」，侧栏与顶栏整体下沉 35px） | 预览稿顶部有一条 35px 的**预览条**（`.pvbar`：换身份 / 直达 / 主题），它的骨架里到处写着 `calc(100vh - 35px)` 与 `top:35px`；产品没有这条预览条，这些预留偏移就变成了空白带（实测 `.sidebar`/`.topbar` 的 `rect.top` 都是 35） | 在 `main.css` 覆盖成真实值：`.app{min-height:100vh}`、`.sidebar{top:0;height:100vh}`、`.topbar{top:0}`、`.login-wrap{min-height:100vh}`、`.side-sticky{top:76px}`（生成物不能手改）；机检加 D3b6 | 几何探针：`sidebarTop=0 / topbarTop=0`；截图复核 |
+| **D12** | **顶栏的主题选择器只剩一个没有样式的文字按钮**（用户：「主题都换不了」） | `extract-preview.mjs` 的 `PREVIEW_ONLY` 把 `.themepick/.theme-btn/.dots/.theme-pop/.theme-grid/.tp` 也当成"预览稿专用"丢掉了 —— 而预览稿里这组样式的注释写着「**通用**：主题选择器（右上角，可视化色卡）」，它只是演示时被摆在预览条上 | ① 提取器只剔 `.pvbar`；② `AppShell` 顶栏照预览稿重建该控件（按钮 = 当前主题三色点 + 中文名 + ▾，弹层 = 6 张「迷你界面」色卡 + 气质标签 + 五色点 + ✓）；③ 主题名/色卡改由 `sync-preview` 从预览稿 `var THEMES` 生成（`src/styles/theme-meta.ts`），产品侧不再手抄 |
+| **D12b** | 修完 D12 后**色卡全部透明** | 色卡变量最初生成在 `components.css` 的 `@layer` 里，而卡上的类名是 `t-${id}` 动态拼的 → Tailwind 在源码里找不到 `t-ink` 这种字面量，把 `.t-ink{--c1:…}` 整条**摇掉** | 把 `.t-<主题id>{--c1..--c5}` 生成到 **theme.css**（不在 `@layer` 里、Tailwind 不摇树），上色规则留在组件层；机检加 D3b3/D3b4 | 探针：色卡取到真实色值（`rgb(48,48,100)` 等），点「墨夜黑」后 `data-theme=night`、刷新仍记住 |
 | D10 | 环境/工具链三类报错 | ① `ERR_PNPM_IGNORED_BUILDS`（pnpm 11 不读 `package.json` 的 `pnpm` 字段）→ 设置搬到 `pnpm-workspace.yaml` 的 `allowBuilds`；② pnpm 供应链策略拒绝 24h 内新发布的传递依赖 → 用 `overrides` 钉版本，**没有关策略**；③ Vite 监听临时目录 `EBUSY` → `server.watch.ignored` | 见左 | `pnpm install` / `pnpm dev` 均正常 |
 
 **检查器自身 bug 累计 8 个（M4 前）+ 本轮 1 个（D3）**，另有 `verify-m5.ps1` 首轮自测暴露的 5 处写法问题（`-like` 的 `[` 通配、`.NET` 相对路径按进程目录解析、`Sort-Object -Unique` 把同路径不同方法误并、素材清单少拼一层目录、非 ASCII 锚点）——**均已修**，这也是 `verify-m5.ps1` 首轮 35/43 → 43/43 的过程记录。

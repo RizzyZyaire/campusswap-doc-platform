@@ -39,8 +39,8 @@
 | 项 | 值 |
 |---|---|
 | 提交 | **12 次**，`main` == `origin/main` == `397d7c8` |
-| 被跟踪文件 | **269**：`backend/*.java` **150**、`frontend/src/**` **45**（含 15 个 .vue）、`docs/*.md` **14**、`docs/03-qa-review/*.ps1` **10** |
-| 机检规模 | **10 个脚本、约 568 个断言/检查点**（13+15+24+17+9+36+142+30+221+43）+ 前端 4 条命令（typecheck/lint/build/check-classes）+ 预览稿 211 项 |
+| 被跟踪文件 | **270**：`backend/*.java` **150**、`frontend/src/**` **46**（含 15 个 .vue + 生成物 `styles/theme-meta.ts`）、`docs/*.md` **14**、`docs/03-qa-review/*.ps1` **10** |
+| 机检规模 | **10 个脚本、约 573 个断言/检查点**（13+15+24+17+9+36+142+30+221+48）+ 前端 4 条命令（typecheck/lint/build/check-classes）+ 预览稿 211 项 |
 | 接口 | **57 个**后端端点，前端 `src/api` **全覆盖**（机检 D9b 对账 0 未覆盖） |
 | 数据库 | `campusswap_db`：**14 张表 / 20 个索引**，零物理外键（靠机检守逻辑外键） |
 | 权限 | **39 个权限点**、3 个角色、3 个部门；前端 39 个常量与库中逐字一致（机检 D7c） |
@@ -118,8 +118,12 @@
   2. `src/router/index.ts` 守卫按 §1.3：未登录 → `/login?redirect=`；已登录但 `meta.perm` 不匹配 → `/403?perm=`（**`/docs/edit/:id?` 必须排在 `/docs/:id` 前面**，否则 `/docs/edit` 会被详情路由吃掉）。
   3. `views/document/DocumentEditView.vue` —— **409 分两种处置**：状态冲突（归档/回收站）切只读；**版本冲突不切只读**，出横幅 +「刷新内容」按钮（`versionNum` 陈旧表单防覆盖的前端那一半）。这个分支有端到端复现脚本 `frontend/scripts/verify-edit-conflict.mjs`（真改一版 → 保存 → 断言横幅与不切只读 → 刷新 → 再存成功，10/10）。
 - **本轮抓到并修掉的真缺陷**（`M5-CLOSURE.md §3` 有完整复现/根因/修法）：① 预览稿同步脚本从 HTML 注释里的字面量 `<style>` 起算，生成出来的 `components.css` **第一条规则是非法选择器**；② 平铺正则不支持花括号嵌套 → `@keyframes sk` 头部丢失、产物里留两行孤立声明；③ 原检查器"未解析内容"判断因 `exec` 归零 `lastIndex` 而**恒为假**（正因如此①②才藏了很久）；④ 模板里写了不存在的类名 → 因此新增 `pnpm run check-classes`（拿**产物 CSS** 对账 206 个类名）。
-- **证据**：`verify-m5.ps1` **43/43** + `typecheck/lint/build/check-classes` 四条 exit 0 + 409 脚本 **10/10** + 后端全量回归绿（m0 13 / m1 15 / api-spec 24 / m2 17 / db-deep 9 / m3 36 / m3-http 142 / m4 30 / m4-http 221 / JUnit 6）+ 预览稿 211 + 15 张页面截图（`D:\DevEnv\logs\shots\m5-*.png`）。
+- **证据**：`verify-m5.ps1` **48/48** + `typecheck/lint/build/check-classes` 四条 exit 0 + 409 脚本 **10/10** + 后端全量回归绿（m0 13 / m1 15 / api-spec 24 / m2 17 / db-deep 9 / m3 36 / m3-http 142 / m4 30 / m4-http 221 / JUnit 6）+ 预览稿 211 + 15 张页面截图（`D:\DevEnv\logs\shots\m5-*.png`）。
 - **一条可以背下来的经验**：**"生成物"也要有体检**。设计系统是脚本从预览稿生成的，脚本的两个正则 bug 都能产出"看起来正常、其实非法/丢失"的 CSS；而静态检查当时全绿 —— 最后是拿**构建产物**核对类名、以及截图人眼，才把它们揪出来。
+- **交付后由用户实测反馈带出的两个真缺陷（2026-09-24 早上补修，见 M5-CLOSURE D11/D12）**：
+  1. **顶部 35px 空白带**：预览稿顶部有一条 35px 的预览条（`.pvbar`：换身份 / 直达 / 主题），它骨架里到处写着 `calc(100vh - 35px)` 与 `top:35px`；产品没有这条预览条 → 页面顶部多出一根白条、侧栏与顶栏整体下沉 35px。修法：在 `main.css` 覆盖成真实值（生成物不能手改），几何探针复验 `sidebarTop=0`。
+  2. **主题选择器被误删**：提取器的 `PREVIEW_ONLY` 把 `.themepick/.theme-btn/.dots/.theme-pop/.theme-grid/.tp` 当成"预览稿专用"丢掉，而预览稿里这组样式的注释写着「**通用**：主题选择器（右上角，可视化色卡）」→ 顶栏只剩一个没有样式的文字按钮。修法：提取器只剔 `.pvbar`，顶栏照预览稿重建色卡控件；主题名与色卡改由 `sync-preview` 从预览稿 `var THEMES` 生成（`src/styles/theme-meta.ts`）。**教训：判"这是不是预览稿专用"要看注释里的口径，不能看它当前摆在哪儿。**
+- **日常怎么自己起前端/后端**：桌面 `CampusSwap-启动前端（双击·含后端）.cmd`（→ `D:\DevEnv\scripts\campusswap-start.cmd`）一键拉起并自动打开浏览器；`CampusSwap-停止前端（双击）.cmd` 关掉。⚠️ **`pnpm` 只存在于 DSH Desktop 的 runtime-commands 目录、不在系统 PATH 上**，所以启动脚本用 `F:\node\node.exe` 直接跑 `node_modules\vite\bin\vite.js`；另外 `.cmd` 里**不能在 if/else 块的 echo 文本里写圆括号**（cmd 会把它当块分隔符，整脚本报 "... was unexpected at this time"，本轮实测踩到）。
 
 ---
 
@@ -149,7 +153,7 @@
 | `src/views` | 15 | 逐页实现（四态 + 权限显隐） | `document/DocumentEditView.vue`（409 两种处置）、`admin/RoleAdminView.vue`（三层权限树半选） |
 | `src/utils` | 4 | 权限常量 / 格式化 / Markdown 渲染与目录 / 行级 diff | `perm.ts`（39 个权限码）、`diff.ts`（自研 LCS，无第三方依赖） |
 | `src/styles` | 3 | `theme.css`+`components.css` **生成**，`main.css` 手写 | `main.css` 顶部注释（为什么不能手改生成物） |
-| `scripts` | 4 | 预览稿同步 / 截图 / 类名体检 / 409 复现 | `extract-preview.mjs`（含两个已修的正则坑） |
+| `scripts` | 4 | 预览稿同步 / 截图 / 类名体检 / 409 复现 | `extract-preview.mjs`（含三个已修的坑：注释里的 `<style>`、丢失的 `@keyframes`、被误删的主题选择器） |
 
 ---
 

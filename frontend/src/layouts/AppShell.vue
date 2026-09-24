@@ -98,6 +98,13 @@ function toggleThemePop(): void {
   themeOpen.value = next
 }
 
+/** 选一套主题：换完顺手把面板收起来（预览稿也是点一下就生效并关闭）。 */
+function pickTheme(id: string): void {
+  theme.setTheme(id)
+  themeOpen.value = false
+  ui.ok(`已切换到「${theme.currentTheme.name}」`)
+}
+
 function submitSearch(): void {
   const kw = keyword.value.trim()
   void router.push({ name: 'docs', query: kw ? { keyword: kw } : {} })
@@ -180,22 +187,38 @@ const roleText = computed(() => (user.roles.length ? user.roles.join(' / ') : '�
             @keyup.enter="submitSearch"
           />
 
-          <div class="pop-host">
-            <button class="btn btn-sm btn-ghost" title="切换主题" @click="toggleThemePop">主题</button>
-            <div v-if="themeOpen" class="pop-panel narrow">
-              <div class="pop-head"><b>主题</b><span class="spacer"></span><span class="xs t3">共 6 套</span></div>
-              <div class="pop-body">
-                <button
+          <!-- 主题选择器：与预览稿「通用：主题选择器（右上角，可视化色卡）」逐字同构 ——
+               按钮上是当前主题的三色点 + 中文名 + ▾，弹出的是 6 张「迷你界面」色卡。
+               样式来自 components.css（.themepick/.theme-btn/.dots/.theme-pop/.theme-grid/.tp），
+               每张卡的颜色由 .t-<主题id> 上的 --c1~--c5 给出（由 sync-preview 从预览稿生成）。 -->
+          <div class="themepick">
+            <button class="btn theme-btn" title="切换主题（6 套，即时生效）" @click="toggleThemePop">
+              <span class="dots" :class="`t-${theme.current}`"><i></i><i></i><i></i></span>
+              <span>{{ theme.currentTheme.name }}</span>
+              <span class="t3">▾</span>
+            </button>
+            <div v-if="themeOpen" class="theme-pop">
+              <h4>选择主题（{{ theme.themes.length }} 套 · 即时生效 · 记住本次选择）</h4>
+              <div class="theme-grid">
+                <div
                   v-for="t in theme.themes"
                   :key="t.id"
-                  class="pop-item"
-                  :class="{ on: t.id === theme.current }"
-                  @click="theme.setTheme(t.id)"
+                  class="tp"
+                  :class="[`t-${t.id}`, { on: t.id === theme.current }]"
+                  :title="t.desc"
+                  @click="pickTheme(t.id)"
                 >
-                  <span class="swatch" :data-theme="t.id"></span>
-                  <span>{{ t.name }}</span>
-                  <span class="k">{{ t.desc }}</span>
-                </button>
+                  <div class="mini">
+                    <div class="sb"><i></i><i></i><i></i></div>
+                    <div class="ct"><i class="w70"></i><i></i><i class="w50"></i></div>
+                  </div>
+                  <div class="cap">
+                    <b>{{ t.name }}</b>
+                    <span class="xs t3">{{ t.tag }}</span>
+                    <span class="sw"><i></i><i></i><i></i><i></i><i></i></span>
+                    <span v-if="t.id === theme.current" class="ok">✓</span>
+                  </div>
+                </div>
               </div>
             </div>
           </div>

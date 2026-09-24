@@ -136,5 +136,6 @@
 | token 键单一出处（`TOKEN_KEY`） | D8a/D8b | 通过 |
 | 57 个后端端点全部被 `src/api` 覆盖 | D9a/D9b | 通过 |
 | 生成物带"请勿手改"横幅、素材清单逐项存在、`main.css` 未被生成脚本覆盖 | D10a~D10f、D11a~D11d | 通过 |
-| 模板里的类名都在产物 CSS 里存在（206 个） | `pnpm run check-classes` | 通过 |
+| 模板里的类名都在产物 CSS 里存在（219 个） | `pnpm run check-classes` | 通过 |
+| 顶栏就是预览稿那套可视化色卡选择器；无预览条遗留的 35px 偏移 | D3b5/D3b6（+ 几何探针 `sidebarTop=0`） | 通过 |
 | `src/types` 无自造字段名（逐个回查 GLOSSARY） | D13 | 通过 |

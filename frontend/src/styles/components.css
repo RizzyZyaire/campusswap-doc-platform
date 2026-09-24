@@ -4,6 +4,31 @@
    图片变量改名：--photo-<theme> → --hero-photo、--photo-login-a → --login-photo（由 theme.css 提供）。
    ============================================================================= */
 @layer components {
+  /* —— 通用：主题选择器（右上角，可视化色卡） —— */
+  .themepick{position:relative}
+  .theme-btn{gap:7px;padding:5px 10px;font-size:12.5px}
+  .dots{display:inline-flex;gap:3px}
+  .dots i{width:11px;height:11px;border-radius:3px;display:block;border:1px solid rgba(0,0,0,.10)}
+  .theme-pop{position:fixed;top:56px;right:16px;z-index:140;width:452px;background:var(--surface);
+    border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow-lg);padding:14px;}
+  .theme-pop.bottom{top:auto;bottom:16px}
+  .theme-pop h4{font-size:13px;font-weight:600;color:var(--text-2);margin:0 0 11px}
+  .theme-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .tp{border:1px solid var(--border);border-radius:var(--radius-sm);overflow:hidden;cursor:pointer;background:var(--surface);transition:border-color var(--t-fast),box-shadow var(--t-fast)}
+  .tp:hover{border-color:var(--border-strong)}
+  .tp.on{border-color:var(--primary);box-shadow:var(--ring)}
+  .tp .mini{display:flex;height:54px}
+  .tp .mini .sb{width:32%;padding:8px 7px;display:flex;flex-direction:column;gap:5px}
+  .tp .mini .sb i{display:block;height:5px;border-radius:3px;background:rgba(255,255,255,.5)}
+  .tp .mini .ct{flex:1;padding:9px 8px;display:flex;flex-direction:column;gap:6px}
+  .tp .mini .ct i{display:block;height:6px;border-radius:3px}
+  .tp .mini .ct i.w70{width:70%}
+  .tp .mini .ct i.w50{width:50%}
+  .tp .cap{display:flex;align-items:center;gap:6px;padding:7px 9px;border-top:1px solid var(--border);font-size:12px}
+  .tp .cap b{font-weight:600}
+  .tp .cap .sw{margin-left:auto;display:flex;gap:3px}
+  .tp .cap .sw i{width:10px;height:10px;border-radius:2px;display:block;border:1px solid rgba(0,0,0,.08)}
+  .tp .cap .ok{color:var(--primary);font-weight:700}
   /* v6：选择器上移到常驻预览条右上角后，登录页的浮动换肤按钮取消（同一控件不再出现两处） */ /* —— 工作台横幅：左侧主题色渐变承载文案，右侧校园照片（按显示比例裁剪，永不放大） —— */
   .hero{position:relative;display:grid;grid-template-columns:minmax(0,1fr) 44%;border-radius:var(--radius-lg);overflow:hidden;margin-bottom:18px;border:2px solid var(--border);box-shadow:var(--shadow);transition:border-color var(--t-fast),box-shadow var(--t-fast)}
   .hero:hover{border-color:color-mix(in srgb,var(--accent) 42%,var(--border));box-shadow:var(--shadow-lg)}
@@ -437,4 +462,19 @@
   @keyframes sk{0%,100%{opacity:1}50%{opacity:.5}}
   .hero .shot{background-image:var(--hero-photo)}
   .login-aside .bg{background-image:var(--login-photo)}
+
+  /* —— 主题选择器色卡的「上色规则」；颜色变量 --c1~--c5 由 theme.css 的 .t-<主题id> 给出 —— */
+  .tp .mini .sb{background:var(--c1)}
+  .tp .mini .ct{background:var(--c4)}
+  .tp .mini .ct i:nth-child(1){background:var(--c2)}
+  .tp .mini .ct i:nth-child(2){background:var(--c5)}
+  .tp .mini .ct i:nth-child(3){background:var(--c3)}
+  .tp .cap .sw i:nth-child(1){background:var(--c1)}
+  .tp .cap .sw i:nth-child(2){background:var(--c2)}
+  .tp .cap .sw i:nth-child(3){background:var(--c3)}
+  .tp .cap .sw i:nth-child(4){background:var(--c4)}
+  .tp .cap .sw i:nth-child(5){background:var(--c5)}
+  .dots i:nth-child(1){background:var(--c1)}
+  .dots i:nth-child(2){background:var(--c2)}
+  .dots i:nth-child(3){background:var(--c3)}
 }

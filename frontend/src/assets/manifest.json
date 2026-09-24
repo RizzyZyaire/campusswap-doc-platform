@@ -1,7 +1,7 @@
 {
   "generatedFrom": "docs/02-design/UI-PREVIEW.html",
   "note": "由 frontend/scripts/extract-preview.mjs 生成；预览稿换了素材/样式就重跑 pnpm run sync-preview。",
-  "count": 13,
+  "count": 14,
   "files": [
     {
       "path": "assets/banners/celadon.jpg",
@@ -72,13 +72,19 @@
     {
       "path": "styles/components.css",
       "kind": "components",
-      "bytes": 37855,
-      "sha256": "c8ab9b2f6c94efb2"
+      "bytes": 40404,
+      "sha256": "326948f34c1dd901"
+    },
+    {
+      "path": "styles/theme-meta.ts",
+      "kind": "theme-meta",
+      "bytes": 2269,
+      "sha256": "4a6a14b81fd91e69"
     },
     {
       "path": "styles/theme.css",
       "kind": "tokens",
-      "bytes": 8341,
+      "bytes": 9458,
       "sha256": "—"
     }
   ]

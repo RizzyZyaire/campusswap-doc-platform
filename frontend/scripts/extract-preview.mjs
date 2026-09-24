@@ -110,6 +110,33 @@ while ((im = tagRe.exec(html))) {
   writeAsset(join('brand', `${name}.${im[2]}`), im[3], 'brand')
 }
 
+/* ---------- 2b) 主题元数据（`var THEMES`）----------
+   preview 的 `var THEMES = [...]` 是主题名 / 气质标签 / 五色色卡 / 设计说明的唯一真源：
+   ① 色卡变量写进 theme.css（**不能**写进 components.css —— 见下面的注释）；
+   ② 元数据写成 src/styles/theme-meta.ts，给 store 用，避免产品侧再手抄一遍名字。 */
+const themesBlock = /var THEMES = \[([\s\S]*?)\n\];/.exec(html)
+if (!themesBlock) throw new Error('预览稿里找不到 THEMES 数组')
+const themeMeta = []
+for (const m of themesBlock[1].matchAll(
+  /\{\s*id:'([a-z]+)',\s*name:'([^']+)',\s*tag:'([^']+)',\s*sw:\[([^\]]+)\],\s*desc:'([^']+)'\s*\}/g
+)) {
+  themeMeta.push({
+    id: m[1],
+    name: m[2],
+    tag: m[3],
+    sw: m[4].split(',').map((s) => s.trim().replace(/^'|'$/g, '')),
+    desc: m[5]
+  })
+}
+if (themeMeta.length !== THEMES.length) {
+  throw new Error(`THEMES 解析到 ${themeMeta.length} 套，期望 ${THEMES.length} 套`)
+}
+for (const id of THEMES) {
+  const t = themeMeta.find((x) => x.id === id)
+  if (!t) throw new Error(`THEMES 里缺少主题 ${id}`)
+  if (t.sw.length !== 5) throw new Error(`主题 ${id} 的色卡不是 5 色：${t.sw.length}`)
+}
+
 /* ---------- 3) theme.css ---------- */
 const tokenLines = []
 tokenLines.push('/* =============================================================================')
@@ -130,6 +157,16 @@ for (const theme of THEMES) {
   tokenLines.push('}')
   tokenLines.push('')
 }
+tokenLines.push('/* -----------------------------------------------------------------------------')
+tokenLines.push('   主题选择器的「色卡变量」：每张卡显示**它自己那套**配色，所以颜色按卡上的 `.t-<主题id>` 给。')
+tokenLines.push('   ⚠️ 这几条必须留在 theme.css（= 不在 `@layer` 里、Tailwind 不做摇树），不能挪进 components.css：')
+tokenLines.push('   卡片上的类名是 `t-${id}` 动态拼出来的，Tailwind 在源码里找不到 `t-ink` 这样的字面量，')
+tokenLines.push('   会把 `.t-ink{--c1:…}` 整条摇掉 —— 后果是色卡与按钮圆点全部透明（2026-09-24 实测踩到）。')
+tokenLines.push('   ----------------------------------------------------------------------------- */')
+for (const t of themeMeta) {
+  tokenLines.push(`.t-${t.id}{${t.sw.map((c, i) => `--c${i + 1}:${c}`).join(';')}}`)
+}
+tokenLines.push('')
 writeFileSync(join(stylesDir, 'theme.css'), tokenLines.join('\n'), 'utf8')
 manifest.push({ path: 'styles/theme.css', kind: 'tokens', bytes: Buffer.byteLength(tokenLines.join('\n')), sha256: '—' })
 
@@ -183,7 +220,12 @@ let flatCss = ''
 
 // 4a) 逐条规则解析（去掉 at-rule 后，剩下的就是平铺的「选择器{声明}」序列），
 //     比用正则切块稳：不会再出现括号不配对或把 var(...) 从中间截断的问题。
-const PREVIEW_ONLY = /(^|[\s,>])(\.pvbar|\.themepick|\.theme-btn|\.dots|\.theme-pop|\.theme-grid|\.tp)(?![a-zA-Z0-9_-])/
+// ⚠️ 只剔「预览条」本身（.pvbar 及其子元素）。
+// 曾经把 `.themepick/.theme-btn/.dots/.theme-pop/.theme-grid/.tp` 也当成"预览稿专用"丢掉 —— 那是**错的**：
+// 预览稿的 CSS 里明确写着「通用：主题选择器（右上角，可视化色卡）」，它只是**演示时**被摆在预览条上；
+// 正式版的主题选择器就在顶栏右上角。丢掉这几条会让产品的主题选择器变成"一个没有样式的文字按钮"
+// （用户实测反馈："顶栏只剩一根白条，主题都换不了"）。
+const PREVIEW_ONLY = /(^|[\s,>])\.pvbar(?![a-zA-Z0-9_-])/
 const rules = []
 /** 样式块末尾的注释（不是规则，平铺正则吃不到）：原样保留在产物尾部，避免"注释凭空消失"。 */
 let trailingNotes = ''
@@ -259,6 +301,38 @@ const rulesWithAssets = kept.map((rule) => {
 // 4c) 图片变量改名：预览稿每套主题各写一条 html[data-theme=X] .hero .shot{background-image:var(--photo-X)}，
 //     正式工程里 --hero-photo 已由 theme.css 按主题给出，所以补一条通用规则即可。
 //     注释单独占一行放回选择器上方：产物仍是可读的（每次 v8.x 修订的原因都留在原地）。
+// 4d) 主题元数据写成 TS 模块（色卡变量已在第 3 步进了 theme.css）。
+const metaTs = [
+  '// 主题元数据 —— 由 frontend/scripts/extract-preview.mjs 从 docs/02-design/UI-PREVIEW.html 的',
+  '// `var THEMES` 数组生成（含中文名 / 气质标签 / 五色色卡 / 设计说明）。',
+  '// 请勿手改：要改主题名或色卡请改预览稿，再跑 pnpm run sync-preview。',
+  '',
+  '/** 一套主题的元数据。 */',
+  'export interface ThemeMeta {',
+  '  /** 主题 id（与 index.html 的 data-theme、localStorage 里存的值一致）。 */',
+  '  id: string',
+  '  /** 中文名（三字，顶栏按钮与色卡上都显示它）。 */',
+  '  name: string',
+  '  /** 一句话气质标签（色卡副标题）。 */',
+  '  tag: string',
+  '  /** 五色色卡：侧栏 / 主色 / 点缀 / 页面底 / 卡片底。 */',
+  '  sw: string[]',
+  '  /** 设计说明（长句）。 */',
+  '  desc: string',
+  '}',
+  '',
+  '/** 六套主题（数组顺序即选择器里的排列顺序）。 */',
+  'export const THEME_META: ThemeMeta[] = [',
+  ...themeMeta.map(
+    (t) => `  { id: '${t.id}', name: '${t.name}', tag: '${t.tag}', sw: [${t.sw.map((c) => `'${c}'`).join(', ')}], desc: '${t.desc}' },`
+  ),
+  ']',
+  ''
+].join('\n')
+writeFileSync(join(stylesDir, 'theme-meta.ts'), metaTs, 'utf8')
+manifest.push({ path: 'styles/theme-meta.ts', kind: 'theme-meta', bytes: Buffer.byteLength(metaTs), sha256: sha(Buffer.from(metaTs)).slice(0, 16) })
+console.log(`  主题元数据：${themeMeta.length} 套（${themeMeta.map((t) => t.name).join(' / ')}）`)
+
 const css = rulesWithAssets.map((r) => (r.notes ? r.notes + '\n' : '') + `${r.sel}{${r.body}}`).join('\n') + (atRules.length ? '\n' + atRules.join('\n') : '')
 console.log(`  组件层：保留 ${rulesWithAssets.length} 条规则（其中 ${renamedVars} 条改了图片变量名），at-rule ${atRules.length} 条，丢弃预览稿专用 ${droppedPreview} 条、令牌块 ${droppedTokens} 条，抽出内联背景图 ${bgIndex} 张`)
 
@@ -267,12 +341,25 @@ compLines.push('/* =============================================================
 compLines.push('   组件层 —— 由 frontend/scripts/extract-preview.mjs 从 docs/02-design/UI-PREVIEW.html 逐条规则提取。')
 compLines.push('   请勿手改（要改先改预览稿再跑 pnpm run sync-preview）。预览稿专用选择器与令牌块已剔除；')
 compLines.push('   图片变量改名：--photo-<theme> → --hero-photo、--photo-login-a → --login-photo（由 theme.css 提供）。')
+compLines.push('')
+compLines.push('   ⚠️ 不要**单独 import 本文件**（`import "./styles/components.css"`）：本文件里的 `@layer components`')
+compLines.push('   需要一个 `@tailwind components` 指令同处一份 CSS 里，只有经 main.css 的 `@import` 内联后才成立；')
+compLines.push('   单独请求它，Tailwind 会报 "`@layer components` is used but no matching `@tailwind components`"（HTTP 500）。')
 compLines.push('   ============================================================================= */')
 compLines.push('@layer components {')
 for (const line of css.split('\n')) compLines.push('  ' + line)
 if (trailingNotes) compLines.push('  ' + trailingNotes)
 compLines.push('  .hero .shot{background-image:var(--hero-photo)}')
 compLines.push('  .login-aside .bg{background-image:var(--login-photo)}')
+compLines.push('')
+compLines.push('  /* —— 主题选择器色卡的「上色规则」；颜色变量 --c1~--c5 由 theme.css 的 .t-<主题id> 给出 —— */')
+compLines.push('  .tp .mini .sb{background:var(--c1)}')
+compLines.push('  .tp .mini .ct{background:var(--c4)}')
+compLines.push('  .tp .mini .ct i:nth-child(1){background:var(--c2)}')
+compLines.push('  .tp .mini .ct i:nth-child(2){background:var(--c5)}')
+compLines.push('  .tp .mini .ct i:nth-child(3){background:var(--c3)}')
+for (let i = 1; i <= 5; i++) compLines.push(`  .tp .cap .sw i:nth-child(${i}){background:var(--c${i})}`)
+for (let i = 1; i <= 3; i++) compLines.push(`  .dots i:nth-child(${i}){background:var(--c${i})}`)
 compLines.push('}')
 writeFileSync(join(stylesDir, 'components.css'), compLines.join('\n'), 'utf8')
 manifest.push({ path: 'styles/components.css', kind: 'components', bytes: Buffer.byteLength(compLines.join('\n')), sha256: sha(Buffer.from(compLines.join('\n'))).slice(0, 16) })

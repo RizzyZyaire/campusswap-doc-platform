@@ -1,24 +1,19 @@
 import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
 import { THEME_KEY } from '@/api/request'
+import { THEME_META, type ThemeMeta } from '@/styles/theme-meta'
 
-/** 主题定义（六套，名称与 id 与预览稿/规格一致；配色由 theme.css 的 CSS 变量给出）。 */
-export interface ThemeDef {
-  id: string
-  name: string
-  /** 一句话气质描述（主题选择器里显示）。 */
-  desc: string
-}
+/**
+ * 主题定义（六套）。
+ *
+ * <p>id / 中文名 / 气质标签 / 五色色卡全部来自**生成物** `@/styles/theme-meta`（源头是预览稿的
+ * `var THEMES` 数组），产品侧不再手抄一遍名字 —— 之前手抄的那一版就和预览稿对不上
+ * （名字相同、气质描述各写各的），也会让顶栏色卡缺颜色。</p>
+ */
+export type ThemeDef = ThemeMeta
 
-/** 六套主题（顺序即选择器里的排列顺序）。 */
-export const THEMES: ThemeDef[] = [
-  { id: 'hebtu', name: '师大蓝', desc: '校徽蓝，正式稳重' },
-  { id: 'gingko', name: '银杏暖', desc: '暖金调，亲和' },
-  { id: 'celadon', name: '青瓷绿', desc: '青瓷釉色，清透' },
-  { id: 'ink', name: '墨玉青', desc: '墨绿沉静，耐看' },
-  { id: 'jiang', name: '师大绛', desc: '绛红，典礼感' },
-  { id: 'night', name: '墨夜黑', desc: '深色模式' }
-]
+/** 六套主题（数组顺序即选择器里的排列顺序）。 */
+export const THEMES: ThemeDef[] = THEME_META
 
 const DEFAULT_THEME = 'hebtu'
 
