@@ -2,16 +2,19 @@
 import { computed, onMounted, ref } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
 import ImportMarkdownButton from '@/components/ImportMarkdownButton.vue'
+import MarkdownImportDialog from '@/components/MarkdownImportDialog.vue'
 import Pager from '@/components/Pager.vue'
 import StateBlock from '@/components/StateBlock.vue'
 import StatusBadge from '@/components/StatusBadge.vue'
 import { ApiError } from '@/api/request'
 import * as docApi from '@/api/documents'
+import * as taxApi from '@/api/taxonomy'
 import { useUiStore } from '@/stores/ui'
+import { useImportQueueStore } from '@/stores/importQueue'
 import { useUserStore } from '@/stores/user'
 import { PERM } from '@/utils/perm'
 import { relativeTime } from '@/utils/format'
-import type { DocumentStatus, DocumentVo } from '@/types'
+import type { DocumentStatus, DocumentVo, TagVo } from '@/types'
 
 /**
  * 我的文档（§8.6）：六个 tab。
@@ -28,31 +31,55 @@ interface TabDef {
 const ui = useUiStore()
 const user = useUserStore()
 const router = useRouter()
+const importQueue = useImportQueueStore()
+
+/** 批量导入弹窗（选完文件后打开：可逐篇改标题、统一选分类与标签，再决定直接建还是逐篇编辑）。 */
+const importFiles = ref<{ name: string; text: string }[]>([])
+const importCategories = ref<{ id: string; label: string }[]>([])
+const importTags = ref<TagVo[]>([])
 
 /**
- * 上传的 Markdown 文件 → 直接建一篇草稿。
+ * 上传的文件 → 打开批量导入弹窗。
  *
- * <p>读取与格式校验在 `ImportMarkdownButton` 里；这里只负责"建草稿 + 跳去编辑器接着改"。
- * 标题默认取文件名（去掉扩展名），摘要取正文第一段非标题文字（与编辑器里的口径一致）。</p>
+ * <p>分类与标签在这里一次性取好（弹窗里要用）；取不到就退化成"未分类 / 无标签"，不阻断导入。</p>
  *
- * @param payload 文件名与正文
+ * @param payload 读好的文件（可多篇）
  */
-async function onImported(payload: { name: string; text: string }): Promise<void> {
-  const title = payload.name.replace(/\.[^.]+$/, '').slice(0, 128)
-  const firstLine = payload.text.replace(/^#.*$/m, '').split('\n').find((l) => l.trim()) ?? ''
+async function onImported(payload: { name: string; text: string }[]): Promise<void> {
+  importFiles.value = payload
   try {
-    const created = await docApi.createDocument({
-      title,
-      summary: firstLine.trim().slice(0, 120) || null,
-      contentMd: payload.text,
-      categoryId: null,
-      tagIds: [],
-      priceCents: 0
-    })
-    ui.ok(`已从「${payload.name}」建了一篇草稿，去补分类与标签吧`)
-    await router.push({ name: 'docs-edit', params: { id: created.id } })
-  } catch (e) {
-    ui.err(e instanceof ApiError ? e.message : '导入建草稿失败')
+    const tree = await taxApi.categoryTree()
+    const out: { id: string; label: string }[] = []
+    const walk = (nodes: typeof tree, depth: number): void => {
+      for (const n of nodes) {
+        out.push({ id: n.id, label: '\u3000'.repeat(depth) + n.name })
+        if (n.children?.length) walk(n.children, depth + 1)
+      }
+    }
+    walk(tree, 0)
+    importCategories.value = out
+  } catch {
+    importCategories.value = []
+  }
+  try {
+    importTags.value = (await taxApi.tagList({ pageNum: 1, pageSize: 100 })).list
+  } catch {
+    importTags.value = []
+  }
+}
+
+/**
+ * 批量导入结束：刷新列表；若用户选了"逐篇编辑"，把新文档放进待编辑队列并跳到第一篇。
+ *
+ * @param payload 新建成功的文档与模式
+ */
+async function onImportDone(payload: { created: { id: string; title: string }[]; mode: 'list' | 'edit' }): Promise<void> {
+  importFiles.value = []
+  await load()
+  if (payload.mode === 'edit' && payload.created.length) {
+    importQueue.start(payload.created)
+    const first = importQueue.shift()
+    if (first) await router.push({ name: 'docs-edit', params: { id: first.id } })
   }
 }
 
@@ -192,7 +219,7 @@ onMounted(load)
       </div>
       <div class="acts">
         <!-- 两个入口：① 在网站上写（编辑器）；② 上传现成的 Markdown 文件直接建草稿（用户反馈"只有新建、没有上传"） -->
-        <ImportMarkdownButton v-if="user.hasPerm(PERM.docCreate)" label="上传 Markdown" @loaded="onImported" />
+        <ImportMarkdownButton v-if="user.hasPerm(PERM.docCreate)" label="上传 Markdown" multiple @loaded="onImported" />
         <RouterLink v-if="user.hasPerm(PERM.docCreate)" class="btn btn-primary" to="/docs/edit">新建文档</RouterLink>
       </div>
     </div>
@@ -286,5 +313,14 @@ onMounted(load)
         </div>
       </div>
     </div>
+    <!-- 批量导入弹窗：逐篇改标题 + 统一分类/标签 + 两种落地方式 -->
+    <MarkdownImportDialog
+      v-if="importFiles.length"
+      :files="importFiles"
+      :categories="importCategories"
+      :tags="importTags"
+      @close="importFiles = []"
+      @done="onImportDone"
+    />
   </div>
 </template>

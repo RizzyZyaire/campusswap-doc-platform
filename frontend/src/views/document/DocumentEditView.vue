@@ -7,6 +7,7 @@ import { ApiError } from '@/api/request'
 import * as docApi from '@/api/documents'
 import * as taxApi from '@/api/taxonomy'
 import { uploadImage } from '@/api/files'
+import { useImportQueueStore } from '@/stores/importQueue'
 import { useUiStore } from '@/stores/ui'
 import { useUserStore } from '@/stores/user'
 import { PERM } from '@/utils/perm'
@@ -26,6 +27,7 @@ const route = useRoute()
 const router = useRouter()
 const ui = useUiStore()
 const user = useUserStore()
+const importQueue = useImportQueueStore()
 
 const docId = computed(() => (route.params.id ? String(route.params.id) : ''))
 const isEdit = computed(() => Boolean(docId.value))
@@ -241,6 +243,8 @@ async function save(): Promise<string | null> {
     status.value = updated.status
     baseline.value = JSON.stringify(form)
     ui.ok(`已保存（v${updated.versionNum}）`)
+    // 批量导入的"逐篇编辑"队列：存完自动跳下一篇（队列空了就留在原地）
+    if (importQueue.hasNext) await nextInQueue()
     return updated.id
   } catch (e) {
     handleSaveError(e)
@@ -311,24 +315,39 @@ async function saveAndPublish(): Promise<void> {
 /* ---------------- 导入 Markdown 文件（"上传文档"入口） ---------------- */
 
 /**
- * 导入完成：把文件内容填进表单。
+ * 导入完成：把（第一个）文件内容填进表单。
  *
- * <p>读取与格式校验都在 `ImportMarkdownButton` 里做了，这里只管"填进去 + 提示"。</p>
+ * <p>读取与格式校验都在 `ImportMarkdownButton` 里做了（它支持多选），这里只管"填进去 + 提示"。
+ * 编辑器一次只接一篇；要一次导多篇请走「我的文档 → 上传 Markdown」的批量弹窗。</p>
  *
- * @param payload 文件名与正文
+ * @param payload 读好的文件（可能多个）
  */
-function onImported(payload: { name: string; text: string }): void {
+function onImported(payload: { name: string; text: string }[]): void {
+  const file = payload[0]
+  if (!file) return
   if (form.contentMd.trim() && !window.confirm('当前正文不为空，导入会覆盖它，继续吗？')) return
-  form.contentMd = payload.text
+  form.contentMd = file.text
   // 标题：优先用文件名（去掉扩展名）；正文第一个 H1 与文件名不同则提示一句
-  const base = payload.name.replace(/\.[^.]+$/, '')
+  const base = file.name.replace(/\.[^.]+$/, '')
   if (!form.title.trim()) form.title = base
   if (!form.summary.trim()) {
     const firstLine = form.contentMd.replace(/^#.*$/m, '').split('\n').find((l) => l.trim()) ?? ''
     form.summary = firstLine.trim().slice(0, 120)
   }
   const h1 = /^#\s+(.+)$/m.exec(form.contentMd)?.[1]?.trim()
-  ui.ok(h1 && h1 !== form.title ? `已导入「${payload.name}」（正文标题是「${h1}」，需要的话改一下标题）` : `已导入「${payload.name}」，检查后保存即可`)
+  const tip = h1 && h1 !== form.title ? `已导入「${file.name}」（正文标题是「${h1}」，需要的话改一下标题）` : `已导入「${file.name}」，检查后保存即可`
+  const more = payload.length > 1 ? `；另外 ${payload.length - 1} 个文件未使用 —— 编辑器一次只接一篇，批量导入请走「我的文档 → 上传 Markdown」` : ''
+  ui.ok(tip + more)
+}
+
+/** 跳到队列里的下一篇（保存后自动调用；也可以手动"跳过这篇"）。 */
+async function nextInQueue(): Promise<void> {
+  const next = importQueue.shift()
+  if (!next) {
+    ui.ok('导入批次已全部处理完')
+    return
+  }
+  await router.push({ name: 'docs-edit', params: { id: next.id } })
 }
 
 /* ---------------- 图片上传（工具栏 / 粘贴 / 拖拽 三入口） ---------------- */
@@ -497,6 +516,18 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', onBeforeUnload)
             提交审核
           </button>
         </div>
+      </div>
+
+      <!-- 批量导入的「逐篇编辑」队列：保存后自动跳下一篇，不用回列表里找 -->
+      <div v-if="importQueue.hasNext" class="alert a-info mb16">
+        <span class="ico">▤</span>
+        <span>
+          导入批次还剩 <b>{{ importQueue.pending }}</b> 篇待编辑（本批共 {{ importQueue.total }} 篇，当前第
+          {{ importQueue.current }} 篇）。保存这一篇后会自动跳到下一篇。
+        </span>
+        <span class="spacer"></span>
+        <button class="btn btn-sm" @click="nextInQueue">跳过这篇</button>
+        <button class="btn btn-sm" @click="importQueue.clear()">结束批次</button>
       </div>
 
       <div v-if="readOnly" class="alert a-warn mb16">

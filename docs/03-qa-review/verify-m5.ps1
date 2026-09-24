@@ -140,6 +140,21 @@ Check 'D3b12 markdown import component exists and is wired into editor + my docu
     ((Test-Path -LiteralPath $importer) -and ((Read-All (Join-Path $srcDir 'views\document\DocumentEditView.vue')) -like '*ImportMarkdownButton*') -and ((Read-All (Join-Path $srcDir 'views\document\MyDocumentView.vue')) -like '*ImportMarkdownButton*')) 'components/ImportMarkdownButton.vue'
 Check 'D3b13 import accepts only markdown/plain text and says why' `
     (((Read-All $importer) -like '*.markdown*') -and ((Read-All $importer) -like '*O7*')) 'components/ImportMarkdownButton.vue'
+$batchDlg = Join-Path $srcDir 'components\MarkdownImportDialog.vue'
+$batchSrc = ''
+if (Test-Path -LiteralPath $batchDlg) { $batchSrc = Read-All $batchDlg }
+Check 'D3b14 batch import dialog offers both modes (create drafts / create then edit)' `
+    (($batchSrc -like "*run('list')*") -and ($batchSrc -like "*run('edit')*")) 'components/MarkdownImportDialog.vue'
+Check 'D3b15 batch import edits titles and takes one category/tags per batch' `
+    (($batchSrc -like '*v-model="r.title"*') -and ($batchSrc -like '*categoryId*') -and ($batchSrc -like '*chip-pick*')) 'components/MarkdownImportDialog.vue'
+Check 'D3b16 per-file failures are shown and retryable (no silent loss)' `
+    (($batchSrc -like '*retryFailed*') -and ($batchSrc -like '*row.error*')) 'components/MarkdownImportDialog.vue'
+$editViewSrc = Read-All (Join-Path $srcDir 'views\document\DocumentEditView.vue')
+$queueStore = Join-Path $srcDir 'stores\importQueue.ts'
+Check 'D3b17 import queue store persists in sessionStorage' `
+    ((Test-Path -LiteralPath $queueStore) -and ((Read-All $queueStore) -like '*sessionStorage*')) 'stores/importQueue.ts'
+Check 'D3b18 editor shows the queue banner and advances on save' `
+    (($editViewSrc -like '*nextInQueue*') -and ($editViewSrc -like '*importQueue.hasNext*')) 'views/document/DocumentEditView.vue'
 $indexHtml = Read-All (Join-Path $frontend 'index.html')
 Check 'D3c index.html carries data-theme on <html>' ($indexHtml -like '*data-theme=*') 'index.html'
 

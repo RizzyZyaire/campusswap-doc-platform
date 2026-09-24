@@ -85,6 +85,22 @@
     max-width: 560px;
   }
 
+  /* 批量导入弹窗：宽一点（要放"文件 / 标题 / 字数 / 状态"四列），行高紧凑些 */
+  .import-modal {
+    max-width: 900px;
+  }
+
+  .import-tbl td {
+    padding: 8px 12px;
+    vertical-align: middle;
+  }
+
+  .import-tbl .input {
+    height: 30px;
+    padding: 0 9px;
+    font-size: 13px;
+  }
+
   .about-hd {
     display: flex;
     align-items: center;
