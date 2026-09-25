@@ -612,7 +612,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File docs/03-qa-review/verify-m5.
 
 ---
 
-### M7 交付与上传（0.5 天）
+### M7 交付与上传（0.5 天）　✅ 已完成（2026-09-25，commit `8db4175`；提交包 `docs/05-submission/build-submission.ps1`，一键跑批 `docs/03-qa-review/run-all-checks.ps1` 12/0）
 
 - [x] **T7.1** 目录裁剪：确保根目录**只有** `docs/`、`backend/`、`frontend/`（§3.2）
   - 实测根目录 = `docs/ backend/ frontend/` + `README.md` + `.gitignore`（两个必需文件，§3.2 的"只放三个目录"指目录层面）；`.idea/` 是 IDE 自建目录，已列入 `.gitignore` 且**不进提交包**（保留在本地是因为 IDEA 正在用）。
