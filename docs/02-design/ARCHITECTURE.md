@@ -490,7 +490,11 @@ public interface DocumentRepository extends JpaRepository<Document, Long>,
 | 分类 + 状态 + 更新时间倒序（检索主路径） | `idx_doc_cat_status_updated(category_id, status, updated_at, deleted)` | `EXPLAIN ANALYZE` 显示 `Index Scan`，无 `Rows Removed by Filter` |
 | **仅状态 + 更新时间**（审核队列、我的文档） | `idx_doc_status_updated(status, updated_at, deleted)` | **最左前缀**：`status` 单独筛选走不了上一个索引，必须单独建 |
 | 作者维度（我的文档） | `idx_doc_created_by_updated(created_by, updated_at, deleted)` | **排序键必须进索引**：实测 `(created_by, deleted)` 写法会退化为 filesort（20 000 行时 28.4 ms），改后 0.135 ms |
-| **全文检索**（关键词 ≥2 字，正文可搜） | `ft_doc_search(title, summary, content_md)` **WITH PARSER ngram** | `EXPLAIN` 显示 `type=fulltext` + `key=ft_doc_search`（M5 前实测：`type=fulltext`，`Ft_hints: no_ranking`（默认按 `updated_at` 排序）/ 带排序键时为 ranking）；对照实验：同一关键词 `LIKE title/summary` 命中 **0**、`MATCH` 命中 **1** |
+| **排序选项：状态 + 发布时间倒序**（检索/治理的「发布时间」档） | `idx_doc_status_publish(status, publish_at, deleted)` | 20 045 行实测：修复前读 13 361 行 + filesort **45.9 ms**，补索引后 `Index lookup … (reverse)` **0.254 ms**（`EXPLAIN-NOTES.md` §6） |
+| **排序选项：状态 + 阅读量倒序**（「阅读量」档） | `idx_doc_status_view(status, view_count, deleted)` | 同上：**47.0 ms → 0.285 ms** |
+| **排序选项：分类 + 状态 + 另两档排序** | `idx_doc_cat_status_publish(category_id, status, publish_at, deleted)`、`idx_doc_cat_status_view(category_id, status, view_count, deleted)` | 13.2 / 11.5 ms → **0.122 / 0.139 ms** |
+| **不过滤状态的治理列表**（状态列无等值谓词，状态索引全部失效） | `idx_doc_deleted_updated(deleted, updated_at)`、`idx_doc_deleted_publish(deleted, publish_at)`、`idx_doc_deleted_view(deleted, view_count)` | 三条都要有：只补 `updated_at` 那条时，另两档会改走索引扫描再排序（60.7 / 47.5 ms，**比全表扫描还慢**）；补齐后 19.3 / 18.8 / 18.8 ms → **0.191 / 0.218 / 0.187 ms** |
+| **全文检索**（关键词 ≥2 字，正文可搜） | `ft_doc_search(title, summary, content_md)` **WITH PARSER ngram** | `EXPLAIN` 显示 `type=fulltext` + `key=ft_doc_search`（M5 前实测：`type=fulltext`，`Ft_hints: no_ranking`（默认按 `updated_at` 排序）/ 带排序键时为 ranking）；对照实验：同一关键词 `LIKE title/summary` 命中 **0**、`MATCH` 命中 **1**。**`sort=relevance` 无法进索引**：它按 `MATCH(...) AGAINST(...)` 的计算分排序，属算法固有，保留为唯一需要内存排序的排序档 |
 | 收藏列表 | 主键 `(user_id, document_id)` + `idx_fav_doc(document_id)` | |
 | 登录名查用户 | `uk_sys_user_username(username)` | |
 
@@ -503,6 +507,7 @@ public interface DocumentRepository extends JpaRepository<Document, Long>,
 3. **批量造数后必须 `ANALYZE TABLE doc_document;`**（`perf-fixture.sql` 之后），否则全文索引统计不新鲜。
 
 **流程要求**：M2 建表时索引一次到位；**M6 用 DBeaver 对 3 条高频 SQL 执行 `EXPLAIN ANALYZE`，把原始输出与结论写入 `docs/03-qa-review/EXPLAIN-NOTES.md`**（命中哪个索引、是否出现 `Seq Scan` / `Using filesort`、最左前缀是否被满足）。M2 首测已完成，见该文件（Q1 0.149 ms / Q2 0.221 ms / Q3 修复后 0.135 ms / 对照组全表扫描 18.2 ms）。
+**收尾补充（2026-09-24）**：M6 在 20 045 篇数据量下的回归暴露出「`publishAt_desc` / `viewCount_desc` 两档排序无索引支撑」（45.9 / 47.0 ms 的 filesort），按上表补了 **7 条排序索引**（二级索引 20 → 27，`doc_document` 12 个），8 种「排序 × 筛选」形态复测全部为 `Index lookup … (reverse)`、**0 个 Sort**、耗时 0.122~0.285 ms；复现命令与逐条计划见 `EXPLAIN-NOTES.md` §6，列序由 `verify-m2.ps1` C13c 机检锁定。
 
 ### 10.5 每个读接口的 SQL 条数预算（N+1 的设计级验收）
 

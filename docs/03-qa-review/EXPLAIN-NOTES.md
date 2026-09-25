@@ -161,7 +161,7 @@ EXPLAIN SELECT d.id FROM doc_document d WHERE d.deleted=0 AND d.status='PUBLISHE
 ## 4. M6 回归清单
 
 - [x] 数据量提升到 **20 045 行**（注入 20 000 篇压测文档）后重跑 Q1~Q3b → 全部仍为 `Index lookup`，**无 `Table scan`、无 `Sort`**（见 §5，2026-09-24 M6-T6.6）
-- [ ] 按 `DocumentSort` 的三档排序各跑一次 `EXPLAIN ANALYZE`：`updatedAt_desc`（已测）、`publishAt_desc`、`viewCount_desc` → 后两档若无索引支撑需补索引或降级排序选项（**M7 前若仍未做，登记为已知缺口**）
+- [x] 按 `DocumentSort` 的三档排序各跑一次 `EXPLAIN ANALYZE`：`updatedAt_desc`（已测）、`publishAt_desc`、`viewCount_desc` → **实测后两档原本是 filesort（45.9 / 47.0 ms），已补 7 条排序索引，复测三档 × 两种筛选形态全部 ≤0.3 ms**（见 §6，2026-09-24 收尾）
 - [x] 核对列表接口的 Hibernate 生成 SQL 与本文件 Q1~Q3b 一致（`probe-sql-counts.mjs` 抓到的 SQL 原文已逐条登记在 `TEST_CHECKLIST.md` 的 M6 表）
 - [x] 把本文件与 `TEST_CHECKLIST.md` 的 N+1 记录交叉引用，形成"查询性能"完整证据链（§5 ↔ `TEST_CHECKLIST.md` M6-SQL-COUNTS 段）
 - [x] ~~全文检索分支的 `EXPLAIN`~~ → 已在 §2b Q5 完成（2026-09-23，M5 前置）
@@ -192,3 +192,66 @@ EXPLAIN SELECT d.id FROM doc_document d WHERE d.deleted=0 AND d.status='PUBLISHE
 4. `deleted = 0` 仍以 `Filter` 形式出现（索引末位带 `deleted` 列），实测只影响 10 行的过滤，未退化为回表全扫。
 
 **收工动作**：压测数据用完即清（`DELETE FROM doc_document WHERE title LIKE '【压测】%'`），M6 最终状态是**重灌后的 45 篇种子库**（`reload-db.ps1` 自检：45/28/9/4/4/99/109/39，三项一致性计数 0）。
+
+---
+
+## 6. 排序选项索引修复 —— `DocumentSort` 三档排序实测（收尾项，2026-09-24）
+
+<!-- M7-SORT-INDEX-FIX -->
+
+> **背景**：§4 的最后一条未做项。前端把 `DocumentSort` 的三档排序都开给了用户
+> （检索页 `document.ts` 的 `sort?`、治理页 `GovernanceView.vue` 的「最近更新 / 发布时间 / 阅读量」下拉），
+> 但 `doc_document` 上只有 `updated_at` 进了索引，`publish_at` / `view_count` 没有。
+> **方法**：注入 20 000 篇（库内 20 045 篇）+ `ANALYZE TABLE` → 对「三档排序 × {有状态筛选, 不过滤状态} × {全站, 带分类}」共 8 种形态跑 `EXPLAIN ANALYZE` → 按结果补索引 → 同样 8 条复测。
+> **原始输出**：修复前 `D:\DevEnv\logs\m6b-sort-explain-before.txt`；修复后 `D:\DevEnv\logs\m7-sort-explain-final.txt`。
+
+### 6.1 修复前（20 045 篇，真实执行）
+
+| 形态 | 计划 | 耗时 | 问题 |
+|---|---|---|---|
+| `status='PUBLISHED'` + `ORDER BY updated_at DESC` | `Index lookup idx_doc_status_updated (reverse)` | 0.75 ms | 正常（对照组） |
+| `status='PUBLISHED'` + `ORDER BY publish_at DESC` | `Index lookup idx_doc_status_updated` → **`Sort`** | **45.9 ms** | ❌ 排序键不在索引里，读了 13 361 行再内存排序 |
+| `status='PUBLISHED'` + `ORDER BY view_count DESC` | 同上 → **`Sort`** | **47.0 ms** | ❌ 同上 |
+| `category_id=3 AND status` + `ORDER BY publish_at DESC` | `Index lookup idx_doc_cat_status_updated` → **`Sort`** | **13.2 ms** | ❌ 读了 3 341 行再排序 |
+| `category_id=3 AND status` + `ORDER BY view_count DESC` | 同上 → **`Sort`** | **11.5 ms** | ❌ 同上 |
+| 不过滤状态 + `ORDER BY updated_at DESC`（治理页默认视图） | **`Table scan`** → `Sort` | **19.3 ms** | ❌ 状态列无等值谓词，两条状态索引都用不上 |
+| 不过滤状态 + `ORDER BY publish_at DESC` | `Table scan` → `Sort` | **18.8 ms** | ❌ 同上 |
+| 不过滤状态 + `ORDER BY view_count DESC` | `Table scan` → `Sort` | **18.8 ms** | ❌ 同上 |
+
+### 6.2 补的 7 条索引（`backend/sql/schema.sql`，`doc_document`）
+
+| 索引 | 列 | 服务的形态 |
+|---|---|---|
+| `idx_doc_status_publish` | `(status, publish_at, deleted)` | 已发布/审核队列 + 发布时间排序 |
+| `idx_doc_status_view` | `(status, view_count, deleted)` | 同上 + 阅读量排序 |
+| `idx_doc_cat_status_publish` | `(category_id, status, publish_at, deleted)` | 分类筛选 + 发布时间排序 |
+| `idx_doc_cat_status_view` | `(category_id, status, view_count, deleted)` | 分类筛选 + 阅读量排序 |
+| `idx_doc_deleted_updated` | `(deleted, updated_at)` | 治理页「全部状态」+ 默认排序 |
+| `idx_doc_deleted_publish` | `(deleted, publish_at)` | 治理页「全部状态」+ 发布时间排序 |
+| `idx_doc_deleted_view` | `(deleted, view_count)` | 治理页「全部状态」+ 阅读量排序 |
+
+**索引总数**：`schema.sql` 的二级索引 20 → **27**（`doc_document` 一张表 12 个，含 1 个 ngram 全文索引）。
+**为什么"不过滤状态"要单列三条**：`deleted` 只有 0/1 两个取值，`(deleted, 排序键)` 这种"低基数等值列 + 排序键"的组合正好能让 MySQL 反向扫索引取前 10 行；
+一开始只补了 `(deleted, updated_at)`，结果另外两档的优化器改走索引扫描再排序（60.7 / 47.5 ms，**比原来的全表扫描更慢**）—— 这三条要么一起补，要么一条都别补，这个中间态是靠复测发现的。
+
+### 6.3 修复后（同样 20 045 篇，8 种形态复测）
+
+| 形态 | 计划 | 耗时 | 提升 |
+|---|---|---|---|
+| `status` + `updated_at DESC` | `Index lookup idx_doc_status_updated (reverse)` | 0.139 ms | — |
+| `status` + `publish_at DESC` | `Index lookup idx_doc_status_publish (reverse)` | **0.254 ms** | **181×** |
+| `status` + `view_count DESC` | `Index lookup idx_doc_status_view (reverse)` | **0.285 ms** | **165×** |
+| `category+status` + `publish_at DESC` | `Index lookup idx_doc_cat_status_publish (reverse)` | **0.122 ms** | **108×** |
+| `category+status` + `view_count DESC` | `Index lookup idx_doc_cat_status_view (reverse)` | **0.139 ms** | **83×** |
+| 不过滤状态 + `updated_at DESC` | `Index lookup idx_doc_deleted_updated (reverse)` | **0.191 ms** | **101×** |
+| 不过滤状态 + `publish_at DESC` | `Index lookup idx_doc_deleted_publish (reverse)` | **0.218 ms** | **86×** |
+| 不过滤状态 + `view_count DESC` | `Index lookup idx_doc_deleted_view (reverse)` | **0.187 ms** | **101×** |
+
+**结论**：8 种形态**全部为 `Index lookup ... (reverse)`，8 条计划里 0 个 `Sort`、0 个 `Table scan`**，
+每一档都只读 10 行（`rows=10`）；实测耗时从 11.5~47.0 ms 降到 0.122~0.285 ms。
+`verify-m2.ps1` 的 **C13c** 断言这 7 条索引的列序（含 `deleted` 必须落在末尾），改错列序会直接机检失败。
+唯一无法进索引的排序是 `relevance`（全文相关度）：它按 `MATCH(...) AGAINST(...)` 的计算分排序，任何 B-tree 都服务不了 —— 属算法固有，已在 `ARCHITECTURE §10.4` 说明。
+
+**代价与取舍（如实登记）**：`doc_document` 现在 12 个索引，写入时每个索引都要维护。本项目读多写少
+（文档写入是低频人工操作，20 000 行压测数据本身也是离线灌的），换来的是三档排序在线性增长的数据量下依旧平稳；
+如果将来写变成高频，应先合并 `(status, X, deleted)` 与 `(deleted, X)` 两组里的重叠形态，而不是继续加索引。

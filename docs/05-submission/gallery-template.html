@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>{{TITLE}}</title>
+<style>
+  :root {
+    --ink: #1f2933; --ink-2: #52606d; --line: #e4e7eb; --bg: #f7f9fb; --card: #ffffff;
+    --brand: #2f6f4f; --brand-soft: #e8f2ec;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 28px 20px 60px; background: var(--bg); color: var(--ink);
+    font: 15px/1.7 "Microsoft YaHei", "PingFang SC", system-ui, -apple-system, sans-serif;
+  }
+  .wrap { max-width: 1180px; margin: 0 auto; }
+  header { border-left: 6px solid var(--brand); padding: 6px 0 6px 16px; margin-bottom: 22px; }
+  h1 { margin: 0 0 6px; font-size: 24px; letter-spacing: .5px; }
+  .sub { color: var(--ink-2); font-size: 14px; }
+  .tips {
+    background: var(--brand-soft); border: 1px solid #cfe3d7; border-radius: 10px;
+    padding: 12px 16px; margin: 18px 0 26px; font-size: 14px; color: #24513c;
+  }
+  .tips b { color: #17402e; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(430px, 1fr)); gap: 22px; }
+  figure {
+    margin: 0; background: var(--card); border: 1px solid var(--line); border-radius: 12px;
+    overflow: hidden; box-shadow: 0 1px 2px rgba(16, 24, 40, .04);
+  }
+  figure a { display: block; background: #eef1f4; }
+  figure img { display: block; width: 100%; height: auto; }
+  figcaption { padding: 12px 14px; font-size: 13.5px; color: var(--ink-2); }
+  figcaption b { display: block; color: var(--ink); font-size: 14px; margin-bottom: 3px; }
+  .idx {
+    display: inline-block; min-width: 22px; height: 22px; line-height: 22px; text-align: center;
+    background: var(--brand); color: #fff; border-radius: 6px; font-size: 12px; margin-right: 6px;
+  }
+  footer { margin-top: 34px; color: #7b8794; font-size: 13px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>{{TITLE}}</h1>
+    <div class="sub">{{SUBTITLE}}</div>
+  </header>
+
+  <div class="tips">
+    <b>怎么用：</b>直接双击本文件即可（图片是相对路径 <code>shots/</code>，请保持目录结构不要拆散）。
+    <b>看不清：</b>点任意一张图会在新标签页打开原图。
+    共 <b>{{COUNT}}</b> 张截图。
+  </div>
+
+  <div class="grid">
+{{FIGURES}}
+  </div>
+
+  <footer>
+    CampusSwap 文档管理平台 · 截图来自本地运行实例（后端 10087 / 前端 5173）· 设计与实现细节见 <code>docs/</code> 与 <code>README.md</code>
+  </footer>
+</div>
+</body>
+</html>

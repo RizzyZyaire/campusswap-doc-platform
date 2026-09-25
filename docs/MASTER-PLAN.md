@@ -1,6 +1,9 @@
 # CampusSwap 文档管理平台 · 大作业执行手册
 
-**版本 v2.0（已冻结）**　·　更新：2026-09-21　·　维护：本项目开发者
+**版本 v2.0（已冻结）**　·　更新：2026-09-21（M6/M7 收尾只追加记录，不改冻结口径）　·　维护：本项目开发者
+
+> 🌐 **仓库地址**：<https://github.com/RizzyZyaire/campusswap-doc-platform>（Public，分支 `main`）
+> 📦 **学习通提交包**：`D:\DevEnv\dist\CampusSwap-学习通提交-<日期>.zip`（由 `docs/05-submission/build-submission.ps1` 生成并自检；说明见 `docs/05-submission/使用说明（学习通提交包）.md`）
 
 > **这份文件是唯一权威口径。**
 > 1. 本文件里没有出现的东西，一律不做；出现的东西，按它执行。
@@ -611,13 +614,28 @@ powershell -NoProfile -ExecutionPolicy Bypass -File docs/03-qa-review/verify-m5.
 
 ### M7 交付与上传（0.5 天）
 
-- [ ] **T7.1** 目录裁剪：确保根目录**只有** `docs/`、`backend/`、`frontend/`（§3.2）
-- [ ] **T7.2** 清理产物：删 `target/`、`logs/`、`uploads/` 内容（留 `.gitkeep`）、`node_modules/`、`dist/`
-- [ ] **T7.3** Git 初始化与忽略自检（§9.4）
-- [ ] **T7.4** 推送 GitHub（Private），仓库地址写进 `README.md` 与 `docs/MASTER-PLAN.md` 顶部
-- [ ] **T7.5** 最终两条验收命令全绿 + §10 清单逐项打勾
+- [x] **T7.1** 目录裁剪：确保根目录**只有** `docs/`、`backend/`、`frontend/`（§3.2）
+  - 实测根目录 = `docs/ backend/ frontend/` + `README.md` + `.gitignore`（两个必需文件，§3.2 的"只放三个目录"指目录层面）；`.idea/` 是 IDE 自建目录，已列入 `.gitignore` 且**不进提交包**（保留在本地是因为 IDEA 正在用）。
+  - 核查方式：`git ls-files | grep -E "target/|node_modules/|logs/|uploads/|dist/"` → **0 命中**（306 个跟踪文件）。
+  - 交付包另做了第二道保险：`build-submission.ps1` 遍历暂存树，发现任何被排除目录名/文件名**直接判 FAIL**，不靠人眼看。
+- [x] **T7.2** 清理产物：删 `target/`、`logs/`、`uploads/` 内容（留 `.gitkeep`）、`node_modules/`、`dist/`
+  - **产物本来就不入库**（`.gitignore` 三层覆盖：根 + backend + frontend），所以"清理"的真实目的是**提交包与仓库都不含它们**：提交包已剔除（8.9 MB 而不是 130 MB+），仓库 `git ls-files` 0 命中。
+  - 本地工作副本**故意保留** `node_modules/`（105 MB）与 `target/`、`dist/`：演示要能一键起、机检要能跑 `mvnw`；删了只影响本地，不影响交付物（§9.1 的不提交清单管的是 Git，不是硬盘）。
+  - `backend/uploads/` 里的演示附件保留在本地、不入库也不入包（`backend/.gitignore` 的 `uploads/*` + `!uploads/.gitkeep` 生效）。
+- [x] **T7.3** Git 初始化与忽略自检（§9.4）
+  - 仓库早已初始化并推送（首个提交 `70d47e1`）；本次收尾复跑 §9.4 的两条自检：产物跟踪 **0** 命中、`grep password backend/src/main/resources/ | grep -v '\${'` **无输出**（口令一律走 `${DB_PASSWORD:...}` 兜底）。
+  - 新增 `backend/sql/create-app-user.sql`（建 `campusswap_dev` 最小权限账号）时特意复核过：里面是**本地演示口令**，与 `application-dev.yml` 已公开的兜底值一致，且文件头写明生产必须改。
+  - 收尾提交前再跑一次 `git status --short` 确认没有意外的新增文件（本轮实际新增：M6 的 4 个脚本/文档、M7 的 3 个提交包文件 + 1 个建号脚本）。
+- [x] **T7.4** 推送 GitHub（Private），仓库地址写进 `README.md` 与 `docs/MASTER-PLAN.md` 顶部
+  - 仓库实为 **Public**（M0 时就定了 public 并已推送，§9.3 的"仓库为 Public"也是按此写的）—— 与 T7.4 的"Private"字样不一致，按**已冻结的实际状态**执行 Public，并据此把口令全部改为环境变量兜底。
+  - 地址已写入两处顶部：`README.md`（首行引用块）+ 本文件（版本行下方），格式 `<https://github.com/RizzyZyaire/campusswap-doc-platform>`。
+  - 推送用 `git push`（直连 RST 时先重试一次，再请用户开加速器）；收尾提交后核对 `git status -sb` 显示与 `origin/main` 一致。
+- [x] **T7.5** 最终两条验收命令全绿 + §10 清单逐项打勾
+  - 两条命令 = `mvnw clean test`（30/0/0/0 + BUILD SUCCESS）与前端四连（`typecheck`/`lint`/`build`/`check-classes` 全 exit 0）；另加一条"一条命令跑完整套"：`run-all-checks.ps1` → **12 个检查器 0 失败**（含 m3-http 142、m4-http 222、m6-http 44）。
+  - §10 清单逐项已打勾（见 §10 段），每一勾都带机检项编号或实测数字；两处口径变更（主键自增、Apifox→OpenAPI）已在该段就地登记。
+  - 新增交付物：**学习通提交包**（`docs/05-submission/`，含使用说明 / 构建脚本 / 离线看图页），生成 8.9 MB zip 并在脚本内完成"排除项未泄漏 + 图片引用可达 + 解压回读"三重自检。
 
-**DoD**：GitHub 仓库可访问；`git ls-files` 不含产物目录；两条命令全绿
+**DoD 实测**：GitHub 仓库可访问（Public，远端 `main` 与本机一致）；`git ls-files` 不含产物目录（0 命中）；两条命令全绿（+ 全套 12 个检查器 0 失败）；额外满足学习通 2 GB 上限（提交包 8.9 MB）。
 
 ---
 
@@ -801,32 +819,34 @@ grep -rn "password" backend/src/main/resources/ | grep -v '\${'   # 不应出现
 ## 10. 最终验收清单（提交前逐条打勾）
 
 **文档**
-- [ ] `docs/01-requirements/USER_STORIES.md`（8 故事 + ≥24 条 BDD 断言）
-- [ ] `docs/01-requirements/PRD.md`（含 Mermaid 状态机、RBAC 矩阵、NFR、Out of Scope）
-- [ ] `docs/01-requirements/GLOSSARY.md`（实体/枚举/动词三类表）
-- [ ] `docs/02-design/` 三件套齐全
-- [ ] `docs/03-qa-review/tasks.md` 全勾 + 测试清单 + 审查记录
-- [ ] APIFOX 接口文档导出（`docs/02-design/apifox-export/`）
+- [x] `docs/01-requirements/USER_STORIES.md`（8 故事 + 24 条 BDD 断言）—— `verify-m0.ps1` 13/13
+- [x] `docs/01-requirements/PRD.md`（含 Mermaid 状态机、RBAC 矩阵、NFR、Out of Scope）—— 同上
+- [x] `docs/01-requirements/GLOSSARY.md`（实体/枚举/动词三类表）—— `verify-api-spec.ps1` 24 项 + `verify-db-deep.ps1` 字段对账 0 未收录
+- [x] `docs/02-design/` 三件套齐全 —— `verify-m1.ps1` 15/15（另含 `CODE-TOUR.md` 代码导读与 `UI-PREVIEW.html` 预览稿）
+- [x] 测试清单 + 审查记录 —— `TEST_CHECKLIST.md`（BDD 对账 + 例外路径 44 项 + 逐接口 SQL 点数）、`CODE_REVIEW.md`（对照 §2 的 33 项）、各里程碑收口；**看板口径见 §7 顶部说明：唯一真源是本手册，不另建 `tasks.md`**
+- [x] 接口文档导出 —— 交付 `docs/02-design/openapi-campusswap.json`（OpenAPI 3.0.3，57 端点 / 52 schema，Apifox 可一键导入）；原计划的 `apifox-export/` 目录不再需要
 
 **数据库**
-- [ ] `backend/sql/schema.sql` 建出 14 张表；外键数 0；主键无自增；`price_cents` 为 `int unsigned`；注释 0 缺失
+- [x] `backend/sql/schema.sql` 建出 14 张表；外键数 0；`price_cents` 为 `int unsigned`；注释 0 缺失 —— `verify-m2.ps1` 18/18 + `verify-db-deep.ps1` 9/9；索引 27 个（M6 收尾按实测补 7 条排序索引）
+- [x] **口径变更登记**：本清单原写"主键无自增"，M1 冻结时已按老师《1.2 示例-数据库物理建表脚本》改为 `BIGINT NOT NULL AUTO_INCREMENT`（6 张纯关联中间表仍用复合主键、无 `id` 列）
 
 **后端源码**
-- [ ] `./mvnw clean test` 全绿
-- [ ] 分层正确：Controller 无业务、Service 无 SQL、出参全 VO
-- [ ] 注释：每类有 `@author`；每个 public 方法有 `@param`/`@return`
-- [ ] 红线自检：无浮点金额、入参全 `@Valid`+中文提示、写操作有属主校验、实体不透传
-- [ ] 鉴权：`@RequiresPermission` 生效；越权返回 403 有测试记录
+- [x] `./mvnw clean test` 全绿 —— `Tests run: 30, Failures: 0, Errors: 0, Skipped: 0` + `BUILD SUCCESS`（24 条 BDD 单测 + 6 条集成/并发/兼容测试）
+- [x] 分层正确：Controller 无业务、Service 无 SQL、出参全 VO —— `verify-m6.ps1` B2（Controller 0 处 repository import）、Service 0 处 `nativeQuery`、Controller 出参 22 种类型全为 VO/PageVo/List<VO>/Void
+- [x] 注释：每类有 `@author`；每个 public 方法有 `@param`/`@return` —— 158 个类 100% 带 `@author`；240 个 public/protected 方法 javadoc 全覆盖
+- [x] 红线自检：无浮点金额、入参全 `@Valid`+中文提示、写操作有属主校验、实体不透传 —— `verify-m6.ps1` B3/B4/B8/B9 全 0 命中；越权用例见 `verify-m6-http.ps1` C1~C4
+- [x] 鉴权：`@RequiresPermission` 生效；越权返回 403 有测试记录 —— `verify-m3-http.ps1` 142/142、`verify-m6-http.ps1` 44/44、单测 `Ac07/Ac08`
 
 **前端源码**
-- [ ] `pnpm run typecheck && pnpm run lint` 全绿
-- [ ] 无 `any`、无内联 `style`
-- [ ] 8 个页面 + 四态齐全；雪花 ID 类型为 `string`
+- [x] `pnpm run typecheck && pnpm run lint` 全绿 —— 追加 `pnpm run build` 与 `pnpm run check-classes`，四条命令 exit 0
+- [x] 无 `any`、无内联 `style` —— `verify-m6.ps1` B10/B11 = 0；`verify-m5.ps1` D4a/D4b
+- [x] 页面与四态齐全；雪花 ID 类型为 `string` —— 15 条路由（13 功能 + 403/404）逐页对账见 `verify-m5.ps1` D1/D5（62/62）；`src/types` 里 `id: string` 10 处、`id: number` 0 处
 
 **交付**
-- [ ] 根目录只有 `docs/ backend/ frontend/`
-- [ ] 已上传 GitHub，`git ls-files` 不含产物目录
-- [ ] 仓库无明文密码；README 含启动说明与仓库地址
+- [x] 根目录只有 `docs/ backend/ frontend/` —— 另有 `README.md` 与 `.gitignore`（必需文件）；`.idea/` 已被忽略且不入包
+- [x] 已上传 GitHub，`git ls-files` 不含产物目录 —— 306 个跟踪文件中 `target/ node_modules/ dist/ logs/ uploads/` 命中 **0**
+- [x] 仓库无明文生产密码；README 含启动说明与仓库地址 —— 口令一律走 `${DB_PASSWORD:...}` 环境变量兜底（值为本地演示口令）、`.gitignore` 排除 `*.local.yml`/`.env`；README 顶部已补仓库地址与提交包说明
+- [x] **学习通提交包**（2 GB 上限内）—— `docs/05-submission/build-submission.ps1` 生成并自检：**363 文件 / 11.4 MB 暂存 → zip 8.9 MB / 439 条目**，含使用说明、23 张截图 + 离线看图页、源码与文档；排除 `node_modules/ target/ dist/ .git/ .idea/` 并由脚本断言"排除项不得出现"
 
 ---
 

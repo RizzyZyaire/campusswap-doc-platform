@@ -18,7 +18,8 @@ param(
     [string]$DocAdminPass = 'Doc@123456',
     [string]$StaffUser = 'staff',
     [string]$StaffPass = 'Staff@123',
-    [string]$AppLog = ''
+    [string]$AppLog = '',
+    [switch]$NoReload
 )
 
 $ErrorActionPreference = 'Continue'
@@ -30,6 +31,24 @@ if (-not (Test-Path $script:Tmp)) { New-Item -ItemType Directory -Path $script:T
 $script:Seq = 0
 $Utf8NoBom = New-Object System.Text.UTF8Encoding($false)
 
+# --- database hygiene --------------------------------------------------------
+# This checker MUTATES the seed database (it creates/edits/deletes documents and
+# resets the staff password). Reload backend/sql/{schema,data}.sql BEFORE the run
+# (a previously interrupted run must not poison the assertions) and AGAIN at the
+# end (the demo database goes back to pristine with no manual step).
+# Pass -NoReload when you deliberately want to inspect the post-run state.
+$script:ReloadScript = Join-Path $PSScriptRoot 'reload-db.ps1'
+function Invoke-DbReload {
+    param([string]$When)
+    if ($NoReload) { Write-Host ('  [db] reload (' + $When + ') skipped: -NoReload'); return }
+    if (-not (Test-Path $script:ReloadScript)) { Write-Host ('  [db] reload script not found: ' + $script:ReloadScript); return }
+    Write-Host ('  [db] reloading campusswap_db (' + $When + ') ...')
+    $out = & powershell -NoProfile -ExecutionPolicy Bypass -File $script:ReloadScript 2>&1
+    $code = $LASTEXITCODE
+    $counts = @($out | Select-String -Pattern 'documents=|versions=|favorites=' | ForEach-Object { $_.Line.Trim() })
+    Write-Host ('  [db] reload exit=' + $code + ' ; ' + ($counts -join ' ; '))
+}
+
 function Cn {
     param([string]$Codes)
     return (-join ($Codes.Split(',') | ForEach-Object { [char][int]('0x' + $_.Trim()) }))
@@ -40,6 +59,10 @@ function Api {
     $script:Seq++
     $bodyFile = Join-Path $script:Tmp ('b-' + $script:Seq + '.json')
     $respFile = Join-Path $script:Tmp ('r-' + $script:Seq + '.json')
+    # always start from a clean slate: if curl fails (dead backend, reset), the
+    # response file simply will not exist, so we can never read a STALE body from
+    # an earlier run and report it as this run's result (hit 2026-09-25).
+    if (Test-Path -LiteralPath $respFile) { Remove-Item -LiteralPath $respFile -Force }
     $curlArgs = @('-s', '-o', $respFile, '-w', '%{http_code}', '-X', $Method)
     if ($Token) { $curlArgs += @('-H', ('Authorization: Bearer ' + $Token)) }
     if (-not $NoBody -and $Body -ne $null) {
@@ -97,6 +120,17 @@ Write-Host ' CampusSwap M4 HTTP acceptance (document domain)'
 Write-Host (' BaseUrl = ' + $BaseUrl)
 Write-Host (' AppLog  = ' + $(if ($AppLog) { $AppLog } else { '(sql checks skipped)' }))
 Write-Host '============================================================='
+Invoke-DbReload 'before run'
+
+# Fail fast (and readably) when the dev server is down: without this, curl prints
+# 000 for every call and the run reports dozens of confusing assertion failures.
+# An unauthenticated /api/stats/overview answers 401 on a healthy backend.
+$probe = Api -Method GET -Path '/api/stats/overview' -NoBody
+if ($probe.Status -ne 401) {
+    Write-Host ('  [FATAL] backend not reachable at ' + $BaseUrl + ' (HTTP ' + $probe.Status + ')')
+    Write-Host '          start it with D:\DevEnv\scripts\campusswap-backend.cmd, then re-run'
+    exit 99
+}
 
 # --- tokens -----------------------------------------------------------------
 $adminLogin = Api -Method POST -Path '/api/auth/login' -Body @{ username = $AdminUser; password = $AdminPass }
@@ -547,6 +581,7 @@ if ($ftId) {
 }
 
 Write-Host ''
+Invoke-DbReload 'after run'
 Write-Host '============================================================='
 Write-Host (' RESULT: PASS=' + $script:Pass + '  FAIL=' + $script:Fail)
 if ($script:Fail -gt 0) {

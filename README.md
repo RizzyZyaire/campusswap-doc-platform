@@ -1,5 +1,8 @@
 # CampusSwap · 文档管理平台
 
+> 🌐 **仓库**：<https://github.com/RizzyZyaire/campusswap-doc-platform>（Public，分支 `main`）
+> 📦 **学习通提交包**：由 `docs/05-submission/build-submission.ps1` 生成（只含源码 + 文档 + 说明 + 截图，剔除 `node_modules/ target/ dist/ .git/ .idea/`），使用说明见 `docs/05-submission/使用说明（学习通提交包）.md`。
+
 单位内部 **Markdown 文档管理平台**（课程大作业）。核心闭环：撰写文档 → 分类与标签 → 快速检索 → **基于已有文档派生新文档** → 版本管理 → 文档管理员审核/归档 → 全程 RBAC 控权。
 
 > 📘 **先读这份**：**[docs/MASTER-PLAN.md](docs/MASTER-PLAN.md)** —— 大作业执行手册（已冻结）：技术栈、硬约束、14 张表数据模型、M0~M7 执行计划（**61 个可勾选任务**）、Prompt 库、交付与 Git 规范。

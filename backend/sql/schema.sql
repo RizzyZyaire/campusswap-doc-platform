@@ -170,6 +170,13 @@ CREATE TABLE `sys_dept_role` (
 --      · idx_doc_cat_status_updated(category_id, status, updated_at, deleted) → 命中「分类+状态+时间倒序」
 --      · idx_doc_status_updated(status, updated_at, deleted)                  → 命中「仅状态+时间倒序」（审核队列/我的文档）
 --        两者不可互相替代：仅按 status 查询无法使用前者（跳过最左列 category_id）
+--      · 排序选项（DocumentSort 三档都开给了前端）各自要有索引支撑，否则 ORDER BY 会 filesort：
+--        idx_doc_status_publish(status, publish_at, deleted)          → 「发布时间」排序（全站/治理）
+--        idx_doc_status_view(status, view_count, deleted)             → 「阅读量」排序（全站/治理）
+--        idx_doc_cat_status_publish(category_id, status, publish_at, deleted) → 分类筛选 + 发布时间排序
+--        idx_doc_cat_status_view(category_id, status, view_count, deleted)    → 分类筛选 + 阅读量排序
+--        （2026-09-24 M7 前的遗留项修复：20 045 篇实测这两档排序原本要 filesort 13 361 行 = 45.9/47.0 ms，
+--          补索引后均为索引反向扫描 0.2~0.3 ms，见 docs/03-qa-review/EXPLAIN-NOTES.md §6）
 --    全文检索索引（UI_UX_SPECIFICATION §10.4，实测 MySQL 8.0.46 / ngram_token_size=2）:
 --      · ft_doc_search(title, summary, content_md) WITH PARSER ngram → 中文按 2-gram 切分，2 字及以上关键词可用
 --      · 只允许 MATCH(title, summary, content_md) 这一种列组合（子集 MATCH 会报 ERROR 1191）
@@ -201,6 +208,18 @@ CREATE TABLE `doc_document` (
     -- updated_at 必须进索引且紧随等值列之后，否则 ORDER BY updated_at DESC 会退化成内存排序
     -- （实测：旧写法 (created_by, deleted) 需读 10003 行 + filesort = 28.4ms；改为本写法后无排序）
     INDEX `idx_doc_created_by_updated` (`created_by`, `updated_at`, `deleted`),
+    -- 排序选项索引：排序键紧随等值列之后，末尾带 deleted 以支持软删除过滤（同 updated_at 的道理）
+    INDEX `idx_doc_status_publish` (`status`, `publish_at`, `deleted`),
+    INDEX `idx_doc_status_view` (`status`, `view_count`, `deleted`),
+    INDEX `idx_doc_cat_status_publish` (`category_id`, `status`, `publish_at`, `deleted`),
+    INDEX `idx_doc_cat_status_view` (`category_id`, `status`, `view_count`, `deleted`),
+    -- 治理列表「全部状态 + 三档排序」：状态列上没有等值谓词时上面几条都用不上，只能全表扫描 + filesort
+    -- （20 045 行实测：默认排序 19.3 ms、另两档 18.8 ms）。补三条 (deleted, 排序键) 让三种形态都走索引反向扫描。
+    -- 取舍说明：这三条索引只为「治理页不选状态」这一种页面形态服务，写放大可忽略（本项目写少读多），
+    -- 换来的是三档排序在 2 万篇下都是 0.1~0.3 ms；实测与结论见 docs/03-qa-review/EXPLAIN-NOTES.md §6。
+    INDEX `idx_doc_deleted_updated` (`deleted`, `updated_at`),
+    INDEX `idx_doc_deleted_publish` (`deleted`, `publish_at`),
+    INDEX `idx_doc_deleted_view` (`deleted`, `view_count`),
     INDEX `idx_doc_derived_from` (`derived_from_id`),
     -- 全文检索（ngram 解析器）：中文按 2-gram 切分，供 MATCH(...) AGAINST(? IN BOOLEAN MODE) 使用
     FULLTEXT KEY `ft_doc_search` (`title`, `summary`, `content_md`) WITH PARSER ngram

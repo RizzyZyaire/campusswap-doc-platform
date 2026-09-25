@@ -15,7 +15,8 @@ param(
     [string]$AdminUser = 'admin',
     [string]$AdminPass = 'Admin@123',
     [string]$StaffUser = 'staff',
-    [string]$StaffPass = 'Staff@123'
+    [string]$StaffPass = 'Staff@123',
+    [switch]$NoReload
 )
 
 $ErrorActionPreference = 'Continue'
@@ -25,6 +26,24 @@ $script:Failures = @()
 $script:Tmp = Join-Path $env:TEMP 'campusswap-m3-http'
 if (-not (Test-Path $script:Tmp)) { New-Item -ItemType Directory -Path $script:Tmp -Force | Out-Null }
 $script:Seq = 0
+
+# --- database hygiene --------------------------------------------------------
+# This checker MUTATES the seed database (creates users, flips statuses, resets
+# passwords). It therefore reloads backend/sql/{schema,data}.sql BEFORE the run
+# (so a previously interrupted run cannot poison the assertions) and AGAIN at
+# the end (so the demo database is pristine without anyone remembering a step).
+# Pass -NoReload when you deliberately want to inspect the post-run state.
+$script:ReloadScript = Join-Path $PSScriptRoot 'reload-db.ps1'
+function Invoke-DbReload {
+    param([string]$When)
+    if ($NoReload) { Write-Host ('  [db] reload (' + $When + ') skipped: -NoReload'); return }
+    if (-not (Test-Path $script:ReloadScript)) { Write-Host ('  [db] reload script not found: ' + $script:ReloadScript); return }
+    Write-Host ('  [db] reloading campusswap_db (' + $When + ') ...')
+    $out = & powershell -NoProfile -ExecutionPolicy Bypass -File $script:ReloadScript 2>&1
+    $code = $LASTEXITCODE
+    $counts = @($out | Select-String -Pattern 'documents=|versions=|favorites=' | ForEach-Object { $_.Line.Trim() })
+    Write-Host ('  [db] reload exit=' + $code + ' ; ' + ($counts -join ' ; '))
+}
 
 $Utf8NoBom = New-Object System.Text.UTF8Encoding($false)
 
@@ -49,6 +68,10 @@ function Api {
     $script:Seq++
     $bodyFile = Join-Path $script:Tmp ('body-' + $script:Seq + '.json')
     $respFile = Join-Path $script:Tmp ('resp-' + $script:Seq + '.json')
+    # always start from a clean slate: if curl fails (dead backend, reset), the
+    # response file simply will not exist, so we can never read a STALE body from
+    # an earlier run and report it as this run's result (hit 2026-09-25).
+    if (Test-Path -LiteralPath $respFile) { Remove-Item -LiteralPath $respFile -Force }
     $curlArgs = @('-s', '-o', $respFile, '-w', '%{http_code}', '-X', $Method)
     if ($Token) { $curlArgs += @('-H', ('Authorization: Bearer ' + $Token)) }
     if ($Body -ne $null) {
@@ -95,6 +118,17 @@ Write-Host '============================================================='
 Write-Host ' CampusSwap M3 HTTP acceptance (T3.10)'
 Write-Host (' BaseUrl = ' + $BaseUrl)
 Write-Host '============================================================='
+Invoke-DbReload 'before run'
+
+# Fail fast (and readably) when the dev server is down: without this, curl prints
+# 000 for every call and the run reports dozens of confusing assertion failures.
+# An unauthenticated /api/stats/overview answers 401 on a healthy backend.
+$probe = Api -Method GET -Path '/api/stats/overview'
+if ($probe.Status -ne 401) {
+    Write-Host ('  [FATAL] backend not reachable at ' + $BaseUrl + ' (HTTP ' + $probe.Status + ')')
+    Write-Host '          start it with D:\DevEnv\scripts\campusswap-backend.cmd, then re-run'
+    exit 99
+}
 
 # -----------------------------------------------------------------------------
 Write-Host ''
@@ -448,6 +482,8 @@ Write-Host '[9] Cleanup test data'
 $cleanupUser = Api -Method PUT -Path ('/api/users/' + $newUserId + '/status') -Token $adminToken -Body @{ status = 'DISABLED' }
 Check 'cleanup.disable-test-user.http' $cleanupUser.Status 200
 Write-Host ('  [INFO] test user id=' + $newUserId + ' left in DISABLED state (no delete API by design)')
+
+Invoke-DbReload 'after run'
 
 Write-Host ''
 Write-Host '============================================================='

@@ -104,6 +104,8 @@ $needIdx = @(
   'uk_sys_permission_code','idx_sys_perm_parent','idx_user_role_role','idx_user_perm_perm',
   'idx_role_perm_perm','idx_dept_role_role',
   'idx_doc_cat_status_updated','idx_doc_status_updated','idx_doc_created_by_updated',
+  'idx_doc_status_publish','idx_doc_status_view','idx_doc_cat_status_publish','idx_doc_cat_status_view',
+  'idx_doc_deleted_updated','idx_doc_deleted_publish','idx_doc_deleted_view',
   'uk_doc_version','idx_doc_category_parent','uk_doc_tag_name','idx_rel_tag_doc','idx_fav_doc',
   'ft_doc_search'
 )
@@ -122,6 +124,22 @@ $ftIdx = (@(Query "SELECT GROUP_CONCAT(COLUMN_NAME ORDER BY SEQ_IN_INDEX) FROM i
 $ftSql = (@(Query "SHOW CREATE TABLE doc_document;")) -join ''
 $ftNgram = ($ftSql -like '*ngram*')
 Check 'C13b fulltext-ngram-index' (($ftIdx -eq 'title,summary,content_md') -and $ftNgram) "ft_doc_search=[$ftIdx] ngram_parser=$ftNgram"
+
+# --- C13c: sort-option indexes keep the sort key right after the equality cols --
+# DocumentSort exposes updatedAt_desc / publishAt_desc / viewCount_desc to the UI, so
+# every one of them needs an index whose column order lets MySQL walk it in reverse
+# instead of filing sorting the whole result set (M7 fix, see EXPLAIN-NOTES.md section 6).
+$pubIdx = (@(Query "SELECT GROUP_CONCAT(COLUMN_NAME ORDER BY SEQ_IN_INDEX) FROM information_schema.STATISTICS WHERE TABLE_SCHEMA=$Q AND INDEX_NAME='idx_doc_status_publish';"))[0]
+$viewIdx = (@(Query "SELECT GROUP_CONCAT(COLUMN_NAME ORDER BY SEQ_IN_INDEX) FROM information_schema.STATISTICS WHERE TABLE_SCHEMA=$Q AND INDEX_NAME='idx_doc_status_view';"))[0]
+$pubCatIdx = (@(Query "SELECT GROUP_CONCAT(COLUMN_NAME ORDER BY SEQ_IN_INDEX) FROM information_schema.STATISTICS WHERE TABLE_SCHEMA=$Q AND INDEX_NAME='idx_doc_cat_status_publish';"))[0]
+$viewCatIdx = (@(Query "SELECT GROUP_CONCAT(COLUMN_NAME ORDER BY SEQ_IN_INDEX) FROM information_schema.STATISTICS WHERE TABLE_SCHEMA=$Q AND INDEX_NAME='idx_doc_cat_status_view';"))[0]
+$delUpdIdx = (@(Query "SELECT GROUP_CONCAT(COLUMN_NAME ORDER BY SEQ_IN_INDEX) FROM information_schema.STATISTICS WHERE TABLE_SCHEMA=$Q AND INDEX_NAME='idx_doc_deleted_updated';"))[0]
+$delPubIdx = (@(Query "SELECT GROUP_CONCAT(COLUMN_NAME ORDER BY SEQ_IN_INDEX) FROM information_schema.STATISTICS WHERE TABLE_SCHEMA=$Q AND INDEX_NAME='idx_doc_deleted_publish';"))[0]
+$delViewIdx = (@(Query "SELECT GROUP_CONCAT(COLUMN_NAME ORDER BY SEQ_IN_INDEX) FROM information_schema.STATISTICS WHERE TABLE_SCHEMA=$Q AND INDEX_NAME='idx_doc_deleted_view';"))[0]
+$sortOk = ($pubIdx -eq 'status,publish_at,deleted') -and ($viewIdx -eq 'status,view_count,deleted') -and
+          ($pubCatIdx -eq 'category_id,status,publish_at,deleted') -and ($viewCatIdx -eq 'category_id,status,view_count,deleted') -and
+          ($delUpdIdx -eq 'deleted,updated_at') -and ($delPubIdx -eq 'deleted,publish_at') -and ($delViewIdx -eq 'deleted,view_count')
+Check 'C13c sort-option-indexes' $sortOk "publish=[$pubIdx] view=[$viewIdx] catPublish=[$pubCatIdx] catView=[$viewCatIdx] allStatus=[$delUpdIdx|$delPubIdx|$delViewIdx]"
 
 # --- C14: seed data counts ---------------------------------------------------
 $seeds = @(

@@ -36,7 +36,7 @@
 | DDL2 | 金额列 `INT UNSIGNED`（分） | `price_cents INT UNSIGNED NOT NULL DEFAULT 0`（`doc_document`，带 COMMENT）；其余计数列同样无符号 | ✅ |
 | DDL3 | 主键 `BIGINT NOT NULL AUTO_INCREMENT`；6 张纯关联中间表用复合主键、无 `id` | `PRIMARY KEY` **14** 处：**8** 张业务表单列自增 + **6** 张中间表复合主键（`sys_user_role`/`sys_role_permission`/`sys_user_permission`/`sys_dept_role`/`doc_document_tag_rel`/`doc_favorite`） | ✅ |
 | DDL4 | 不建任何外键约束 | `FOREIGN KEY` / `REFERENCES` **0** 处；逻辑外键由 `verify-db-deep.ps1` 的 **14 组孤儿行检查** 兜底（实测孤儿 0 行） | ✅ |
-| DDL5 | 高频查询列建索引/复合索引、注意最左前缀 | `information_schema` 实测 **20 个二级索引**（含 3 个业务复合索引 + 1 个 `FULLTEXT ... WITH PARSER ngram`）；T6.6 在 20 045 篇数据量下复测：Q1 命中 `idx_doc_cat_status_updated`、Q2 命中 `idx_doc_status_updated`、Q3 命中 `idx_doc_created_by_updated`（详见 `EXPLAIN-NOTES.md` §5） | ✅ |
+| DDL5 | 高频查询列建索引/复合索引、注意最左前缀 | `information_schema` 实测 **27 个二级索引**（20 → 27 是 M6 收尾按 20 045 篇实测补的 7 条排序索引，列序由 `verify-m2.ps1` C13c 锁定），含业务复合索引 + 1 个 `FULLTEXT ... WITH PARSER ngram`；T6.6/T6.7 在 20 045 篇数据量下复测：主路径 Q1 命中 `idx_doc_cat_status_updated`、Q2 命中 `idx_doc_status_updated`、Q3 命中 `idx_doc_created_by_updated`；三档排序 × 两种筛选形态共 8 条查询**全部 `Index lookup … (reverse)`、0 个 Sort**（详见 `EXPLAIN-NOTES.md` §5/§6） | ✅ |
 | DDL6 | 每张表、每个字段都要有 `COMMENT` | 表级 `COMMENT='...'` **14** 处；`information_schema.columns` 116 列全部带注释（0 列缺注释） | ✅ |
 
 ---
@@ -80,7 +80,7 @@
 | P2 | 列表接口零 N+1：SQL 条数为常数 | 18 个读接口在 45 篇与 20 045 篇两种数据量下逐一点数，**条数完全一致**（`TEST_CHECKLIST.md` M6 表 + `sql-counts-seed/perf.json`）；`pageSize=1` 与 `pageSize=100` 之差只可能是 1 条分页 count | ✅ |
 | P3 | 列表禁查大文本：`DocumentVo` 不含 `contentMd` | `DocumentVo` 无 `contentMd` 字段（唯一命中是 javadoc 的说明文字）；列表 SQL 实测不含 `content_md` 列（`verify-m4-http.ps1` + 逐接口点数器抓到的 SQL 原文） | ✅ |
 | P4 | 动态多条件用 `JpaSpecificationExecutor` + Criteria，禁手写拼接 | 10 个仓储继承 `JpaSpecificationExecutor`，3 个 `*Specifications` 条件构造类；全文检索用**参数绑定**的原生 SQL（`MATCH ... AGAINST(:expr)`），无字符串拼接（检查器断言 `:expr` 绑定 + 关键词不进 SQL 字面量） | ✅ |
-| P5 | 高频查询命中复合索引 | 20 045 篇实测：Q1 `idx_doc_cat_status_updated` 0.342 ms、Q2 `idx_doc_status_updated` 0.261 ms、Q3 `idx_doc_created_by_updated` 0.123 ms、Q3b 优化器自选 `idx_doc_status_updated` 0.203 ms；**对照组**（`IGNORE INDEX`）退化为全表扫描 + Sort **20.9 ms**（约 80×） | ✅ |
+| P5 | 高频查询命中复合索引 | 20 045 篇实测：Q1 `idx_doc_cat_status_updated` 0.342 ms、Q2 `idx_doc_status_updated` 0.261 ms、Q3 `idx_doc_created_by_updated` 0.123 ms、Q3b 优化器自选 `idx_doc_status_updated` 0.203 ms；**对照组**（`IGNORE INDEX`）退化为全表扫描 + Sort **20.9 ms**（约 80×）。收尾补测 `DocumentSort` 三档排序：修复前 `publishAt_desc` / `viewCount_desc` 是 filesort（45.9 / 47.0 ms），补 7 条排序索引后 8 种「排序 × 筛选」形态全部 `Index lookup … (reverse)`、**0 个 Sort**、0.122~0.285 ms（`EXPLAIN-NOTES.md` §6） | ✅ |
 | P6 | 五大避坑红线 | ① `@Data` 0；② 循环查库改批量：`findAllById` 4 处、`@EntityGraph` 1 处、`JOIN FETCH` 3 处；③ 列表不含大文本（P3）；④ 参数类型与列一致（`Long`↔`BIGINT`、金额 `Integer`↔`INT UNSIGNED`，M2/M4 已留证）；⑤ 深分页：`pageNum > 100` → **400**「页码不能超过100，请缩小筛选范围后再试」（`verify-m6-http.ps1` E6/E7） | ✅ |
 
 ---
