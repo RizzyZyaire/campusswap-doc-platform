@@ -1,0 +1,46 @@
+# =============================================================================
+#  演示/交付环境配置（application-demo.yml）
+#
+#  用途：把「一个 jar + 自带数据库」的演示包跑起来，别人不需要装 Node、不需要
+#        改任何配置文件，只需要有 JDK 17（数据库与 Redis 由包内脚本拉起）。
+#
+#  与 dev 的三点差别：
+#   1) 连的是**包内便携 MySQL**（默认 3307，root 空口令的实例里已建好 campusswap_db
+#      与最小权限账号 campusswap_dev），因此端口可被启动脚本用 --spring.datasource.url 覆盖；
+#   2) 连的是**包内便携 Redis**（默认 6380，避开本机可能已存在的 6379）；
+#   3) show-sql 关闭：演示时不需要刷屏的 SQL 日志（机检读日志用的是 dev profile）。
+#
+#  用法（启动脚本里就是这么调的）：
+#    java -jar campusswap-backend-1.0.0.jar --spring.profiles.active=demo
+#  覆盖端口示例：
+#    --server.port=10087 --spring.datasource.url=jdbc:mysql://127.0.0.1:3307/campusswap_db?...
+#
+#  @author Zyaire
+# =============================================================================
+spring:
+  datasource:
+    url: ${DEMO_DB_URL:jdbc:mysql://127.0.0.1:3307/campusswap_db?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true}
+    username: ${DEMO_DB_USERNAME:campusswap_dev}
+    password: ${DEMO_DB_PASSWORD:CampusSwap@2026}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    hikari:
+      maximum-pool-size: 8
+      minimum-idle: 2
+      connection-timeout: 10000
+  jpa:
+    hibernate:
+      # 表结构与数据随便携数据库一起分发，应用永远不改表
+      ddl-auto: none
+    show-sql: false
+    open-in-view: false
+  data:
+    redis:
+      host: ${DEMO_REDIS_HOST:127.0.0.1}
+      port: ${DEMO_REDIS_PORT:6380}
+      database: 0
+      timeout: 3000ms
+
+logging:
+  level:
+    root: info
+    com.campusswap: info

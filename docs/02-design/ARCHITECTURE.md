@@ -646,6 +646,26 @@ graph LR
 | 后端 | 10087（dev）/ 10180（prod） | IDEA 运行 `CampusSwapApplication` 或 `./mvnw spring-boot:run` |
 | 前端 | 5173（dev） | `pnpm dev`；`vite.config.ts` 里 `/api` 与 `/uploads` 代理到 10087 |
 
+### 15.1 单 jar 模式（演示/交付用，2026-10-09 新增）
+
+`mvnw package` 现在会把 `frontend/dist` 拷进 `BOOT-INF/classes/static/`（`pom.xml` 的 `bundle-frontend-dist` 执行），
+于是**一个 jar 同时提供接口与页面**；`WebMvcConfig` 只在检测到 `static/index.html` 时才注册 `/**` 静态处理器，
+并把非 `/api`、非 `/uploads`、不带扩展名的路径**回落到 `index.html`**（前端是 history 路由，刷新 `/docs/5` 不会 404）。
+开发态 classpath 下没有该文件，行为与以前完全一致。配套 `application-demo.yml`（`--spring.profiles.active=demo`）
+把数据源指向便携实例、关掉 SQL 刷屏、Redis 指向独立端口。
+
+| 演示包组件 | 端口 | 说明 |
+|---|---|---|
+| 便携 MySQL 8.0.46 | **3307** | 随包分发（214 MB，`data/` 里已灌好 45 篇文档与 3 个账号），root 空口令仅限本机演示 |
+| 便携 Redis 5.0.14 | **6380** | 随包分发（1.8 MB，关闭持久化） |
+| 应用（含前端） | **10090** | `runtime\bin\java.exe -jar app\campusswap-backend-1.0.0.jar --spring.profiles.active=demo` |
+
+> **为什么端口都避开常用值**：演示包要能与本机既有的 MySQL(3306) / Redis(6379) 以及项目自己的开发栈(10087/5173) 并存。
+> **为什么启动脚本一律用相对路径**：实测 mysqld 的命令行按 ANSI 代码页解析，绝对路径里的中文会在第一个中文字节处被**截断**
+> （报错原文 `Failed to set datadir to 'D:\DevEnv\dist\data\'`）；Windows 8.3 短名在关闭 8.3 生成的卷上不可用。
+> 因此启动器 `cd` 进目录后用 `start /D` + 相对参数调用 mysqld/redis，**解压到中文目录也能跑**（2026-10-09 实测：中文路径下 12.4 s 起全栈）。
+> 打包脚本、启动器与说明书：`docs/05-submission/{build-full-package.ps1, run-version/, README-FIRST.txt}`。
+
 ---
 
 ## 16. 功能价值说明（每个机制"多了什么用"）

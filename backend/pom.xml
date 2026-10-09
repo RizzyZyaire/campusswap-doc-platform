@@ -26,6 +26,8 @@
         <java.version>17</java.version>
         <hutool.version>5.8.47</hutool.version>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <!-- 打包时是否把 ../frontend/dist 塞进 jar 的 static/（单 jar 演示模式，见 build 段注释） -->
+        <frontend.bundle.skip>false</frontend.bundle.skip>
     </properties>
 
     <dependencies>
@@ -100,6 +102,37 @@
             <plugin>
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
+            </plugin>
+            <!--
+              单 jar 模式（2026-10-09）：把前端构建产物 frontend/dist 拷进
+              BOOT-INF/classes/static/，于是 `mvnw package` 出来的一个 jar 就能同时
+              提供接口与页面，别人不用装 Node/pnpm（见 ARCHITECTURE §15）。
+              · 先跑 `cd frontend && pnpm run build` 生成 dist；dist 不存在时本步骤静默跳过，
+                开发与测试流程完全不受影响（WebMvcConfig 也只在 static/index.html 存在时才注册回落）。
+              · skip 开关：`-Dfrontend.bundle.skip=true` 可跳过（例如只想验证后端）。
+            -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-resources-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>bundle-frontend-dist</id>
+                        <phase>prepare-package</phase>
+                        <goals>
+                            <goal>copy-resources</goal>
+                        </goals>
+                        <configuration>
+                            <skip>${frontend.bundle.skip}</skip>
+                            <outputDirectory>${project.build.outputDirectory}/static</outputDirectory>
+                            <resources>
+                                <resource>
+                                    <directory>${project.basedir}/../frontend/dist</directory>
+                                    <filtering>false</filtering>
+                                </resource>
+                            </resources>
+                        </configuration>
+                    </execution>
+                </executions>
             </plugin>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
