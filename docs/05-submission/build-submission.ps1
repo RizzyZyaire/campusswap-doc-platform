@@ -36,6 +36,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $Utf8NoBom = New-Object System.Text.UTF8Encoding($false)
+$Utf8Bom = New-Object System.Text.UTF8Encoding($true)
 $MaxBytes = 2GB
 
 $here = $PSScriptRoot
@@ -47,6 +48,15 @@ $rootName = $manifest.rootName
 $stagingParent = Join-Path $DistRoot 'campusswap-submission'
 $stage = Join-Path $stagingParent $rootName
 $problems = @()
+
+# --- layout names (code points, so this script stays pure ASCII) --------------
+# 2026-10-09 restructure (user feedback: "top level too busy, three overlapping
+# read-me files"): the package now has exactly four predictable top-level items --
+#   先看这里.txt   backend/   frontend/   docs/   plus ONE extra folder holding
+#   everything else (screenshots here; the run version in the full package).
+$cjkEntry = -join ([char]0x5148, [char]0x770B, [char]0x8FD9, [char]0x91CC, [char]0x002E, [char]0x0074, [char]0x0078, [char]0x0074)
+$cjkExtra = -join ([char]0x5176, [char]0x4ED6, [char]0xFF08, [char]0x622A, [char]0x56FE, [char]0xFF09)
+$extraName = $cjkExtra
 
 function Say([string]$t) { Write-Host $t }
 function Add-Problem([string]$t) { $script:problems += $t; Write-Host ('  !! ' + $t) }
@@ -91,6 +101,7 @@ New-Item -ItemType Directory -Path $stage -Force | Out-Null
 Write-Host ''
 Write-Host '[1/5] copying sources and documents (junk excluded by manifest) ...'
 foreach ($entry in $manifest.include) {
+    if ($entry.from -eq 'README.md') { continue }   # the repo README stays on GitHub; the package entry note covers it
     $src = Join-Path $repo $entry.from
     $dst = Join-Path $stage $entry.to
     if (-not (Test-Path -LiteralPath $src)) { Add-Problem ('missing include source: ' + $entry.from); continue }
@@ -104,20 +115,23 @@ foreach ($entry in $manifest.include) {
     }
 }
 
-# --- 2. entry guide -----------------------------------------------------------
+# --- 2. entry guide (ONE per package: 先看这里.txt) ---------------------------
 Write-Host ''
-Write-Host '[2/5] entry guide ...'
-$guideSrc = Join-Path $repo $manifest.guideSource
-if (-not (Test-Path -LiteralPath $guideSrc)) { Add-Problem ('guide missing: ' + $manifest.guideSource) }
+Write-Host '[2/5] entry note ...'
+$guideSrc = Join-Path $here 'README-FIRST-light.txt'
+if (-not (Test-Path -LiteralPath $guideSrc)) { Add-Problem ('entry note missing: README-FIRST-light.txt') }
 else {
-    Copy-Item -LiteralPath $guideSrc -Destination (Join-Path $stage $manifest.entryDoc) -Force
-    Write-Host ('    ' + $manifest.entryDoc)
+    $text = [System.IO.File]::ReadAllText($guideSrc, [System.Text.Encoding]::UTF8)
+    [System.IO.File]::WriteAllText((Join-Path $stage $cjkEntry), $text, $Utf8Bom)   # BOM: Notepad must show Chinese
+    Write-Host ('    ' + $cjkEntry)
 }
 
-# --- 3. screenshots + gallery -------------------------------------------------
+# --- 3. screenshots + gallery (all of it inside the one extra folder) ---------
 Write-Host ''
 Write-Host '[3/5] screenshots and the offline gallery ...'
-$shotsDst = Join-Path $stage $manifest.shotsDir
+$extraDst = Join-Path $stage $extraName
+New-Item -ItemType Directory -Path $extraDst -Force | Out-Null
+$shotsDst = Join-Path $extraDst $manifest.shotsDir
 New-Item -ItemType Directory -Path $shotsDst -Force | Out-Null
 $figures = @()
 $i = 0
@@ -143,7 +157,7 @@ $gallery = $gallery.Replace('{{TITLE}}', $manifest.galleryTitle)
 $gallery = $gallery.Replace('{{SUBTITLE}}', $manifest.gallerySubtitle)
 $gallery = $gallery.Replace('{{FIGURES}}', ($figures -join "`n"))
 $gallery = $gallery.Replace('{{COUNT}}', [string]$figures.Count)
-$galleryPath = Join-Path $stage $manifest.galleryFile
+$galleryPath = Join-Path $extraDst $manifest.galleryFile
 [System.IO.File]::WriteAllText($galleryPath, $gallery, $Utf8NoBom)
 Write-Host ('    ' + $manifest.galleryFile + '  (' + $figures.Count + ' figures, ' + (Format-Size (Get-Item $galleryPath).Length) + ')')
 
@@ -160,19 +174,20 @@ foreach ($d in $allDirs) {
 foreach ($f in $allFiles) {
     foreach ($pattern in $excludeFiles) { if ($f.Name -like $pattern) { Add-Problem ('excluded file leaked: ' + $f.FullName.Replace($stage, '')) } }
 }
-foreach ($must in @('README.md', 'backend\pom.xml', 'backend\mvnw.cmd', 'backend\sql\schema.sql', 'backend\sql\data.sql',
+foreach ($must in @('backend\pom.xml', 'backend\mvnw.cmd', 'backend\sql\schema.sql', 'backend\sql\data.sql',
                     'frontend\package.json', 'frontend\pnpm-lock.yaml', 'frontend\src\main.ts',
                     'docs\MASTER-PLAN.md', 'docs\03-qa-review\CODE_REVIEW.md', 'docs\02-design\UI-PREVIEW.html',
                     'docs\03-qa-review\run-all-checks.ps1')) {
     if (-not (Test-Path -LiteralPath (Join-Path $stage $must))) { Add-Problem ('required file missing in package: ' + $must) }
 }
+if (-not (Test-Path -LiteralPath (Join-Path $stage $cjkEntry))) { Add-Problem ('entry note missing in package: ' + $cjkEntry) }
 if ($totalBytes -gt $MaxBytes) { Add-Problem ('staging exceeds the 2 GB platform limit: ' + (Format-Size $totalBytes)) }
 $hasFrontendSrc = Test-Path -LiteralPath (Join-Path $stage 'frontend\src\views')
 if (-not $hasFrontendSrc) { Add-Problem 'frontend/src/views missing' }
 # image references inside the gallery must resolve to files that really exist
 $html = [System.IO.File]::ReadAllText($galleryPath, [System.Text.Encoding]::UTF8)
 $refs = [regex]::Matches($html, 'src="(shots/[^"]+)"') | ForEach-Object { $_.Groups[1].Value } | Select-Object -Unique
-$broken = @(); foreach ($rel in $refs) { if (-not (Test-Path -LiteralPath (Join-Path $stage ($rel -replace '/', '\')))) { $broken += $rel } }
+$broken = @(); foreach ($rel in $refs) { if (-not (Test-Path -LiteralPath (Join-Path $extraDst ($rel -replace '/', '\')))) { $broken += $rel } }
 if ($broken.Count -gt 0) { Add-Problem ('gallery references broken images: ' + ($broken -join ', ')) }
 Write-Host ('    files=' + $allFiles.Count + '  dirs=' + $allDirs.Count + '  size=' + (Format-Size $totalBytes))
 Write-Host ('    gallery image refs checked: ' + $refs.Count + ' (broken=' + $broken.Count + ')')
@@ -202,11 +217,12 @@ if (-not $NoZip) {
         New-Item -ItemType Directory -Path $probe -Force | Out-Null
         & tar.exe -xf $zipPath -C $probe
         $probeRoot = Join-Path $probe $rootName
-        $mustExist = @($manifest.entryDoc, $manifest.galleryFile, (Join-Path $manifest.shotsDir $manifest.shots[0].file),
+        $mustExist = @($cjkEntry, (Join-Path $extraName $manifest.galleryFile),
+                       (Join-Path (Join-Path $extraName $manifest.shotsDir) $manifest.shots[0].file),
                        'backend\sql\schema.sql', 'frontend\package.json', 'docs\03-qa-review\CODE_REVIEW.md')
         $missing = @(); foreach ($rel in $mustExist) { if (-not (Test-Path -LiteralPath (Join-Path $probeRoot $rel))) { $missing += $rel } }
         if ($missing.Count -gt 0) { Add-Problem ('zip round-trip is missing: ' + ($missing -join ', ')) }
-        $probeShots = @(Get-ChildItem -LiteralPath (Join-Path $probeRoot $manifest.shotsDir) -Filter '*.png' -ErrorAction SilentlyContinue).Count
+        $probeShots = @(Get-ChildItem -LiteralPath (Join-Path (Join-Path $probeRoot $extraName) $manifest.shotsDir) -Filter '*.png' -ErrorAction SilentlyContinue).Count
         Write-Host ('    round-trip extract: root=' + (Test-Path -LiteralPath $probeRoot) + '  shots=' + $probeShots + '  missing=' + $missing.Count)
         Remove-Item -LiteralPath $probe -Recurse -Force
         if (-not $NoDesktopCopy -and (Test-Path -LiteralPath $DesktopDir)) {

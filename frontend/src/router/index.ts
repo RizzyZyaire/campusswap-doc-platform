@@ -13,7 +13,10 @@ import { useUiStore } from '@/stores/ui'
 const routes: RouteRecordRaw[] = [
   { path: '/login', name: 'login', component: () => import('@/views/auth/LoginView.vue'), meta: { public: true, blank: true, title: '登录' } },
 
-  { path: '/', redirect: '/' + '' }, // 占位，真实重定向在下面按权限重写
+  // 根路径：**故意不具名**——它不是目的地，只是一个"按权限选落点"的入口。
+  // 规格不变量是"13 条功能路由 + 2 条异常路由 = 15 个具名路由"（UI_UX_SPECIFICATION §6.1），
+  // 具名就会被 verify-m5.ps1 的 D2a 数成第 16 个（2026-10-10 实测），所以落点判定走 to.path。
+  { path: '/', component: () => import('@/views/workbench/WorkbenchView.vue'), meta: { title: '工作台' } },
   { path: '/workbench', name: 'workbench', component: () => import('@/views/workbench/WorkbenchView.vue'), meta: { title: '工作台' } },
   { path: '/docs', name: 'docs', component: () => import('@/views/document/DocumentListView.vue'), meta: { perm: PERM.docSearch, title: '文档检索' } },
   // 注意顺序：/docs/edit 必须写在 /docs/:id 之前，否则会被当成 id='edit'
@@ -33,15 +36,24 @@ const routes: RouteRecordRaw[] = [
   { path: '/:pathMatch(.*)*', redirect: '/404' }
 ]
 
-routes[1] = {
-  path: '/',
-  redirect: () => {
-    // 按权限重定向（§1.2）：有 doc:search → /docs；否则有 doc:mine → /my；否则 → /403
-    const user = useUserStore()
-    if (user.hasPerm(PERM.docSearch)) return '/docs'
-    if (user.hasPerm(PERM.docMine)) return '/my'
-    return '/403'
-  }
+/**
+ * 根路径的按权限落点（UI_UX_SPECIFICATION §1.2）：有 `doc:search` → `/docs`；
+ * 否则有 `doc:mine` → `/my`；都没有 → 403 页（带上缺的权限码）。
+ *
+ * <p><b>为什么放在守卫里而不是路由表的 redirect 回调里（2026-10-09 修 bug）</b>：
+ * vue-router 的 redirect 回调在**任何守卫之前**执行，那时 store 里既没有 token 也没有权限，
+ * 于是匿名访问 `/` 会被直接判成"无权限" → 返回 `/403` → 守卫把这次 `/403` 当成未登录的来路，
+ * 拼出 `/login?redirect=/403` → 用户登录成功后 `router.replace('/403')`，**刚登录就掉进无权限页**。
+ * 实测复现：匿名访问 `/` 得到 `?redirect=/403`，登录后落点 `/403`（应为 `/docs`）。
+ * 放到守卫 ③ 之后，权限一定已由 login() 或 fetchMe() 填好，判定才是可信的。</p>
+ *
+ * @param user 用户 store
+ * @returns 目标路由位置
+ */
+function landingByPermission(user: ReturnType<typeof useUserStore>) {
+  if (user.hasPerm(PERM.docSearch)) return { name: 'docs' as const }
+  if (user.hasPerm(PERM.docMine)) return { name: 'my' as const }
+  return { name: 'forbidden' as const, query: { need: PERM.docSearch, from: '/' } }
 }
 
 const router = createRouter({
@@ -73,6 +85,11 @@ router.beforeEach(async (to) => {
       user.clear()
       return { name: 'login', query: { redirect: to.fullPath } }
     }
+  }
+
+  // ③.5 根路径：此时权限已就绪，按权限决定落点（见 landingByPermission 注释）
+  if (to.path === '/') {
+    return landingByPermission(user)
   }
 
   // ④ 权限不足 → 403（把缺的权限点带过去，403 页要写明）

@@ -49,6 +49,8 @@ if not exist "%BASE%mysql\bin\mysqld.exe" goto no_mysql
 if not exist "%BASE%mysql\data\campusswap_db" goto no_data
 
 echo [1/4] portable MySQL on port %MYSQLPORT% ...
+echo       (the very first run after unzipping can take 1-2 minutes:
+echo        Windows Defender scans 200+ MB of freshly extracted files)
 netstat -ano | find ":%MYSQLPORT%" | find "LISTENING" >nul
 if not errorlevel 1 goto mysql_up
 if exist "%BASE%mysql\launcher.err" del "%BASE%mysql\launcher.err" >nul 2>&1
@@ -62,18 +64,22 @@ set /a T=0
 netstat -ano | find ":%MYSQLPORT%" | find "LISTENING" >nul
 if not errorlevel 1 goto mysql_up
 set /a T+=1
-if %T% GEQ 40 goto mysql_dead
+if %T% GEQ 90 goto mysql_dead
+set /a R=%T% %% 8
+if %R%==0 echo       still waiting for MySQL (%T% x 2s) - first run is slow, keep this window open
 ping -n 2 127.0.0.1 >nul
 goto mysql_wait
 :mysql_up
 echo       listening on %MYSQLPORT%
 goto redis_step
 :mysql_dead
-echo       MySQL did not come up within 40s - its own log says:
+echo       MySQL did not come up within 180s - its own log says:
 echo       ------------------------------------------------------
 if exist "%BASE%mysql\launcher.err" type "%BASE%mysql\launcher.err"
 echo       ------------------------------------------------------
 echo       (full log: mysql\launcher.err)
+echo       If the log mentions VCRUNTIME140.dll, install the Microsoft
+echo       Visual C++ 2015-2022 Redistributable (x64) once, then retry.
 goto fail
 
 :redis_step
@@ -87,14 +93,14 @@ set /a T=0
 netstat -ano | find ":%REDISPORT%" | find "LISTENING" >nul
 if not errorlevel 1 goto redis_up
 set /a T+=1
-if %T% GEQ 30 goto redis_dead
+if %T% GEQ 60 goto redis_dead
 ping -n 2 127.0.0.1 >nul
 goto redis_wait
 :redis_up
 echo       listening on %REDISPORT%
 goto app_step
 :redis_dead
-echo       Redis did not come up within 30s - see the minimized Redis window
+echo       Redis did not come up within 120s - see the minimized Redis window
 goto fail
 
 :app_step
@@ -102,21 +108,23 @@ echo.
 echo [3/4] website (Spring Boot + bundled frontend) on port %APPPORT% ...
 netstat -ano | find ":%APPPORT%" | find "LISTENING" >nul
 if not errorlevel 1 goto app_up
-echo       starting the app - first boot takes 10-20 seconds
+echo       starting the app - first boot takes 10-30 seconds
 start "CampusSwap website (close this window to stop)" /D "%BASE%" runtime\bin\java.exe -Xmx512m -Dfile.encoding=UTF-8 -jar app\campusswap-backend-1.0.0.jar --spring.profiles.active=demo --server.port=%APPPORT% --logging.file.name=logs\demo-app.log
 set /a T=0
 :app_wait
 netstat -ano | find ":%APPPORT%" | find "LISTENING" >nul
 if not errorlevel 1 goto app_up
 set /a T+=1
-if %T% GEQ 90 goto app_dead
+if %T% GEQ 150 goto app_dead
+set /a R=%T% %% 10
+if %R%==0 echo       still starting the website (%T% x 2s) - keep this window open
 ping -n 2 127.0.0.1 >nul
 goto app_wait
 :app_up
 echo       listening on %APPPORT%
 goto open_it
 :app_dead
-echo       the app did not come up within 180s
+echo       the app did not come up within 300s
 echo       last lines of logs\demo-app.log:
 echo       ------------------------------------------------------
 if exist "%BASE%logs\demo-app.log" powershell -NoProfile -Command "Get-Content -LiteralPath '%BASE%logs\demo-app.log' -Tail 15"

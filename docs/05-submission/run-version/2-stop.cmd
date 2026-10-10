@@ -23,8 +23,15 @@ echo [1/3] MySQL on 3307 ...
 if not exist "%BASE%mysql\bin\mysqladmin.exe" goto mysql_skip
 cd /d "%BASE%mysql"
 bin\mysqladmin.exe --protocol=TCP --host=127.0.0.1 --port=3307 --user=root shutdown >nul 2>&1
+if not errorlevel 1 goto mysql_done
+rem one retry: a just-started mysqld may still be opening its sockets
+ping -n 4 127.0.0.1 >nul
+bin\mysqladmin.exe --protocol=TCP --host=127.0.0.1 --port=3307 --user=root shutdown >nul 2>&1
 if errorlevel 1 echo       not running, or already shut down
 if not errorlevel 1 echo       shut down cleanly
+goto redis_stop
+:mysql_done
+echo       shut down cleanly
 goto redis_stop
 :mysql_skip
 echo       mysqladmin not found - skipping the clean shutdown
