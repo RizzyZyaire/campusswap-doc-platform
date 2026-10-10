@@ -14,3 +14,6 @@ interface ImportMetaEnv {
 interface ImportMeta {
   readonly env: ImportMetaEnv
 }
+
+/** 构建戳（vite define 注入，见 vite.config.ts）：一眼分辨浏览器跑的是哪次构建。 */
+declare const __BUILD_STAMP__: string

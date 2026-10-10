@@ -125,6 +125,23 @@ const step3 = await evalJs('location.pathname + location.search')
 const step3Path = String(step3 ?? '')
 check('带 token 直接打开 / 不落 403', !step3Path.startsWith('/403'), `实际 = ${step3Path}`)
 
+/* ---------- ④ 直接打开 /403（浏览器"继续上次会话"会恢复这个 URL）----------
+   没有 need 参数就不该把人晾在无权限页：能进哪就进哪（2026-10-11 加的自愈） */
+await send('Page.navigate', { url: `${APP}/403` })
+await sleep(3000)
+const step4 = await evalJs('location.pathname + location.search')
+const step4Path = String(step4 ?? '')
+check('直接打开 /403 会自愈到有权限的页面', !step4Path.startsWith('/403'), `实际 = ${step4Path}`)
+
+/* ---------- ⑤ 真正缺权限时仍要拦在 403（自愈不能把守卫变成摆设）---------- */
+// admin 有全部 39 个权限点，所以这里用后端一定会拒的伪造路由不现实；
+// 改为断言 403 页本身可打开且带 need 时不会被自愈改写。
+await send('Page.navigate', { url: `${APP}/403?need=doc:review&from=/review` })
+await sleep(2500)
+const step5 = await evalJs('location.pathname + location.search')
+const step5Path = String(step5 ?? '')
+check('带 need 的 403 保持原样（自愈不越权）', step5Path.startsWith('/403'), `实际 = ${step5Path}`)
+
 ws.close()
 edge.kill()
 await sleep(500)

@@ -57,7 +57,7 @@ if exist "%BASE%mysql\launcher.err" del "%BASE%mysql\launcher.err" >nul 2>&1
 rem cd first so the relative "bin\mysqld.exe" resolves, AND pass /D so the child's
 rem working directory is the mysql folder even if cmd's idea of the cwd differs.
 cd /d "%BASE%mysql"
-start "CampusSwap MySQL %MYSQLPORT%" /min /D "%BASE%mysql" bin\mysqld.exe --datadir=data --port=%MYSQLPORT% --mysqlx=0 --innodb-redo-log-capacity=33554432 --log-error=launcher.err
+start "CampusSwap MySQL %MYSQLPORT%" /min /D "%BASE%mysql" bin\mysqld.exe --datadir=data --port=%MYSQLPORT% --mysqlx=0 --skip-log-bin --innodb-redo-log-capacity=33554432 --log-error=launcher.err
 cd /d "%~dp0"
 set /a T=0
 :mysql_wait
@@ -107,8 +107,22 @@ goto fail
 echo.
 echo [3/4] website (Spring Boot + bundled frontend) on port %APPPORT% ...
 netstat -ano | find ":%APPPORT%" | find "LISTENING" >nul
-if not errorlevel 1 goto app_up
+if errorlevel 1 goto app_start
+rem Port already taken. It is almost always a PREVIOUS launch of this demo that is
+rem still running -- and that instance may be an older jar from another folder,
+rem which is exactly how "I fixed it but the browser still shows the old bug"
+rem happens. Report who owns the port, then restart it from THIS folder so the
+rem version on screen is always the version in this folder.
+echo       port %APPPORT% is already in use; identifying the owner ...
+rem The helper is a separate .ps1 on purpose -- see its header for why an inline
+rem powershell -Command with escaped quotes cannot be used inside a .cmd.
+powershell -NoProfile -ExecutionPolicy Bypass -File "%BASE%stop-old-instance.ps1"
+netstat -ano | find ":%APPPORT%" | find "LISTENING" >nul
+if not errorlevel 1 goto app_busy
+:app_start
 echo       starting the app - first boot takes 10-30 seconds
+echo       build in use:
+powershell -NoProfile -Command "$j = Join-Path '%BASE%' 'app\campusswap-backend-1.0.0.jar'; if (Test-Path -LiteralPath $j) { $i = Get-Item -LiteralPath $j; $h = (Get-FileHash -LiteralPath $j -Algorithm SHA256).Hash.Substring(0,12); Write-Host ('        ' + $i.LastWriteTime.ToString('yyyy-MM-dd HH:mm') + '  sha256:' + $h) }"
 start "CampusSwap website (close this window to stop)" /D "%BASE%" runtime\bin\java.exe -Xmx512m -Dfile.encoding=UTF-8 -jar app\campusswap-backend-1.0.0.jar --spring.profiles.active=demo --server.port=%APPPORT% --logging.file.name=logs\demo-app.log
 set /a T=0
 :app_wait
@@ -122,6 +136,19 @@ ping -n 2 127.0.0.1 >nul
 goto app_wait
 :app_up
 echo       listening on %APPPORT%
+rem The TCP port opens a second or two before Spring can actually serve the page.
+rem Wait until GET / really answers 200, so "READY" means "you can open it now"
+rem and the browser never lands on a connection error (first-run complaint 2026-10-10).
+set /a W=0
+:app_warm
+powershell -NoProfile -Command "try { $r = Invoke-WebRequest -Uri 'http://127.0.0.1:%APPPORT%/' -UseBasicParsing -TimeoutSec 3; if ($r.StatusCode -eq 200) { exit 0 } } catch { }; exit 1"
+if not errorlevel 1 goto app_ready
+set /a W+=1
+if %W% GEQ 30 goto app_ready
+ping -n 2 127.0.0.1 >nul
+goto app_warm
+:app_ready
+echo       page is answering
 goto open_it
 :app_dead
 echo       the app did not come up within 300s
@@ -131,10 +158,23 @@ if exist "%BASE%logs\demo-app.log" powershell -NoProfile -Command "Get-Content -
 echo       ------------------------------------------------------
 goto fail
 
+:app_busy
+echo       port %APPPORT% is STILL busy after the clean-up attempt.
+echo       Something else on this machine owns it (not this demo). Free the port
+echo       or change APPPORT at the top of this file, then run me again.
+goto fail
+
 :open_it
 echo.
 echo [4/4] opening the website ...
-start "" http://localhost:%APPPORT%
+echo       (if the browser was already open on this site, press Ctrl+F5 once:
+echo        page HTML is served no-store, but an old tab may still hold old JS)
+rem ?v= is a CACHE BUSTER, not decoration: a browser that still holds the OLD
+rem index.html (served before this fix, when no Cache-Control was sent) may reuse it
+rem without ever asking the server -- and that old page carries the old JS, so the
+rem user keeps seeing the old behaviour no matter what we fix server-side.
+rem A different URL is a different cache key, so the fresh HTML is fetched for sure.
+start "" "http://localhost:%APPPORT%/?v=%RANDOM%%RANDOM%"
 echo.
 echo ============================================================
 echo   READY  -  website : http://localhost:%APPPORT%

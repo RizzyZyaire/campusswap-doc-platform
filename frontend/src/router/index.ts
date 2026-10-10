@@ -92,6 +92,15 @@ router.beforeEach(async (to) => {
     return landingByPermission(user)
   }
 
+  // ③.6 直接访问/浏览器恢复出来的 /403（没有 need 参数）：不要把人晾在无权限页。
+  //      场景：上一次停在了 403 页，浏览器"继续上次会话"把 /403 原样恢复；
+  //      或者用户把 403 页存了书签。这种情况没有"缺哪个权限"的信息，能进哪就进哪。
+  //      （有 need 参数 = 守卫刚判定的结果，保持原样；landingByPermission 在真无权限时
+  //        会带着 need 返回 forbidden，所以不会在这里来回打转。）
+  if (to.name === 'forbidden' && !to.query.need) {
+    return landingByPermission(user)
+  }
+
   // ④ 权限不足 → 403（把缺的权限点带过去，403 页要写明）
   const need = to.meta.perm as string | undefined
   if (need && !user.hasPerm(need)) {

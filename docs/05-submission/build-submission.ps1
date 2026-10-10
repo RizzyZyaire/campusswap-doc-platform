@@ -54,9 +54,12 @@ $problems = @()
 # read-me files"): the package now has exactly four predictable top-level items --
 #   先看这里.txt   backend/   frontend/   docs/   plus ONE extra folder holding
 #   everything else (screenshots here; the run version in the full package).
-$cjkEntry = -join ([char]0x5148, [char]0x770B, [char]0x8FD9, [char]0x91CC, [char]0x002E, [char]0x0074, [char]0x0078, [char]0x0074)
+$cjkEntry = -join ([char]0x5148, [char]0x770B, [char]0x8FD9, [char]0x91CC, [char]0x002E, [char]0x006D, [char]0x0064)
 $cjkExtra = -join ([char]0x5176, [char]0x4ED6, [char]0xFF08, [char]0x622A, [char]0x56FE, [char]0xFF09)
 $extraName = $cjkExtra
+# zip file name suffix so the two deliverables are told apart at a glance
+# (decoded: light version - source + docs + screenshots)
+$lightSuffix = -join ([char]0xFF08, [char]0x8F7B, [char]0x91CF, [char]0x7248, [char]0x002D, [char]0x6E90, [char]0x7801, [char]0x002B, [char]0x6587, [char]0x6863, [char]0x002B, [char]0x622A, [char]0x56FE, [char]0xFF09)
 
 function Say([string]$t) { Write-Host $t }
 function Add-Problem([string]$t) { $script:problems += $t; Write-Host ('  !! ' + $t) }
@@ -118,8 +121,8 @@ foreach ($entry in $manifest.include) {
 # --- 2. entry guide (ONE per package: 先看这里.txt) ---------------------------
 Write-Host ''
 Write-Host '[2/5] entry note ...'
-$guideSrc = Join-Path $here 'README-FIRST-light.txt'
-if (-not (Test-Path -LiteralPath $guideSrc)) { Add-Problem ('entry note missing: README-FIRST-light.txt') }
+$guideSrc = Join-Path $here 'README-FIRST-light.md'
+if (-not (Test-Path -LiteralPath $guideSrc)) { Add-Problem ('entry note missing: README-FIRST-light.md') }
 else {
     $text = [System.IO.File]::ReadAllText($guideSrc, [System.Text.Encoding]::UTF8)
     [System.IO.File]::WriteAllText((Join-Path $stage $cjkEntry), $text, $Utf8Bom)   # BOM: Notepad must show Chinese
@@ -198,7 +201,7 @@ if (-not $NoZip) {
     Write-Host ''
     Write-Host '[5/5] building the zip with tar.exe (UTF-8 file names) ...'
     $stamp = Get-Date -Format 'yyyyMMdd'
-    $zipPath = Join-Path $DistRoot ($rootName + '-' + $stamp + '.zip')
+    $zipPath = Join-Path $DistRoot ($rootName + $lightSuffix + '-' + $stamp + '.zip')
     if (Test-Path -LiteralPath $zipPath) { Remove-Item -LiteralPath $zipPath -Force }
     & tar.exe -a -c -f $zipPath -C $stagingParent $rootName
     if ($LASTEXITCODE -ne 0) { Add-Problem ('tar.exe failed with exit ' + $LASTEXITCODE) }
@@ -226,7 +229,7 @@ if (-not $NoZip) {
         Write-Host ('    round-trip extract: root=' + (Test-Path -LiteralPath $probeRoot) + '  shots=' + $probeShots + '  missing=' + $missing.Count)
         Remove-Item -LiteralPath $probe -Recurse -Force
         if (-not $NoDesktopCopy -and (Test-Path -LiteralPath $DesktopDir)) {
-            $desktopZip = Join-Path $DesktopDir ($rootName + '-' + $stamp + '.zip')
+            $desktopZip = Join-Path $DesktopDir ($rootName + $lightSuffix + '-' + $stamp + '.zip')
             Copy-Item -LiteralPath $zipPath -Destination $desktopZip -Force
             $a = (Get-FileHash -LiteralPath $zipPath -Algorithm SHA256).Hash
             $b = (Get-FileHash -LiteralPath $desktopZip -Algorithm SHA256).Hash

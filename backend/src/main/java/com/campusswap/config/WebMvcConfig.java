@@ -1,11 +1,14 @@
 package com.campusswap.config;
 
 import com.campusswap.common.security.LoginInterceptor;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import java.nio.file.Paths;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.core.io.Resource;
+import org.springframework.web.servlet.HandlerInterceptor;
 import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
 import org.springframework.web.servlet.config.annotation.ResourceHandlerRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
@@ -46,6 +49,33 @@ public class WebMvcConfig implements WebMvcConfigurer {
                 //       而 API_SPECIFICATION §4.1.2 要求「重复登出幂等返回 200」，
                 //       所以由 Controller 判空后调 TokenService（DEL 不存在的键是安全空操作）。
                 .excludePathPatterns("/api/auth/login", "/api/auth/logout");
+
+        // 页面（HTML）一律不缓存：浏览器"继续上次会话"或启发式缓存可能留下**旧版 index.html**，
+        // 而它引用的是旧版 hash bundle —— 于是服务端已经修好的前端，用户那边看到的仍是老行为
+        // （2026-10-11 排查"启动后依旧跳 403"时确认这是必须堵死的一条路：
+        //  带 hash 的 assets/ 可以放心缓存，只有 HTML 必须每次回源）。
+        registry.addInterceptor(new HandlerInterceptor() {
+            /**
+             * 给 HTML 响应打上禁缓存头。
+             *
+             * @param request  当前请求
+             * @param response 当前响应
+             * @param handler  处理器
+             * @return 恒为 true（只加响应头，不拦截）
+             */
+            @Override
+            public boolean preHandle(HttpServletRequest request, HttpServletResponse response,
+                                     Object handler) {
+                String path = request.getRequestURI();
+                int dot = path.lastIndexOf('.');
+                boolean html = dot < 0 || path.endsWith(".html");
+                if (html) {
+                    response.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
+                    response.setHeader("Pragma", "no-cache");
+                }
+                return true;
+            }
+        }).addPathPatterns("/**").excludePathPatterns("/api/**", "/uploads/**");
     }
 
     /**

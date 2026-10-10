@@ -30,5 +30,9 @@ export default tseslint.config(
       'vue/multi-word-component-names': 'off',
       'no-console': ['warn', { allow: ['warn', 'error'] }]
     }
+    },
+  {
+    // vite define 注入的编译期常量（见 vite.config.ts）：声明成只读全局，避免 no-undef 误报
+    languageOptions: { globals: { __BUILD_STAMP__: 'readonly', __VERSION__: 'readonly' } }
   }
 )

@@ -4,7 +4,13 @@ import vue from '@vitejs/plugin-vue'
 
 // 开发端口固定 5173（UI_UX_SPECIFICATION §6.1 与 CORS 白名单都按它写死）
 // /api 走 dev 代理转发到后端 10087：开发期同源、无预检，后端 CorsConfig 仍保留作为直连兜底。
+// 构建戳：打进前端产物，登录页会显示出来。
+// 用途（2026-10-10 用户踩坑）：浏览器可能仍在跑**缓存里的旧 bundle**，
+// 页面上一眼就能看出当前前端是哪次构建的，不用靠猜。
+const BUILD_STAMP = new Date().toISOString().replace('T', ' ').slice(0, 16)
+
 export default defineConfig({
+  define: { __BUILD_STAMP__: JSON.stringify(BUILD_STAMP) },
   plugins: [vue()],
   resolve: {
     alias: {

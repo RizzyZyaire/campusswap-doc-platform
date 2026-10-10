@@ -18,6 +18,8 @@ import { useUserStore } from '@/stores/user'
  * 不再是"纯白里孤零零一张表单"。</p>
  */
 const route = useRoute()
+/** 构建戳：浏览器若在跑缓存的旧 bundle，这里会显示旧时间（Ctrl+F5 可强刷）。 */
+const buildStamp = __BUILD_STAMP__
 const router = useRouter()
 const user = useUserStore()
 const ui = useUiStore()
@@ -96,7 +98,7 @@ async function onSubmit(): Promise<void> {
 
       <div class="foot">
         裕华校区 · 石家庄市南二环东路 20 号 ｜ 红旗校区 · 红旗大街 469 号<br />
-        技术支持：信息化中心 · 0311-80787800
+        技术支持：信息化中心 · 0311-80787800<br />前端构建 {{ buildStamp }}
       </div>
     </section>
 

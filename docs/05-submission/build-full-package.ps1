@@ -19,7 +19,7 @@
 #  mangled into broken paths. Data files (the .txt notes, the manifest) are UTF-8.
 #
 #  Sources it assembles:
-#    - docs/05-submission/README-FIRST-full.txt   (entry note)
+#    - docs/05-submission/README-FIRST-full.md   (entry note)
 #    - docs/05-submission/run-version/*           (start/stop/run guide)
 #    - D:\DevEnv\dist\portable\{mysql,redis,runtime}
 #    - backend/target/campusswap-backend-1.0.0.jar  (fat jar WITH the SPA inside)
@@ -60,13 +60,15 @@ $rootName = $manifest.rootName
 # (measured 2026-10-10: $extraLight and $shotDirName silently became $null).
 # decoded: 0=entry note "xian kan zhe li .txt", 1=extra(full), 2=extra(light),
 #          3=run dir, 4=shots dir, 5=start cmd, 6=stop cmd, 7=run guide, 8=zip suffix
-$entryName = -join ([char]0x5148, [char]0x770B, [char]0x8FD9, [char]0x91CC, [char]0x002E, [char]0x0074, [char]0x0078, [char]0x0074)
+$entryName = -join ([char]0x5148, [char]0x770B, [char]0x8FD9, [char]0x91CC, [char]0x002E, [char]0x006D, [char]0x0064)
 $extraFull = -join ([char]0x5176, [char]0x4ED6, [char]0xFF08, [char]0x8FD0, [char]0x884C, [char]0x7248, [char]0x002B, [char]0x622A, [char]0x56FE, [char]0xFF09)
 $extraLight = -join ([char]0x5176, [char]0x4ED6, [char]0xFF08, [char]0x622A, [char]0x56FE, [char]0xFF09)
 $runDirName = -join ([char]0x53CC, [char]0x51FB, [char]0x8FD0, [char]0x884C, [char]0xFF08, [char]0x514D, [char]0x5B89, [char]0x88C5, [char]0xFF09)
 $shotDirName = -join ([char]0x6548, [char]0x679C, [char]0x622A, [char]0x56FE)
 $startName = -join ([char]0x0031, [char]0x002D, [char]0x542F, [char]0x52A8, [char]0x7F51, [char]0x7AD9, [char]0xFF08, [char]0x53CC, [char]0x51FB, [char]0x6211, [char]0xFF09, [char]0x002E, [char]0x0063, [char]0x006D, [char]0x0064)
 $stopName = -join ([char]0x0032, [char]0x002D, [char]0x505C, [char]0x6B62, [char]0x7F51, [char]0x7AD9, [char]0xFF08, [char]0x53CC, [char]0x51FB, [char]0x6211, [char]0xFF09, [char]0x002E, [char]0x0063, [char]0x006D, [char]0x0064)
+# 8=run guide -- stays .txt on purpose: it is a plain-text note read in Notepad,
+#   while the package entry note (先看这里) is .md per user request.
 $runGuide = -join ([char]0x8FD0, [char]0x884C, [char]0x8BF4, [char]0x660E, [char]0x002E, [char]0x0074, [char]0x0078, [char]0x0074)
 $zipSuffix = -join ([char]0x53CC, [char]0x51FB, [char]0x8FD0, [char]0x884C, [char]0x002B, [char]0x6E90, [char]0x7801, [char]0x002B, [char]0x6587, [char]0x6863)
 $entryName = $entryName.Trim(); $extraFull = $extraFull.Trim(); $extraLight = $extraLight.Trim()
@@ -102,12 +104,12 @@ New-Item -ItemType Directory -Path $extraDir -Force | Out-Null
 # --- 3. entry note ------------------------------------------------------------
 Write-Host ''
 Write-Host '[2/6] entry note ...'
-$firstSrc = Join-Path $here 'README-FIRST-full.txt'
+$firstSrc = Join-Path $here 'README-FIRST-full.md'
 if (Test-Path -LiteralPath $firstSrc) {
     $text = [System.IO.File]::ReadAllText($firstSrc, [System.Text.Encoding]::UTF8)
     [System.IO.File]::WriteAllText((Join-Path $stage $entryName), $text, $Utf8Bom)
     Write-Host ('    ' + $entryName)
-} else { Add-Problem 'README-FIRST-full.txt missing' }
+} else { Add-Problem 'README-FIRST-full.md missing' }
 
 # --- 4. zero-install run version ---------------------------------------------
 Write-Host ''
@@ -136,6 +138,7 @@ $rv = Join-Path $here 'run-version'
 if (Test-Path -LiteralPath $rv) {
     Copy-Item -LiteralPath (Join-Path $rv '1-start.cmd') -Destination (Join-Path $runDir $startName) -Force
     Copy-Item -LiteralPath (Join-Path $rv '2-stop.cmd') -Destination (Join-Path $runDir $stopName) -Force
+    Copy-Item -LiteralPath (Join-Path $rv 'stop-old-instance.ps1') -Destination (Join-Path $runDir 'stop-old-instance.ps1') -Force
     $usageText = [System.IO.File]::ReadAllText((Join-Path $rv $runGuide), [System.Text.Encoding]::UTF8)
     [System.IO.File]::WriteAllText((Join-Path $runDir $runGuide), $usageText, $Utf8Bom)
     Write-Host ('    ' + $startName + ' / ' + $stopName + ' / ' + $runGuide)
