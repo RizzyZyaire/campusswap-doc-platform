@@ -37,24 +37,19 @@ const routes: RouteRecordRaw[] = [
 ]
 
 /**
- * 根路径的按权限落点（UI_UX_SPECIFICATION §1.2）：有 `doc:search` → `/docs`；
- * 否则有 `doc:mine` → `/my`；都没有 → 403 页（带上缺的权限码）。
+ * 登录后与根路径的落点 = **工作台**（2026-10-11 按用户反馈改）。
  *
- * <p><b>为什么放在守卫里而不是路由表的 redirect 回调里（2026-10-09 修 bug）</b>：
- * vue-router 的 redirect 回调在**任何守卫之前**执行，那时 store 里既没有 token 也没有权限，
- * 于是匿名访问 `/` 会被直接判成"无权限" → 返回 `/403` → 守卫把这次 `/403` 当成未登录的来路，
- * 拼出 `/login?redirect=/403` → 用户登录成功后 `router.replace('/403')`，**刚登录就掉进无权限页**。
- * 实测复现：匿名访问 `/` 得到 `?redirect=/403`，登录后落点 `/403`（应为 `/docs`）。
- * 放到守卫 ③ 之后，权限一定已由 login() 或 fetchMe() 填好，判定才是可信的。</p>
+ * <p>原来是"按权限选第一个能进的页面"（有 `doc:search` → `/docs`），结果用户登录后直接落到
+ * 文档检索页，观感是"进了个二级页面而不是首页"。现改为固定落 `/workbench`：
+ * 工作台不需要任何权限点（见路由表），所有登录用户都能看，作为首页语义最自然。</p>
  *
- * @param user 用户 store
- * @returns 目标路由位置
+ * <p><b>为什么落点判定放在守卫里而不是路由表的 redirect 回调里（2026-10-09 修 bug 的遗留结论）</b>：
+ * vue-router 的 redirect 回调在**任何守卫之前**执行，那时 store 里既没有 token 也没有用户信息，
+ * 于是匿名访问 `/` 会被直接判成"无权限" → 返回 `/403` → 守卫再把这次 `/403` 当成未登录的来路，
+ * 拼出 `/login?redirect=/403` → 登录成功后 `router.replace('/403')`，**刚登录就掉进无权限页**。
+ * 所以落点一律在守卫 ③（fetchMe 之后）之后决定。</p>
  */
-function landingByPermission(user: ReturnType<typeof useUserStore>) {
-  if (user.hasPerm(PERM.docSearch)) return { name: 'docs' as const }
-  if (user.hasPerm(PERM.docMine)) return { name: 'my' as const }
-  return { name: 'forbidden' as const, query: { need: PERM.docSearch, from: '/' } }
-}
+const HOME = { name: 'workbench' as const }
 
 const router = createRouter({
   history: createWebHistory(),
@@ -87,18 +82,16 @@ router.beforeEach(async (to) => {
     }
   }
 
-  // ③.5 根路径：此时权限已就绪，按权限决定落点（见 landingByPermission 注释）
+  // ③.5 根路径：落工作台（见 HOME 注释）
   if (to.path === '/') {
-    return landingByPermission(user)
+    return HOME
   }
 
-  // ③.6 直接访问/浏览器恢复出来的 /403（没有 need 参数）：不要把人晾在无权限页。
-  //      场景：上一次停在了 403 页，浏览器"继续上次会话"把 /403 原样恢复；
-  //      或者用户把 403 页存了书签。这种情况没有"缺哪个权限"的信息，能进哪就进哪。
-  //      （有 need 参数 = 守卫刚判定的结果，保持原样；landingByPermission 在真无权限时
-  //        会带着 need 返回 forbidden，所以不会在这里来回打转。）
+  // ③.6 直接访问/浏览器恢复出来的 /403（没有 need 参数）：回工作台。
+  //      场景：上一次停在了 403 页，浏览器"继续上次会话"把它原样恢复，或用户存了书签。
+  //      有 need 参数 = 守卫刚判定的结果，保持原样，不会在这里来回打转。
   if (to.name === 'forbidden' && !to.query.need) {
-    return landingByPermission(user)
+    return HOME
   }
 
   // ④ 权限不足 → 403（把缺的权限点带过去，403 页要写明）

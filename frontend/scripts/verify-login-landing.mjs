@@ -27,7 +27,7 @@ const PORT = 9334
 const TMP = `${process.env.TEMP ?? '.'}\\cdpprof-login-${process.pid}`
 
 const ACCOUNT = { username: 'admin', password: 'Admin@123' }
-const EXPECT_AFTER_LOGIN = '/docs' // admin 有 doc:search → 落检索页
+const EXPECT_AFTER_LOGIN = '/workbench' // 2026-10-11 起固定落工作台（原为按权限落 /docs）
 
 rmSync(TMP, { recursive: true, force: true })
 mkdirSync(TMP, { recursive: true })
@@ -131,7 +131,7 @@ await send('Page.navigate', { url: `${APP}/403` })
 await sleep(3000)
 const step4 = await evalJs('location.pathname + location.search')
 const step4Path = String(step4 ?? '')
-check('直接打开 /403 会自愈到有权限的页面', !step4Path.startsWith('/403'), `实际 = ${step4Path}`)
+check('直接打开 /403 会自愈到工作台', !step4Path.startsWith('/403'), `实际 = ${step4Path}`)
 
 /* ---------- ⑤ 真正缺权限时仍要拦在 403（自愈不能把守卫变成摆设）---------- */
 // admin 有全部 39 个权限点，所以这里用后端一定会拒的伪造路由不现实；
