@@ -39,6 +39,13 @@ spring:
       port: ${DEMO_REDIS_PORT:6380}
       database: 0
       timeout: 3000ms
+  # 全文检索：演示包里**不带** ES（解压后 750 MB），地址可配置；
+  # 没有 ES 时检索自动降级到 MySQL 引擎（接口照常返回，engine=mysql），
+  # 界面会提示"Elasticsearch 未连接，已降级"。装了 ES 的机器自动启用 ES 引擎。
+  elasticsearch:
+    uris: ${ES_URIS:http://127.0.0.1:9200}
+    connection-timeout: 2s
+    socket-timeout: 3s
 
 logging:
   level:

@@ -285,7 +285,7 @@ public record ResponseResult<T>(int code, String message, T data) { }
 
 ---
 
-## 3. 接口总表（57 条）
+## 3. 接口总表（60 条）
 
 > 「用途」列说明该接口**解决什么问题、为哪个页面/故事服务**。
 
@@ -393,7 +393,7 @@ public record ResponseResult<T>(int code, String message, T data) { }
 
 | 项 | 值 |
 |---|---|
-| 接口总数 | **57** |
+| 接口总数 | **60**（原 57 + 2026-10-11 M8 全文检索 3 条，见表 3.12） |
 | 按方法 | GET **19** / POST **18** / PUT **12** / DELETE **8** |
 | 按鉴权 | 公开 **1** / 登录即可 **3** / 权限点 **53** |
 | 按模块 | 认证 4 · 用户 6 · 角色 6 · 权限 4 · 部门 6 · 文档 15 · 审核与治理 6 · 分类与标签 8 · 文件与统计 2 |
@@ -408,6 +408,17 @@ public record ResponseResult<T>(int code, String message, T data) { }
 | 57 | 治理 | GET | `/api/documents/manage` | 治理用全状态列表：按状态（**含回收站 `TRASH`**）、关键词、分类、拟稿人、时间筛选全平台文档；`GET /api/documents` 仍只返回已发布 | `doc:manage` | `DocumentManageDtoReq` | `PageVo<DocumentVo>` | 400 / 401 / 403 |
 
 ---
+
+### 3.12 全文检索（2026-10-11 M8 新增，3 条）
+
+> 课件 10.1 落地：Elasticsearch + IK 中文分词。设计见 `ES-SEARCH-DESIGN.md`。
+> 编号沿用 §3.11 的策略——**追加在表尾（58 / 59 / 60）**，不插进原序列。
+
+| 序号 | 模块 | 方法 | 路径 | 用途 | 权限点 | 入参 DTO | 出参 VO | 主要错误码 |
+|---|---|---|---|---|---|---|---|---|
+| 58 | 检索 | GET | `/api/search/documents` | 全文检索：关键词 + 检索范围（标题 / 正文 / 标题+摘要+正文），ES + IK 分词、相关度排序、命中词高亮；**ES 未连接时自动降级 MySQL 引擎**（响应里如实标注） | `doc:search` | `DocumentSearchEsDtoReq` | `SearchResultVo` | 400 / 401 / 403 |
+| 59 | 检索 | GET | `/api/search/status` | 汇报当前检索引擎（ES 已连接 / 已降级）、索引文档数与 IK 就绪状态，供检索页徽标显示与排障 | `doc:search` | 无 | `SearchEngineStatusVo` | 401 / 403 |
+| 60 | 检索 | POST | `/api/search/rebuild` | 管理员一键把主库全部 `PUBLISHED` 文档全量重建进 ES 索引（课件 §5.2 的 `rebuildAllPublishedDocuments()`，游标分页 + 批量写入） | `doc:manage` | 无 | `SearchRebuildVo` | 401 / 403 |
 
 ## 4. 逐模块详规
 
@@ -2517,7 +2528,7 @@ Content-Type: image/png
 
 | 自查项 | 结论 | 证据 |
 |---|---|---|
-| 接口总数与要求一致 | ✅ | 总表 §3 = **57 条**（原 55 条 + 2026-09-23 新增的 `PUT /api/auth/password`、`GET /api/documents/manage`），GET 19 / POST 18 / PUT 12 / DELETE 8；§4 逐条详规待这两条实现后补齐 |
+| 接口总数与要求一致 | ✅ | 总表 §3 = **60 条**（57 + M8 全文检索 3 条）（原 55 条 + 2026-09-23 新增的 `PUT /api/auth/password`、`GET /api/documents/manage`），GET 19 / POST 18 / PUT 12 / DELETE 8；§4 逐条详规待这两条实现后补齐 |
 | 出参统一规则 | ✅ | 实体型 VO 全部继承 `AuditVo`（§2.7.1）；全部接口出参**均无 `deleted` 字段**；权限/部门/分类接口无 enable/disable 字段或子资源 |
 | 与前端字段口径逐字对齐 | ✅ | 列表排序单字段 `sort`（`DocumentSort`）、标签筛选 `tagIds`（AND）、文档作者 `authorId`+`authorName`、版本操作人 `operatorId`+`operatorName`、角色/版本 DTO 用 `RoleDtoReq`、用户角色入参 `roles`、图片出参 `ImageVo`、统计出参 `StatVo` 三字段——全部与 `GLOSSARY.md` §3.6 / §3.7 一致 |
 | 停用接口方法口径 | ✅ | 用户停用/启用统一为 `PUT /api/users/{id}/status`（入参 `UserStatusDtoReq{status}`，取值 `ACTIVE`/`LOCKED`/`DISABLED`），与前端规范一致 |

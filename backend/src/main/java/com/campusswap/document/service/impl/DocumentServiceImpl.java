@@ -57,6 +57,9 @@ import java.util.Map;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import com.campusswap.common.util.TxUtil;
+import com.campusswap.document.search.DocumentSearchService;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -97,6 +100,14 @@ public class DocumentServiceImpl implements DocumentService {
     private final UserService userService;
     private final PermissionCacheService permissionCacheService;
     private final StringRedisTemplate stringRedisTemplate;
+
+    /**
+     * 检索索引同步服务（课件 10.1 的 ES 索引增量维护）。
+     *
+     * <p>用 {@code ObjectProvider} 而不是直接注入：该服务的 MySQL 降级引擎反向依赖本服务，
+     * 直接构造注入会形成循环依赖。</p>
+     */
+    private final ObjectProvider<DocumentSearchService> documentSearchServiceProvider;
 
     // ─────────────────────────── 列表 ───────────────────────────
 
@@ -457,6 +468,7 @@ public class DocumentServiceImpl implements DocumentService {
                 .changeType(ChangeType.DELETE)
                 .build();
         documentVersionRepository.saveAndFlush(snapshot);
+        syncSearchIndexAfterCommit(id);
         log.info("文档进回收站: id={}, 版本={}, 操作人={}", id, version, me);
     }
 
@@ -505,7 +517,35 @@ public class DocumentServiceImpl implements DocumentService {
         documentVersionRepository.deleteByDocumentIdPhysically(id);
         favoriteRepository.deleteByDocumentIdPhysically(id);
         documentRepository.destroyPhysically(id);
+        syncSearchIndexAfterCommit(id);
         log.warn("文档彻底删除: id={}, 操作人={}, 清理标签={}", id, me, tagIds.size());
+    }
+
+    /**
+     * 事务提交后把文档的最新状态镜像到检索索引（发布/编辑/归档/驳回/删除都会走到这里）。
+     *
+     * <p><b>为什么用 ObjectProvider 取服务</b>：{@code DocumentSearchService} 的 MySQL 降级引擎
+     * 反向依赖本服务（{@code DocumentService}），构造注入会形成循环依赖；ObjectProvider
+     * 把解析推迟到真正调用时，既断开环又不丢类型安全。</p>
+     *
+     * <p><b>为什么在 afterCommit 里做</b>：索引写入不是事务的一部分；若在提交前同步，
+     * 增量同步的原生查询会读到还没提交的旧状态（例如刚发布的文档仍是 DRAFT），
+     * 导致"发布成功但搜不到"。</p>
+     *
+     * @param documentId 文档 ID
+     */
+    private void syncSearchIndexAfterCommit(Long documentId) {
+        if (documentId == null) {
+            return;
+        }
+        TxUtil.afterCommit(() -> {
+            try {
+                documentSearchServiceProvider.getObject().syncOne(documentId);
+            } catch (Exception e) {
+                // 检索索引是派生数据：同步失败只记日志，绝不影响业务写入
+                log.warn("检索索引同步失败（不影响业务）: documentId={}, {}", documentId, e.getMessage());
+            }
+        });
     }
 
     // ─────────────────────────── 详情与版本 ───────────────────────────
@@ -757,6 +797,7 @@ public class DocumentServiceImpl implements DocumentService {
                 .changeRemark(remark)
                 .build();
         documentVersionRepository.saveAndFlush(version);
+        syncSearchIndexAfterCommit(doc.getId());
     }
 
     /**

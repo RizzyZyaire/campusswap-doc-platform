@@ -867,6 +867,21 @@ grep -rn "password" backend/src/main/resources/ | grep -v '\${'   # 不应出现
 
 ---
 
+### M8 全文检索（Elasticsearch + IK）（1 天）　✅ 已完成（2026-10-11；机检 `verify-m8.ps1` **38 项**，收口记录 `docs/03-qa-review/M8-CLOSURE.md`，设计 `docs/02-design/ES-SEARCH-DESIGN.md`）
+
+> 触发：课件《10.1 企业知识搜索：Elasticsearch 全文检索基础》+《10.1-安装手册》，老师追加两条要求（**检索前可选范围**、**结果关键词高亮**）。
+> 方案：用户拍板**双引擎降级** —— ES 优先，连不上自动回落既有 MySQL 检索，接口结构不变（提交包不带 ES，950 MB）。
+
+- [x] **T8.1** 原生安装 Elasticsearch（纯英文路径 `D:\DevEnv\11_Elasticsearch\`）+ IK 中文分词器，关安全认证、单机、1 GB 堆，`_cat/plugins` 与 `_analyze` 双验收
+- [x] **T8.2** pom 引入 `spring-boot-starter-data-elasticsearch`，`application-{dev,demo}.yml` 配 uris + **2s/3s 短超时**（保证降级不拖慢用户）
+- [x] **T8.3** 索引实体 `DocumentSearchIndex`（`@Document` + `@Field`，标题/摘要/正文 `ik_max_word` 入库 + `ik_smart` 查询，过滤字段一律 `Keyword`）
+- [x] **T8.4** `DocumentSearchRepository` 四条 JSON DSL（范围 ALL / TITLE / CONTENT / 带分类），权重 `title^3 / summary^2 / content`，`status=PUBLISHED` 进 `filter` 上下文
+- [x] **T8.5** 全量重建 `rebuildAllPublishedDocuments()`：清空 + 主库游标分页（500/批）+ 一次性标签分组 + 批量写入 + `count()` 自检（实测 28 篇 / 550 ms）
+- [x] **T8.6** 增量镜像：`writeVersion`（发布/编辑/归档/驳回/重审/恢复/派生/新建的统一咽喉）+ 进回收站 + 彻底删除三处钩子，**事务提交后**同步、失败只记日志（实测 28 → 29 → 28）
+- [x] **T8.7** 接口与前端：`GET /api/search/documents`（scope 三段 + 高亮）、`GET /api/search/status`、`POST /api/search/rebuild`；检索页加范围分段按钮、`<mark>` 高亮、引擎徽标与重建按钮
+- [x] **T8.8** 文档与机检：`ES-SEARCH-DESIGN.md`、`API_SPECIFICATION` §3.12/§4.8（57 → **60** 条）、`GLOSSARY` §3.8/§4.2（v2.3）、`verify-m8.ps1` 38 项、`M8-CLOSURE.md`；回归 m4-http 205 / m5 62 / m6 50 / 单测 30 全绿
+
+**M8 实测修掉的 9 个问题**（详见 `M8-CLOSURE.md` §4）：ES 8.18 服务端与 9.4.5 客户端协议不兼容（`compatible-with=9` → 400，服务端改 9.4.5）；IK 官方已停止 GitHub 发布且插件 CLI 必须加 `-b`；原生查询时间列须用 `LocalDateTime` 而非 `Timestamp`；`status` 若落成 `text` 会让 `term` 过滤恒 0 命中；后端禁浮点红线 → 相关度改两位小数字符串；机检脚本自身 4 个 bug（变量大小写撞车 / 自动变量 `$args` / 401 探活 / 关键词不在种子数据）。
 ## 附录 A　术语表（GLOSSARY 起始草案，P4 产出后替换）
 
 | 中文概念 | 英文标识符 | 数据库/代码命名 | 说明 |
@@ -927,6 +942,7 @@ grep -rn "password" backend/src/main/resources/ | grep -v '\${'   # 不应出现
 
 | 日期 | 变更 |
 |---|---|
+| 2026-10-11 | **v2.7（M8 收口）**：课件 10.1 全文检索落地 —— Elasticsearch **9.4.5** + analysis-ik 9.4.5（**服务端版本必须与 Boot 4.1.1 管辖的 9.4.5 客户端同大版本**，8.x 服务端会因 `compatible-with=9` 版本头被 400 拒绝）；新增 3 个接口（57 → **60** 条）：范围检索 + 引擎状态 + 全量重建；**双引擎降级**（ES 优先、连不上自动回落 MySQL，接口结构与高亮不变）；索引实体/仓储 JSON DSL（`ik_max_word` 入库 + `ik_smart` 查询，`title^3/summary^2/content`）；增量镜像挂在 `writeVersion` 统一咽喉 + 删除两处钩子（事务提交后、失败不影响业务）；高亮统一在 Java 侧转义后插 `<mark>`；新增 `verify-m8.ps1`（38 项全绿）、`ES-SEARCH-DESIGN.md`、`M8-CLOSURE.md`；`GLOSSARY` 升 v2.3（§3.8 检索字段字典 + §4.2 `SearchScope`） |
 | 2026-09-20 | v1.0 初版：汇总三份课件（需求工程 SOP / JPA 实体规约 / 老师 AGENTS.md）与碎片要求 |
 | 2026-09-21 | **v2.0 冻结版**：业务定为文档管理平台；前端自研；权限 3 层；Redis 用本机；交付三文件夹 + GitHub（含忽略清单）；评分只看源码；删除全部"待确认"表述，新增 M0~M7 可勾选任务看板与 7 组 Prompt |
 | 2026-09-21 | **v2.2（M2 收口）**：数据库落地 —— 14 张表 + 20 个索引 + 种子数据（39 权限点/3 角色/3 账号）建成；新增 `verify-m2.ps1`（16 项）与 `EXPLAIN-NOTES.md`；实测修正索引 `idx_doc_created_by` → `idx_doc_created_by_updated`（排序键必须进索引，28.4ms → 0.135ms）；新增压测夹具 `perf-fixture.sql`；§2 决策状态改为「10 个问题按默认方案锁定」 |

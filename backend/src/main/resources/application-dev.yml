@@ -27,6 +27,13 @@ spring:
       port: 6379
       database: 0
       timeout: 3000ms
+  # 全文检索（课件 10.1）：ES 8.18 + IK 分词器，本机 9200。
+  # 超时 deliberately 很短：ES 没启动时检索要**快速降级**到 MySQL 引擎，
+  # 不能让用户等在默认 30 秒的连接超时上。
+  elasticsearch:
+    uris: ${ES_URIS:http://127.0.0.1:9200}
+    connection-timeout: 2s
+    socket-timeout: 3s
 
 logging:
   level:

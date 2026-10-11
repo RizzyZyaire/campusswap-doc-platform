@@ -41,7 +41,7 @@
 | 提交 | **12 次**，`main` == `origin/main` == `397d7c8` |
 | 被跟踪文件 | **270**：`backend/*.java` **150**、`frontend/src/**` **46**（含 15 个 .vue + 生成物 `styles/theme-meta.ts`）、`docs/*.md` **14**、`docs/03-qa-review/*.ps1` **10** |
 | 机检规模 | **10 个脚本、约 573 个断言/检查点**（13+15+24+17+9+36+142+30+221+48）+ 前端 4 条命令（typecheck/lint/build/check-classes）+ 预览稿 211 项 |
-| 接口 | **57 个**后端端点，前端 `src/api` **全覆盖**（机检 D9b 对账 0 未覆盖） |
+| 接口 | **60 个**后端端点，前端 `src/api` **全覆盖**（机检 D9b 对账 0 未覆盖） |
 | 数据库 | `campusswap_db`：**14 张表 / 20 个索引**，零物理外键（靠机检守逻辑外键） |
 | 权限 | **39 个权限点**、3 个角色、3 个部门；前端 39 个常量与库中逐字一致（机检 D7c） |
 | 鉴权 | **4 道关卡**；4 族 Redis 键（`login:token:` 2h、`user:tokens:` 2h、`perm:user:` 30min、`view:doc:{docId}:{userId}` 30min） |
@@ -146,7 +146,7 @@
 
 | 目录 | 文件数 | 职责 | 想读懂它先看 |
 |---|---|---|---|
-| `src/api` | 7 | Axios 实例 / 拦截器 / 按域拆分的 57 个接口函数 | `request.ts`（拆信封 + `ApiError` + 401 广播） |
+| `src/api` | 7 | Axios 实例 / 拦截器 / 按域拆分的 60 个接口函数 | `request.ts`（拆信封 + `ApiError` + 401 广播） |
 | `src/types` | 4 | GLOSSARY §3.7 的手写映射（ID 一律 `string`） | `document.ts`（`DocumentUpdateDtoReq` 上的 `versionNum` 注释） |
 | `src/stores` | 3 | 用户会话与 `hasPerm` / 6 套主题 / 轻提示 | `user.ts` |
 | `src/router` | 1 | 13 + 2 条路由 + 守卫（§1.3） | `index.ts` 的 `beforeEach` |

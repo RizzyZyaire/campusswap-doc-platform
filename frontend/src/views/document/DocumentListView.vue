@@ -5,16 +5,28 @@ import Pager from '@/components/Pager.vue'
 import StateBlock from '@/components/StateBlock.vue'
 import { ApiError } from '@/api/request'
 import * as docApi from '@/api/documents'
+import * as searchApi from '@/api/search'
 import * as taxApi from '@/api/taxonomy'
 import { useUiStore } from '@/stores/ui'
 import { useUserStore } from '@/stores/user'
 import { PERM } from '@/utils/perm'
-import { MATCHED_IN_TEXT, relativeTime } from '@/utils/format'
+import { relativeTime } from '@/utils/format'
 import type { CategoryVo, DocumentSort, DocumentVo, TagVo } from '@/types'
+import { SEARCH_SCOPE_TEXT, type SearchEngineStatusVo, type SearchScope } from '@/types/search'
 
 /**
- * 文档检索（§8.4）：关键词（≥2 字走全文检索、能命中正文）/ 分类 / 标签 / 排序。
- * 出参里的 highlight（含 <em>）与 matchedIn 只在这一分支返回，需要渲染出来让用户看到"命中在哪"。
+ * 文档检索（§8.4 + 课件 10.1 ES 全文检索）。
+ *
+ * <p>两条链路，一个界面：</p>
+ * <ul>
+ *   <li><b>有关键词且没选标签</b> → 走 {@code GET /api/search/documents}（ES + IK 分词，可切换
+ *       "标题 / 正文 / 标题+摘要+正文"三种检索范围，结果带 {@code <mark>} 高亮与相关度分数；
+ *       ES 没启动时后端自动降级为 MySQL 引擎并在页面上标出来）；</li>
+ *   <li><b>没关键词，或选了标签</b> → 走既有的 {@code GET /api/documents}（分类/标签/排序筛选，
+ *       标签是 AND 命中，由 MySQL 引擎处理）。</li>
+ * </ul>
+ *
+ * <p>高亮片段由后端转义后再插标记，前端只白名单渲染 {@code <mark>}（见后端 SearchTextHighlighter）。</p>
  */
 const route = useRoute()
 const router = useRouter()
@@ -23,22 +35,51 @@ const user = useUserStore()
 
 const keyword = ref<string>(typeof route.query.keyword === 'string' ? route.query.keyword : '')
 const categoryId = ref<string>(typeof route.query.categoryId === 'string' ? route.query.categoryId : '')
+const scope = ref<SearchScope>('ALL')
 const selectedTags = ref<string[]>([])
 const sort = ref<DocumentSort>('updatedAt_desc')
 
-const list = ref<DocumentVo[]>([])
+/** 统一行结构：两条链路的结果都归一到这里，模板只写一次。 */
+interface Row {
+  id: string
+  title: string
+  titleHtml: string
+  snippetHtml: string
+  categoryName: string | null
+  authorName: string | null
+  updatedAt: string | null
+  versionNum: number | null
+  viewCount: number | null
+  matched: string[]
+  score: string | null
+}
+
+const rows = ref<Row[]>([])
 const total = ref(0)
 const pageNum = ref(1)
 const pageSize = ref(10)
 const loading = ref(false)
 const errorText = ref('')
+/** 本次结果由哪个引擎给出（来自后端回执，不靠前端猜）。 */
+const engineName = ref<string>('')
+const engineMessage = ref<string>('')
+const indexStatus = ref<SearchEngineStatusVo | null>(null)
 
 const categories = ref<CategoryVo[]>([])
 const tags = ref<TagVo[]>([])
 
+const KEYWORD_MIN = 2
 /** 关键词是否够走全文检索（后端约定 ≥2 字）。 */
-const fullTextMode = computed(() => keyword.value.trim().length >= 2)
+const fullTextMode = computed(() => keyword.value.trim().length >= KEYWORD_MIN)
+/** 是否走 ES 检索链路（有标签筛选时交给 MySQL，标签是 AND 命中）。 */
+const useFullTextApi = computed(() => fullTextMode.value && selectedTags.value.length === 0)
 const canUseRelevance = computed(() => fullTextMode.value)
+
+/** 命中字段的中文名。 */
+const MATCHED_TEXT: Record<string, string> = { title: '标题', summary: '摘要', content: '正文' }
+
+/** 检索范围选项（模板里迭代它，避免在模板内写类型断言）。 */
+const SCOPES: SearchScope[] = ['TITLE', 'CONTENT', 'ALL']
 
 const flatCategories = computed(() => {
   const out: CategoryVo[] = []
@@ -52,26 +93,105 @@ const flatCategories = computed(() => {
   return out
 })
 
+/** 把后端给的 <em> 命中标记换成界面统一使用的 <mark>（两条链路渲染同一套样式）。 */
+function toMark(html: string | null | undefined): string {
+  if (!html) return ''
+  return html.replace(/<em>/g, '<mark>').replace(/<\/em>/g, '</mark>')
+}
+
+/** 既有 DocumentVo → 统一行结构。 */
+function fromDocumentVo(d: DocumentVo): Row {
+  return {
+    id: d.id,
+    title: d.title,
+    titleHtml: toMark(d.title),
+    snippetHtml: toMark(d.highlight) || toMark(d.summary),
+    categoryName: d.categoryName ?? null,
+    authorName: d.authorName ?? null,
+    updatedAt: d.updatedAt ?? null,
+    versionNum: d.versionNum ?? null,
+    viewCount: d.viewCount ?? null,
+    matched: d.matchedIn ? [d.matchedIn] : [],
+    score: null
+  }
+}
+
 async function load(): Promise<void> {
   loading.value = true
   errorText.value = ''
   try {
-    const page = await docApi.searchDocuments({
-      pageNum: pageNum.value,
-      pageSize: pageSize.value,
-      keyword: keyword.value.trim() || undefined,
-      categoryId: categoryId.value || undefined,
-      tagIds: selectedTags.value.length ? selectedTags.value : undefined,
-      sort: sort.value
-    })
-    list.value = page.list
-    total.value = page.total
+    if (useFullTextApi.value) {
+      const res = await searchApi.searchFullText({
+        keyword: keyword.value.trim(),
+        scope: scope.value,
+        categoryId: categoryId.value || undefined,
+        sort: sort.value,
+        pageNum: pageNum.value,
+        pageSize: pageSize.value
+      })
+      engineName.value = res.engine
+      engineMessage.value = res.engineMessage
+      rows.value = res.list.map((h) => ({
+        id: h.id,
+        title: h.title,
+        titleHtml: h.titleHighlight || toMark(h.title),
+        snippetHtml: h.snippet,
+        categoryName: h.categoryName,
+        authorName: h.authorName,
+        updatedAt: h.publishAt,
+        versionNum: null,
+        viewCount: null,
+        matched: h.matchedFields ?? [],
+        score: h.score
+      }))
+      total.value = res.total
+    } else {
+      const page = await docApi.searchDocuments({
+        pageNum: pageNum.value,
+        pageSize: pageSize.value,
+        keyword: keyword.value.trim() || undefined,
+        categoryId: categoryId.value || undefined,
+        tagIds: selectedTags.value.length ? selectedTags.value : undefined,
+        sort: sort.value
+      })
+      engineName.value = 'mysql'
+      engineMessage.value = selectedTags.value.length
+        ? '标签为 AND 命中，由 MySQL 引擎处理筛选'
+        : '未输入关键词，直接列出最近更新的已发布文档'
+      rows.value = page.list.map(fromDocumentVo)
+      total.value = page.total
+    }
   } catch (e) {
     errorText.value = e instanceof ApiError ? e.message : '检索失败，请稍后重试'
-    list.value = []
+    rows.value = []
     total.value = 0
   } finally {
     loading.value = false
+  }
+}
+
+/** 拉一次引擎状态（页头徽标：ES 已连接 / 已降级）。 */
+async function loadEngineStatus(): Promise<void> {
+  try {
+    indexStatus.value = await searchApi.searchEngineStatus()
+  } catch {
+    indexStatus.value = null
+  }
+}
+
+/** 重建索引（doc:manage）：把主库所有已发布文档重新同步进 ES。 */
+async function rebuildIndex(): Promise<void> {
+  try {
+    const res = await searchApi.rebuildSearchIndex()
+    if (res.success) {
+      ui.ok(`索引重建完成：同步 ${res.indexed} 篇，索引内 ${res.indexCount} 篇，用时 ${res.elapsedMs} ms`)
+      await loadEngineStatus()
+      await load()
+    } else {
+      ui.warn(res.message)
+    }
+  } catch (e) {
+    ui.err(e instanceof ApiError ? e.message : '索引重建失败')
   }
 }
 
@@ -88,6 +208,16 @@ function applyFilters(): void {
   void load()
 }
 
+/** 切换检索范围后立即重查（这是用户明确要的"搜索前先选范围"）。 */
+function chooseScope(next: SearchScope): void {
+  if (scope.value === next) return
+  scope.value = next
+  if (fullTextMode.value) {
+    pageNum.value = 1
+    void load()
+  }
+}
+
 function toggleTag(id: string): void {
   const idx = selectedTags.value.indexOf(id)
   if (idx >= 0) selectedTags.value.splice(idx, 1)
@@ -97,6 +227,7 @@ function toggleTag(id: string): void {
 function resetFilters(): void {
   keyword.value = ''
   categoryId.value = ''
+  scope.value = 'ALL'
   selectedTags.value = []
   sort.value = 'updatedAt_desc'
   applyFilters()
@@ -118,6 +249,7 @@ watch(canUseRelevance, (ok) => {
 onMounted(async () => {
   await Promise.all([
     load(),
+    loadEngineStatus(),
     taxApi.categoryTree().then((t) => (categories.value = t)).catch(() => (categories.value = [])),
     taxApi
       .tagList({ pageNum: 1, pageSize: 50 })
@@ -133,11 +265,12 @@ onMounted(async () => {
       <div>
         <h1>文档检索</h1>
         <div class="desc">
-          只检索<strong>已发布</strong>文档。关键词 <strong>≥ 2 字</strong>时走全文检索（能命中正文，并给出命中片段）；
-          不足 2 字回落标题/摘要模糊匹配。
+          只检索<strong>已发布</strong>文档。关键词 <strong>≥ 2 字</strong>时走全文检索（Elasticsearch + IK 中文分词，
+          可命中正文并高亮关键词）；不足 2 字回落标题/摘要模糊匹配。
         </div>
       </div>
       <div class="acts">
+        <button v-if="user.hasPerm(PERM.docManage)" class="btn btn-sm" @click="rebuildIndex">重建检索索引</button>
         <RouterLink v-if="user.hasPerm(PERM.docCreate)" class="btn btn-primary" to="/docs/edit">新建文档</RouterLink>
       </div>
     </div>
@@ -162,7 +295,25 @@ onMounted(async () => {
         </select>
         <button class="btn btn-sm btn-primary" @click="applyFilters">查询</button>
         <button class="btn btn-sm" @click="resetFilters">重置</button>
-        <span v-if="fullTextMode" class="badge primary">全文检索</span>
+      </div>
+
+      <!-- 检索范围：搜索前先选"在哪儿找"，用户明确要求的能力 -->
+      <div class="card-bd tight">
+        <div class="row wrap">
+          <span class="xs t3">检索范围：</span>
+          <button
+            v-for="s in SCOPES"
+            :key="s"
+            class="tag"
+            :class="{ on: scope === s }"
+            :title="`在${SEARCH_SCOPE_TEXT[s]}中检索`"
+            @click="chooseScope(s)"
+          >
+            {{ SEARCH_SCOPE_TEXT[s] }}
+          </button>
+          <span v-if="fullTextMode" class="badge primary">全文检索</span>
+          <span v-if="!fullTextMode && keyword.trim()" class="xs t3">关键词不足 2 字：按标题/摘要模糊匹配</span>
+        </div>
       </div>
 
       <div v-if="tags.length" class="card-bd tight">
@@ -181,11 +332,24 @@ onMounted(async () => {
         </div>
       </div>
 
+      <!-- 引擎徽标：把"这次是谁在检索"如实告诉用户（ES 未启动时后端会降级） -->
+      <div v-if="engineName" class="card-bd tight">
+        <div class="row wrap">
+          <span class="badge" :class="engineName === 'elasticsearch' ? 'primary' : ''">
+            检索引擎：{{ engineName === 'elasticsearch' ? 'Elasticsearch（IK 分词）' : 'MySQL' }}
+          </span>
+          <span class="xs t3">{{ engineMessage }}</span>
+          <span v-if="indexStatus && indexStatus.elasticsearchAvailable" class="xs t3">
+            索引文档数：{{ indexStatus.indexCount }}
+          </span>
+        </div>
+      </div>
+
       <StateBlock v-if="loading" kind="loading" :rows="6" />
       <StateBlock v-else-if="errorText" kind="error" :desc="errorText">
         <button class="btn btn-sm" @click="load">重新加载</button>
       </StateBlock>
-      <StateBlock v-else-if="!list.length" kind="empty" title="没有匹配的文档" desc="换个关键词，或清空筛选条件。">
+      <StateBlock v-else-if="!rows.length" kind="empty" title="没有匹配的文档" desc="换个关键词，或清空筛选条件。">
         <button class="btn btn-sm" @click="resetFilters">清空筛选</button>
       </StateBlock>
 
@@ -198,25 +362,28 @@ onMounted(async () => {
               <th class="w-fix2">拟稿人</th>
               <th class="w-fix">版本</th>
               <th class="w-fix">阅读</th>
-              <th class="w-fix2">更新时间</th>
+              <th class="w-fix2">时间</th>
             </tr>
           </thead>
           <tbody>
-            <tr v-for="d in list" :key="d.id">
+            <tr v-for="d in rows" :key="d.id">
               <td>
-                <RouterLink class="title" :to="`/docs/${d.id}`">{{ d.title }}</RouterLink>
-                <span v-if="d.summary" class="sub">{{ d.summary }}</span>
-                <!-- 命中片段：后端已用 <em> 包裹命中词，且只给"真的有命中"的片段 -->
-                <span v-if="d.highlight" class="hl" v-html="d.highlight"></span>
-                <span v-if="d.matchedIn" class="hit-note">
-                  命中位置：{{ MATCHED_IN_TEXT[d.matchedIn] ?? d.matchedIn }}
+                <!-- 高亮标题：后端已转义，只插 <mark> -->
+                <RouterLink class="title" :to="`/docs/${d.id}`">
+                  <span v-html="d.titleHtml"></span>
+                </RouterLink>
+                <!-- 命中片段：关键词在正文/摘要里的上下文，命中词已高亮 -->
+                <span v-if="d.snippetHtml" class="hl" v-html="d.snippetHtml"></span>
+                <span v-if="d.matched.length" class="hit-note">
+                  命中位置：{{ d.matched.map((m) => MATCHED_TEXT[m] ?? m).join('、') }}
+                  <template v-if="d.score !== null"> · 相关度 {{ d.score }}</template>
                 </span>
               </td>
               <td class="sm t2">{{ d.categoryName ?? '未分类' }}</td>
               <td class="sm t2">{{ d.authorName ?? '—' }}</td>
-              <td class="t2">v{{ d.versionNum }}</td>
-              <td class="num t2">{{ d.viewCount }}</td>
-              <td class="sm t2">{{ relativeTime(d.updatedAt) }}</td>
+              <td class="t2">{{ d.versionNum === null ? '—' : `v${d.versionNum}` }}</td>
+              <td class="num t2">{{ d.viewCount ?? '—' }}</td>
+              <td class="sm t2">{{ d.updatedAt ? relativeTime(d.updatedAt) : '—' }}</td>
             </tr>
           </tbody>
         </table>

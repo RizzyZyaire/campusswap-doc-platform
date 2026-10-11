@@ -325,6 +325,37 @@
 
 ---
 
+### 3.8 全文检索字段字典（M8，2026-10-11 增补；ES 索引 `campusswap_document` 与 `/api/search/*` 出参）
+
+> 登记口径：本表是 `frontend/src/types/search.ts` 的字段真源（机检 `verify-m5.ps1` D13 会逐字段核对）。
+
+| 字段 | 类型 | 所属 | 含义 |
+|---|---|---|---|
+| `keyword` | string | `DocumentSearchEsDtoReq` | 检索关键词（必填，≤ 64 字符） |
+| `scope` | `SearchScope` | `DocumentSearchEsDtoReq` / `SearchResultVo` | 检索范围：`TITLE` 标题 / `CONTENT` 正文 / `ALL` 标题+摘要+正文 |
+| `scopeLabel` | string | `SearchResultVo` | 检索范围中文名（「标题 + 摘要 + 正文」） |
+| `engine` | string | `SearchResultVo` / `SearchEngineStatusVo` | 本次实际生效的引擎：`elasticsearch` / `mysql` |
+| `engineMessage` | string | `SearchResultVo` | 引擎中文说明（分词策略或降级原因） |
+| `list` | `SearchHitVo[]` | `SearchResultVo` | 命中列表 |
+| `total` / `pageNum` / `pageSize` | number | `SearchResultVo` | 分页口径同 §3.6 |
+| `id` | string | `SearchHitVo` | 文档 ID（字符串，与全站一致） |
+| `title` | string | `SearchHitVo` | 标题纯文本 |
+| `titleHighlight` | string | `SearchHitVo` | 已转义并插入 `<mark>` 的标题 HTML（前端白名单只放这一个标签） |
+| `snippet` | string | `SearchHitVo` | 命中片段（同样已转义 + `<mark>`；命中位置前后各 48 字，两端省略号） |
+| `categoryName` / `authorName` | string | `SearchHitVo` | 分类名（未分类为「未分类」）与作者姓名 |
+| `status` | string | `SearchHitVo` | 文档状态（检索只返回 `PUBLISHED`） |
+| `publishAt` | string | `SearchHitVo` | 发布时间（`yyyy-MM-dd HH:mm:ss`） |
+| `matchedFields` | string[] | `SearchHitVo` | 命中字段清单：`title` / `summary` / `content` |
+| `score` | string | `SearchHitVo` | 相关度（两位小数字符串如 `"4.83"`；MySQL 降级引擎为 `null`）。**不用浮点类型**：后端红线禁止源码出现浮点类型关键字（机检 `verify-m6.ps1` B8） |
+| `elasticsearchAvailable` | boolean | `SearchEngineStatusVo` | ES 是否可用 |
+| `ikAnalyzerReady` | boolean | `SearchEngineStatusVo` | IK 中文分词器是否就位 |
+| `endpoint` | string | `SearchEngineStatusVo` | ES 地址（排障用） |
+| `indexCount` | number | `SearchEngineStatusVo` / `SearchRebuildVo` | 索引内文档数（ES 不可用时为 `-1`） |
+| `success` | boolean | `SearchRebuildVo` | 重建是否成功 |
+| `indexed` | number | `SearchRebuildVo` | 本次从主库同步的文档数 |
+| `elapsedMs` | number | `SearchRebuildVo` | 重建耗时（毫秒） |
+| `message` | string | `SearchRebuildVo` | 中文结果说明（成功条数或失败原因） |
+
 ## 4. 核心领域枚举（Enum）
 
 ### 4.1 `DocumentStatus` 文档生命周期
@@ -481,8 +512,9 @@ export interface PageVo<T> {
 | 权限码与 `PRD.md` §3.2 的 39 个权限点一致 | ✅ | §5 动词表逐条引用 |
 | 禁用别名明确列出（M5 代码走查检查表） | ✅ | §6 |
 | TS 类型与后端 VO 字段逐字对齐 | ✅ | §7 |
+| v2.3（2026-10-11，M8 全文检索）新增字段全部登记 | ✅ | §3.8（检索出参 24 字段）、§4.2（`SearchScope`） |
 | v2.2 三项接口变更的新字段/新类型全部登记 | ✅ | §3.6（`keyword` 全文口径、`relevance`）、§3.7（`highlight` / `matchedIn` / `DocumentManageDtoReq` / `PasswordChangeDtoReq`）、§7（`MatchedIn`） |
 
 ---
 
-**冻结签署**：本文件 v2.1 自 2026-09-21 起冻结；**v2.2（2026-09-23）为 M5 前置的登记性增补，v2.1 的命名口径未变**。任何新字段必须先在此登记，再写代码。
+**冻结签署**：本文件 v2.1 自 2026-09-21 起冻结；**v2.2（2026-09-23）为 M5 前置的登记性增补，v2.1 的命名口径未变**；**v2.3（2026-10-11）为 M8 全文检索的登记性增补（§3.8 / §4.2 `SearchScope`），命名口径同样未变**。任何新字段必须先在此登记，再写代码。
