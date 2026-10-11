@@ -98,12 +98,66 @@ ping -n 2 127.0.0.1 >nul
 goto redis_wait
 :redis_up
 echo       listening on %REDISPORT%
-goto app_step
+goto es_step
 :redis_dead
 echo       Redis did not come up within 120s - see the minimized Redis window
 goto fail
 
+:es_step
+echo.
+echo [3/5] Elasticsearch 9200 (optional - full-text search engine) ...
+rem Elasticsearch is NOT bundled (about 950 MB unzipped). Two situations are fine:
+rem   * ES already listening on 9200 -> just use it (whoever started it);
+rem   * no ES anywhere              -> the app falls back to the MySQL engine,
+rem     search keeps working and nothing else is affected.
+rem So: check the port FIRST (never start a second node, never mislabel a running
+rem one), and only then look for a local install to start.
+set "ESMODE=MySQL (no local Elasticsearch - search falls back automatically)"
+netstat -ano | find ":9200" | find "LISTENING" >nul
+if not errorlevel 1 goto es_running
+rem ES_HOME first: the courseware install guide tells students to set it
+set "ESDIR="
+if defined ES_HOME if exist "%ES_HOME%\bin\elasticsearch.bat" set "ESDIR=%ES_HOME%"
+for /d %%d in ("%SystemDrive%\Environment\elasticsearch-*") do if not defined ESDIR if exist "%%~fd\bin\elasticsearch.bat" set "ESDIR=%%~fd"
+for /d %%d in ("%SystemDrive%\elasticsearch-*") do if not defined ESDIR if exist "%%~fd\bin\elasticsearch.bat" set "ESDIR=%%~fd"
+for /d %%d in ("%SystemDrive%\DevEnv\11_Elasticsearch\elasticsearch-*") do if not defined ESDIR if exist "%%~fd\bin\elasticsearch.bat" set "ESDIR=%%~fd"
+for /d %%d in ("%~d0\Environment\elasticsearch-*") do if not defined ESDIR if exist "%%~fd\bin\elasticsearch.bat" set "ESDIR=%%~fd"
+for /d %%d in ("%~d0\elasticsearch-*") do if not defined ESDIR if exist "%%~fd\bin\elasticsearch.bat" set "ESDIR=%%~fd"
+for /d %%d in ("%~d0\DevEnv\11_Elasticsearch\elasticsearch-*") do if not defined ESDIR if exist "%%~fd\bin\elasticsearch.bat" set "ESDIR=%%~fd"
+if not defined ESDIR if exist "%ProgramFiles%\Elasticsearch\bin\elasticsearch.bat" set "ESDIR=%ProgramFiles%\Elasticsearch"
+if not defined ESDIR goto es_absent
+echo       found a local install at %ESDIR%
+echo       starting it (20-40 seconds)
+set "ES_JAVA_HOME=%ESDIR%\jdk"
+start "CampusSwap Elasticsearch 9200" /min /D "%ESDIR%" bin\elasticsearch.bat
+set /a ETRIES=0
+:es_wait
+netstat -ano | find ":9200" | find "LISTENING" >nul
+if not errorlevel 1 goto es_up
+set /a ETRIES+=1
+if %ETRIES% GEQ 60 goto es_timeout
+ping -n 2 127.0.0.1 >nul
+goto es_wait
+:es_running
+echo       port 9200 is already in use - assuming Elasticsearch, leaving it alone
+echo       (the website verifies compatibility and falls back if it is not ES 9.x)
+set "ESMODE=Elasticsearch (already running on 9200)"
+goto app_step
+:es_up
+echo       Elasticsearch is up on 9200
+set "ESMODE=Elasticsearch (IK analyzer)"
+goto app_step
+:es_timeout
+echo       ES did not open 9200 within 120s - see %ESDIR%\logs
+echo       search will use the MySQL engine instead
+goto app_step
+:es_absent
+echo       no local Elasticsearch and nothing on 9200 - search will use MySQL
+echo       (install ES per courseware 10.1 to switch the search engine to ES)
+goto app_step
+
 :app_step
+
 echo.
 echo [3/4] website (Spring Boot + bundled frontend) on port %APPPORT% ...
 netstat -ano | find ":%APPPORT%" | find "LISTENING" >nul

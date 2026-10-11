@@ -25,6 +25,11 @@ import org.springframework.data.elasticsearch.annotations.FieldType;
  *
  * <p>本类不使用 {@code @Data}（项目红线：实体类禁 {@code @Data}），只开 Getter/Setter + Builder。</p>
  *
+ * <p><b>为什么 {@code createIndex = false}</b>：Spring Data ES 的仓储在<b>构造期</b>就会连集群检查/创建索引，
+ * 于是"机器上没装 ES"会让整个应用启动失败（实测 Connection refused 直接崩），双引擎降级就失效了。
+ * 索引改由 {@code DocumentSearchServiceImpl#ensureIndex()} 在首次真正用到 ES 时用
+ * {@code IndexOperations.createWithMapping()} 显式创建（映射仍来自本类的注解，含 IK 分词器）。</p>
+ *
  * @author Zyaire
  */
 @Getter
@@ -32,7 +37,7 @@ import org.springframework.data.elasticsearch.annotations.FieldType;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-@Document(indexName = DocumentSearchIndex.INDEX_NAME)
+@Document(indexName = DocumentSearchIndex.INDEX_NAME, createIndex = false)
 public class DocumentSearchIndex {
 
     /** 索引名（课件示例用 dochub_document；本项目按库名与业务命名）。 */

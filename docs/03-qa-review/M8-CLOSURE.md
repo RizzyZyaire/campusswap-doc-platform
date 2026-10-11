@@ -127,3 +127,31 @@ scope=NOPE                       → HTTP 400（DTO @Pattern 拦截）
 - 不做同义词/拼音/停用词/自定义词典：IK 默认词典，后续需要再放 `plugins/ik/config/` 下的自定义词表；
 - 不做检索行为分析（无慢查询日志、无 `search_after` 深分页）：`pageSize ≤ 100`，深分页按课件红线五不做；
 - 不把标签筛选并入 ES 查询：标签是 AND 命中，继续由 MySQL 引擎处理（前端徽标如实说明），避免查询组合爆炸。
+
+---
+
+## 9 收口后追加：无 ES 机器的启动加固（2026-10-11 晚）
+
+用户提问"压缩包给别人、别人没有这个 ES 能启动吗"——**这一问逼出了一个真缺陷**，补测与修法如下。
+
+### 9.1 实测缺陷 #10：没装 ES 时应用根本起不来
+
+- **现象**：把 `D:\DevEnv\11_Elasticsearch` 改名藏起来（模拟没装 ES 的机器），启动演示包 → 卡在 `[4/5]` 直到 180 秒超时，`logs\demo-app.log` 里：
+  `Failed to instantiate [SimpleElasticsearchRepository] ... Connect to http://127.0.0.1:9200 failed: Connection refused`。
+- **根因**：Spring Data ES 的仓储在**启动期**实例化，构造器会连集群检查/创建索引 → "没装 ES"= 应用启动失败，既有的双引擎降级只在"应用已经跑起来"之后才生效。
+- **修法**（三处，详见 `ES-SEARCH-DESIGN.md` §13）：仓储改普通 `@Repository` 类 + 索引改首次使用显式创建（`createIndex = false`）+ 写入后显式 `refresh()`。
+- **复验**：ES 缺席时应用 **12.2 秒启动成功**、检索降级 MySQL 并照常高亮、重建返回 `success=false` + 中文说明；ES 恢复后自动建索引、重建 28 篇、范围 7/8/8、标题权重 4.83 全部复现；`verify-m8.ps1` **39/39**。
+
+### 9.2 实测缺陷 #11：启动脚本把"别人的 ES 已在跑"误判为"没有 ES"
+
+- **现象**：脚本先找安装目录、找到了才看端口，导致"ES 已在 9200 上运行但装在没猜到的路径"时打印 `no local Elasticsearch found`，摘要里写 MySQL（而应用其实连上了 ES）。
+- **修法**：**先探 9200**（在跑就复用、绝不重复启动、也绝不误标），再按 `ES_HOME` → `C:\Environment\elasticsearch-*` → 包所在盘的多处候选目录找安装并拉起；找不到才打印"将使用 MySQL"。
+- **覆盖的机器**：老师按手册装（`ES_HOME` 或 `D:\Environment\es-*`）、装到 C 盘、装在包旁边、已经自己启动着 ES —— 四种情况都能识别；`ES_HOME` 与 `ES_URIS` 两个环境变量仍是最终兜底（后者直接改应用连接的地址）。
+
+### 9.3 与课件口径的新增偏差
+
+| 项 | 课件写法 | 实际 | 理由 |
+|---|---|---|---|
+| 检索仓储 | `interface ... extends ElasticsearchRepository` | 普通 `@Repository` 类 + `ElasticsearchOperations` | 仓储接口在启动期连集群 → 没装 ES 就起不来；且 6.1.1 无 `bootstrapMode` 可声明惰性 |
+| 查询定义 | 注解式 `@Query`（JSON DSL 字符串） | Java 侧 `MultiMatchQuery / MatchQuery / TermQuery` 动态拼装 | 静态 DSL 装不下"范围 × 可选分类过滤"；权重与 filter 语义与课件逐字一致 |
+| 索引创建 | Spring Data 自动 | 首次用到 ES 时 `createWithMapping()` 显式创建 | 自动创建绑定在仓储构造器上，同上 |

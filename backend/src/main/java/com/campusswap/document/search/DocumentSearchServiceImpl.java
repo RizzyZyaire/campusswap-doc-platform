@@ -21,6 +21,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
+
 import org.springframework.data.elasticsearch.core.SearchHit;
 import org.springframework.data.elasticsearch.core.SearchHits;
 import org.springframework.stereotype.Service;
@@ -59,8 +60,16 @@ public class DocumentSearchServiceImpl implements DocumentSearchService {
     /** 返回给前端的时间格式（与全站一致）。 */
     private static final DateTimeFormatter HUMAN = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
-    /** ES 侧仓储（检索 + 索引写入）。 */
+    /**
+     * ES 侧仓储（检索 + 索引写入）。
+     *
+     * <p>它是普通 {@code @Repository} Bean（不是 Spring Data 仓储接口），构造期不连集群，
+     * 因此这里可以直接注入——应用在没有 ES 的机器上也能正常启动，检索时再降级。</p>
+     */
     private final DocumentSearchRepository searchRepository;
+
+    /** 索引是否已确认存在（首次用到 ES 时建一次，避免每次检索都往返一次 exists）。 */
+    private volatile boolean indexReady = false;
 
     /** 主库侧只读仓储（重建/增量同步的数据来源）。 */
     private final DocumentIndexRepository indexRepository;
@@ -71,6 +80,31 @@ public class DocumentSearchServiceImpl implements DocumentSearchService {
     /** ES 地址（回显给状态接口，便于排障）。 */
     @Value("${spring.elasticsearch.uris:http://127.0.0.1:9200}")
     private String endpoint;
+
+    /**
+     * 取 ES 仓储（延迟实例化；ES 不可用时抛异常，由调用处的 try/catch 接住并降级）。
+     *
+     * @return ES 仓储
+     */
+    /**
+     * 确保索引存在（带注解里声明的 IK 分词映射）。
+     *
+     * <p>因为实体上是 {@code createIndex = false}（见 DocumentSearchIndex 的说明），
+     * 建索引这件事在这里做：首次用到 ES 时建一次，之后靠 {@link #indexReady} 短路。
+     * 本方法只在"已经确认 ES 可用"之后调用，且调用处均有 try/catch。</p>
+     */
+    private void ensureIndex() {
+        if (indexReady) {
+            return;
+        }
+        synchronized (this) {
+            if (indexReady) {
+                return;
+            }
+            searchRepository.createIndexIfMissing();
+            indexReady = true;
+        }
+    }
 
     /** 上次探测时间戳。 */
     private volatile long probedAt = 0L;
@@ -106,6 +140,7 @@ public class DocumentSearchServiceImpl implements DocumentSearchService {
 
         if (esAvailable()) {
             try {
+                ensureIndex();
                 SearchHits<DocumentSearchIndex> hits = runEsQuery(scope, keyword, req.getCategoryId(), pageable);
                 List<SearchHitVo> list = new ArrayList<>();
                 for (SearchHit<DocumentSearchIndex> hit : hits.getSearchHits()) {
@@ -136,8 +171,9 @@ public class DocumentSearchServiceImpl implements DocumentSearchService {
             return vo;
         }
         try {
-            // 全量重建 = 先清空再灌，保证索引里不存在已下架的历史文档
-            searchRepository.deleteAll();
+            ensureIndex();
+            // 全量重建 = 索引整个重建再灌，保证不残留已下架的历史文档、映射也是最新的
+            searchRepository.recreateIndex();
             Map<Long, List<String>> tagMap = loadTagMap();
             long afterId = 0L;
             long indexed = 0L;
@@ -181,6 +217,7 @@ public class DocumentSearchServiceImpl implements DocumentSearchService {
             if (!esAvailable()) {
                 return;
             }
+            ensureIndex();
             DocumentIndexRepository.DocumentIndexRow row = indexRepository.findPublishedById(documentId);
             if (row == null) {
                 // 编辑后回到草稿 / 已归档 / 进回收站：都不该留在检索索引里
@@ -241,16 +278,8 @@ public class DocumentSearchServiceImpl implements DocumentSearchService {
      */
     private SearchHits<DocumentSearchIndex> runEsQuery(SearchScope scope, String keyword, String categoryId,
                                                        Pageable pageable) {
-        Long category = parseId(categoryId);
-        if (scope == SearchScope.TITLE) {
-            return searchRepository.searchTitleOnly(keyword, pageable);
-        }
-        if (scope == SearchScope.CONTENT) {
-            return searchRepository.searchContentOnly(keyword, pageable);
-        }
-        return category == null
-                ? searchRepository.searchAllFields(keyword, pageable)
-                : searchRepository.searchAllFieldsInCategory(keyword, category, pageable);
+        // 范围决定 must 子句（标题 / 正文 / 联合），分类决定是否追加 filter——都在仓储里拼装
+        return searchRepository.search(keyword, scope, parseId(categoryId), pageable);
     }
 
     /**
@@ -312,7 +341,7 @@ public class DocumentSearchServiceImpl implements DocumentSearchService {
             list.add(hit);
         }
         vo.setEngine(ENGINE_MYSQL);
-        vo.setEngineMessage("Elasticsearch 未连接，已降级为 MySQL 引擎（无相关度评分；高亮基于标题与摘要）");
+        vo.setEngineMessage("Elasticsearch 未连接，已降级为 MySQL 引擎（无相关度评分；高亮基于标题与摘要；检索范围仅 ES 引擎支持，降级时按标题+摘要匹配）");
         vo.setList(list);
         vo.setTotal(page.total());
         return vo;
@@ -488,6 +517,7 @@ public class DocumentSearchServiceImpl implements DocumentSearchService {
         log.warn("Elasticsearch 查询失败，本次检索降级为 MySQL 引擎：{}", cause.getMessage());
         esAvailable = false;
         cachedIndexCount = -1L;
+        indexReady = false;
         probedAt = System.currentTimeMillis();
     }
 

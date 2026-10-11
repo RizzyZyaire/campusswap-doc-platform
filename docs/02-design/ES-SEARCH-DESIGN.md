@@ -196,3 +196,33 @@ GET  http://127.0.0.1:9200/_cluster/health  Accept: ...;compatible-with=8       
 ## 12 关键词为空时
 
 `keyword` 为空返回空列表 + 提示（`请输入关键词后再检索`），`engine` 字段仍如实回填——避免"空关键词把 28 篇全捞出来"这种反直觉行为。
+
+---
+
+## 13 没有 ES 的机器也必须能跑（2026-10-11 补测后加固）
+
+初版有个致命假设错误：以为"Spring Data ES 只是惰性连接"。**实测推翻了它**——把 ES 目录改名藏起来后启动应用，直接崩：
+
+```
+Error creating bean with name 'documentSearchRepository'
+  → BeanInstantiationException: Failed to instantiate [SimpleElasticsearchRepository]
+  → DataAccessResourceFailureException: Connect to http://127.0.0.1:9200 failed: Connection refused
+```
+
+**根因**：Spring Data ES 的仓储在**应用启动时就被实例化**，而 `SimpleElasticsearchRepository` 的构造器会立刻连集群检查/创建索引。也就是说"没装 ES"= 应用起不来，双引擎降级形同虚设——而提交包**不带 ES**，这等于把风险直接甩给老师。
+
+**加固措施（三处）**：
+
+| 措施 | 说明 |
+|---|---|
+| 仓储改为普通 `@Repository` 类 | `DocumentSearchRepository` 不再 `extends ElasticsearchRepository`，改为注入 `ElasticsearchOperations` 的普通 Bean（构造期零网络请求）。这也是**本项目唯一一处刻意偏离课件写法**的地方：`@EnableElasticsearchRepositories` 在 Spring Data ES 6.1.1 里没有 `bootstrapMode` 属性，无法声明惰性引导；且注解式 `@Query` 是静态 DSL，装不下"范围 × 可选分类过滤"的动态组合 |
+| 索引改为**首次用到 ES 时显式创建** | 实体上是 `@Document(..., createIndex = false)`，建索引在 `ensureIndex()` 里用 `IndexOperations.createWithMapping()` 完成（映射仍来自 `@Field` 注解，含 IK 分词器），并用 `indexReady` 短路避免每次检索都往返一次 `exists` |
+| 写入后**显式 refresh** | ES 默认 1 秒才刷成可搜索段，而 `ElasticsearchOperations#save` 不带刷新策略 → 实测"重建报 indexed=28 但 `_count=0`、紧接着检索 0 命中"。`refresh()` 后读写立即一致（本项目量级下开销可忽略） |
+
+**补测结果**：
+
+| 场景 | 结果 |
+|---|---|
+| ES 目录完全不存在（改名模拟）+ 9200 空闲 | 应用 **12.2 秒正常启动**；`/api/search/status` → `engine=mysql`；三种范围检索照常返回结果并高亮；`POST /api/search/rebuild` 返回 `success=false` + 中文说明（不是 500） |
+| ES 恢复后 | 首次检索/重建即自动建索引（映射含 IK），重建 28 篇 / 922 ms，`_count=28` 立即一致；范围 7 / 8 / 8 与标题权重 4.83 全部复现 |
+| 启动脚本（包内） | 先探 9200 → 再找本机安装（`ES_HOME` 优先，其次 `C:`/包所在盘 的 `Environment\` / `elasticsearch-*` / `DevEnv\11_Elasticsearch\` / `Program Files\Elasticsearch`），都找不到就打印"search will use MySQL"并继续；**端口已被占用时一律不重复启动、也不误判为"没有 ES"** |

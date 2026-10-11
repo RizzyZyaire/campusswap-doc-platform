@@ -91,18 +91,18 @@ Check 'A3 filter-only fields declared Keyword (no analyzer)' `
     ((Has $idx 'FieldType.Keyword') -and (Has $idx 'FieldType.Text'))
 
 $repoSrc = Read-Text 'backend\src\main\java\com\campusswap\document\search\DocumentSearchRepository.java'
-Check 'A4 repository extends ElasticsearchRepository' (Has $repoSrc 'extends ElasticsearchRepository')
-Check 'A5 three scope queries present (all / title / content)' `
-    ((Has $repoSrc 'searchAllFields') -and (Has $repoSrc 'searchTitleOnly') -and (Has $repoSrc 'searchContentOnly'))
-Check 'A6 JSON DSL boosts title^3 and summary^2' ((Has $repoSrc 'title^3') -and (Has $repoSrc 'summary^2'))
-Check 'A7 PUBLISHED filter lives in the filter context' ((Has $repoSrc '"status": "PUBLISHED"'))
-Check 'A8 @Query JSON DSL annotations are used' ((Has $repoSrc '@Query'))
+Check 'A4 repository is a plain @Repository over ElasticsearchOperations (no startup connection)' ((Has $repoSrc '@Repository') -and (Has $repoSrc 'ElasticsearchOperations') -and (-not (Has $repoSrc 'extends ElasticsearchRepository')))
+Check 'A5 scope decides the must clause (title / content / multi_match)' `
+    ((Has $repoSrc 'case TITLE') -and (Has $repoSrc 'case CONTENT') -and (Has $repoSrc 'MultiMatchQuery'))
+Check 'A6 field boosts title^3 / summary^2 are declared' ((Has $repoSrc 'title^3') -and (Has $repoSrc 'summary^2'))
+Check 'A7 PUBLISHED filter lives in the filter context' (Has $repoSrc 'bool.filter')
+Check 'A8 writes are refreshed so a rebuild is immediately searchable' (Has $repoSrc 'refresh()')
 
 $impl = Read-Text 'backend\src\main\java\com\campusswap\document\search\DocumentSearchServiceImpl.java'
 Check 'A9 service implements the full rebuild (rebuildAllPublishedDocuments)' ((Has $impl 'rebuildAll') -and (Has $impl 'findPublishedAfter'))
 Check 'A10 service implements the MySQL fallback engine' ((Has $impl 'mysqlFallback') -and (Has $impl 'ENGINE_MYSQL'))
 Check 'A11 service exposes incremental sync (syncOne / removeOne)' ((Has $impl 'syncOne') -and (Has $impl 'removeOne'))
-Check 'A12 scope enum drives the query choice' ((Has $impl 'SearchScope.TITLE') -and (Has $impl 'SearchScope.CONTENT'))
+Check 'A12 scope is passed from the service into the repository query builder' ((Has $impl 'searchRepository.search(keyword, scope') -and (Has $repoSrc 'case TITLE') -and (Has $repoSrc 'case CONTENT'))
 Check 'A13 index rebuild uses cursor paging (no deep offset)' ((Has $impl 'findPublishedAfter'))
 
 $hl = Read-Text 'backend\src\main\java\com\campusswap\document\search\SearchTextHighlighter.java'
@@ -141,6 +141,10 @@ Check 'A25 search page offers the scope selector (title / content / all)' `
     ((Has $view 'SEARCH_SCOPE_TEXT') -and (Has $view 'chooseScope') -and (Has $view 'SCOPES'))
 Check 'A26 search page renders server highlights and shows the engine badge' `
     ((Has $view 'v-html="d.titleHtml"') -and (Has $view 'engineName'))
+
+$idxSrc = Read-Text 'backend\src\main\java\com\campusswap\document\search\DocumentSearchIndex.java'
+Check 'A28 index creation is explicit and lazy (createIndex=false + first-use creation)' `
+    ((Has $idxSrc 'createIndex = false') -and (Has $impl 'ensureIndex') -and (Has $repoSrc 'createIndexIfMissing'))
 
 $doc = Read-Text 'docs\02-design\ES-SEARCH-DESIGN.md'
 Check 'A27 design doc ES-SEARCH-DESIGN.md exists and is filled' `
