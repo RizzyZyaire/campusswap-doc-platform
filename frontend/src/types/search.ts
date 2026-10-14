@@ -41,6 +41,8 @@ export interface SearchHitVo {
   authorName: string | null
   status: string | null
   publishAt: string | null
+  /** 最后更新时间（yyyy-MM-dd HH:mm:ss）——"最近更新 ↓"排序的时间列用它，不再借 publishAt 显示 */
+  updatedAt: string | null
   /** 相关度分数（两位小数字符串，如 "4.83"）；MySQL 降级引擎下为 null */
   score: string | null
   /** 命中字段：title / summary / content */

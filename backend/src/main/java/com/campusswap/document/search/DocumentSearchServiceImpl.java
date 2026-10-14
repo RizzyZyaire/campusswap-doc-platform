@@ -373,6 +373,8 @@ public class DocumentSearchServiceImpl implements DocumentSearchService {
         vo.setAuthorName(doc.getAuthorName());
         vo.setStatus(doc.getStatus());
         vo.setPublishAt(doc.getPublishAt() == null ? null : doc.getPublishAt().replace('T', ' '));
+        // 索引里 updatedAt 与 publishAt 同为 ISO 字符串，转换口径照抄上一行（不新增查询）
+        vo.setUpdatedAt(doc.getUpdatedAt() == null ? null : doc.getUpdatedAt().replace('T', ' '));
         vo.setScore(formatScore(hit.getScore(), relevanceSort));
         vo.setMatchedFields(matchedFields(doc.getTitle(), doc.getSummary(), doc.getContent(), keyword));
         return vo;

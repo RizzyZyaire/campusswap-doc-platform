@@ -41,6 +41,15 @@ public class SearchHitVo {
     private String publishAt;
 
     /**
+     * 最后更新时间（yyyy-MM-dd HH:mm:ss）。
+     *
+     * <p>"最近更新 ↓"排序的展示列就是它：ES 索引里本来就有该字段（keyword，ISO 格式），
+     * 不新增查询，只把它一并回给出参。用 String 而不是日期类型——与前端的
+     * {@code relativeTime()} 口径一致，也避免后端出现日期类型的序列化差异。</p>
+     */
+    private String updatedAt;
+
+    /**
      * 相关度分数（ES 引擎给出，保留两位小数的字符串如 {@code "4.83"}）。
      *
      * <p><b>没有相关度时一律为 null，不会出现 {@code "NaN"}</b>：非相关度排序（按发布/更新时间、

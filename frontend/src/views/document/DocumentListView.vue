@@ -152,7 +152,7 @@ async function load(): Promise<void> {
         snippetHtml: h.snippet,
         categoryName: h.categoryName,
         authorName: h.authorName,
-        updatedAt: h.publishAt,
+        updatedAt: h.updatedAt ?? h.publishAt,
         versionNum: null,
         viewCount: null,
         matched: h.matchedFields ?? [],
@@ -440,6 +440,13 @@ onMounted(async () => {
                     · 相关度 {{ d.score }}
                   </template>
                 </span>
+                <!-- 组合筛选命中标签：标签是 AND 语义，命中的每条结果行必然都带所选标签，
+                     名字取自本页已加载的 tags（不发新请求），样式沿用全站 .tag 小片 -->
+                <div v-if="selectedTags.length" class="row wrap mt8">
+                  <span v-for="tid in selectedTags" :key="tid" class="tag">
+                    {{ tags.find((t) => t.id === tid)?.name ?? tid }}
+                  </span>
+                </div>
               </td>
               <td class="sm t2">{{ d.categoryName ?? '未分类' }}</td>
               <td class="sm t2">{{ d.authorName ?? '—' }}</td>

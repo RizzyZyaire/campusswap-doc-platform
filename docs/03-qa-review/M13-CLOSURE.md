@@ -23,15 +23,17 @@
 | 项 | 值 |
 |---|---|
 | Erlang/OTP | **27.3.4**（课件红线：26.2.x / 27.3.x；**严禁 OTP 29**）→ `D:\DevEnv\12_Erlang` |
-| RabbitMQ | **4.0.9**（课件推荐 4.0.x / 3.13.x）→ `D:\DevEnv\13_RabbitMQ\rabbitmq_server-4.0.9` |
+| RabbitMQ | **4.0.5**（课件推荐 4.0.x / 3.13.x）→ `D:\DevEnv\13_RabbitMQ\rabbitmq_server-4.0.5`（NSIS 安装版，home 嵌套一层 `…\rabbitmq_server-4.0.5\`）<br>**2026-10-15 起改用老师提供的 4.0.5 安装版（原 4.0.9 zip）**；原目录保留改名为 `…\rabbitmq_server-4.0.9.disabled` |
 | 数据目录 | `RABBITMQ_BASE=D:\DevEnv\13_RabbitMQ\data`（**不落 C 盘**：默认会写 `%APPDATA%\RabbitMQ`） |
 | 端口 | 5672（AMQP）/ 15672（管理控制台）/ 25672（节点间） |
 | 账号 | `campusswap / CampusSwap@2026`（administrator，vhost `/`）；`guest/guest` 保留但仅本机可用 |
 | 管理插件 | `rabbitmq-plugins.bat enable rabbitmq_management`（离线生效，需重启 broker） |
-| 安装包归档 | `D:\DevEnv\06_Tools\安装包归档\{otp_win64_27.3.4.exe, rabbitmq-server-windows-4.0.9.zip}` |
+| 安装包归档 | `D:\DevEnv\06_Tools\安装包归档\{otp_win64_27.3.4.exe, rabbitmq-server-windows-4.0.9.zip}`；老师提供 `D:\Six Gods\Desktop\OTP\{otp_win64_27.3.exe, rabbitmq-server-4.0.5.exe}` |
 
-**启动方式**：`sbin\rabbitmq-server.bat`（需 `ERLANG_HOME` 指向 Erlang 安装目录；zip 版不注册 Windows 服务）。
-**冷启动实测**：`5672 + 15672` 全部就绪 **10.4 秒**。
+**启动方式**：`sbin\rabbitmq-server.bat`（需 `ERLANG_HOME` 指向 Erlang 安装目录；**不注册 Windows 服务**——安装版用 `/NOSERVICEINSTALL` 跳过，与 zip 版行为一致）。
+**冷启动实测**：`5672 + 15672` 全部就绪 **10.4 秒**（4.0.9）/ **约 20 秒**（4.0.5 安装版冷启动）。
+**⚠️ 换装 4.0.5 的两个坑（2026-10-15 实测）**：① 安装器是 NSIS，**只认 `/D=`（须最后且不加引号），不认课件写的 `/DIR=`**；必须带 `/NOSERVICEINSTALL`（服务段会删改 `%USERPROFILE%\.erlang.cookie`）。
+② 安装版目录比 zip 版**多嵌套一层**，起停脚本的 `rabbitmq_server-*` 通配会同时匹配到 `.disabled` 旧目录 → 已抽出 `:mq_resolve`（跳过 `.disabled` + 兼容两种布局）。
 
 ---
 
