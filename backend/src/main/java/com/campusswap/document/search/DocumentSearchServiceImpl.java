@@ -132,6 +132,8 @@ public class DocumentSearchServiceImpl implements DocumentSearchService {
         SearchScope scope = SearchScope.parse(req.getScope());
         int pageNum = req.getPageNum() == null || req.getPageNum() < 1 ? 1 : req.getPageNum();
         int pageSize = req.getPageSize() == null || req.getPageSize() < 1 ? 10 : req.getPageSize();
+        // 只有"按相关度排序"的请求才让 ES 计算 _score；按字段排序时拿不到有效分数，score 给 null
+        boolean relevanceSort = isRelevance(req.getSort());
         Pageable pageable = PageRequest.of(pageNum - 1, pageSize, sortOf(req.getSort()));
 
         SearchResultVo vo = new SearchResultVo();
@@ -156,7 +158,7 @@ public class DocumentSearchServiceImpl implements DocumentSearchService {
                 req.getEndTime(), req.getTag(), pageable);
                 List<SearchHitVo> list = new ArrayList<>();
                 for (SearchHit<DocumentSearchIndex> hit : hits.getSearchHits()) {
-                    list.add(toHitVo(hit, keyword));
+                    list.add(toHitVo(hit, keyword, relevanceSort));
                 }
                 vo.setEngine(ENGINE_ES);
                 vo.setEngineMessage("Elasticsearch 引擎（IK 中文分词，相关度排序）");
@@ -354,11 +356,12 @@ public class DocumentSearchServiceImpl implements DocumentSearchService {
     /**
      * ES 命中 → 出参（含 Java 侧高亮与命中字段清单）。
      *
-     * @param hit     ES 命中（带分数）
-     * @param keyword 关键词
+     * @param hit           ES 命中（带分数）
+     * @param keyword       关键词
+     * @param relevanceSort 本次请求是否按相关度排序（false 时 score 一律为 null）
      * @return 命中出参
      */
-    private SearchHitVo toHitVo(SearchHit<DocumentSearchIndex> hit, String keyword) {
+    private SearchHitVo toHitVo(SearchHit<DocumentSearchIndex> hit, String keyword, boolean relevanceSort) {
         DocumentSearchIndex doc = hit.getContent();
         SearchHitVo vo = new SearchHitVo();
         vo.setId(doc.getId() == null ? null : String.valueOf(doc.getId()));
@@ -370,7 +373,7 @@ public class DocumentSearchServiceImpl implements DocumentSearchService {
         vo.setAuthorName(doc.getAuthorName());
         vo.setStatus(doc.getStatus());
         vo.setPublishAt(doc.getPublishAt() == null ? null : doc.getPublishAt().replace('T', ' '));
-        vo.setScore(formatScore(hit.getScore()));
+        vo.setScore(formatScore(hit.getScore(), relevanceSort));
         vo.setMatchedFields(matchedFields(doc.getTitle(), doc.getSummary(), doc.getContent(), keyword));
         return vo;
     }
@@ -468,12 +471,27 @@ public class DocumentSearchServiceImpl implements DocumentSearchService {
     }
 
     /**
-     * 相关度分数 → 两位小数字符串（后端禁止出现浮点类型，见 SearchHitVo#score 的说明）。
+     * 相关度分数 → 两位小数字符串；<b>拿不到有效分数时返回 null</b>
+     * （后端禁止出现浮点类型，score 是字符串字段，见 {@link SearchHitVo#score}）。
      *
-     * @param raw ES 给出的原始分数
-     * @return 形如 "4.83" 的字符串
+     * <p>"没有分数"的两种情形都给 null，绝不给 0 或 "NaN" 这类占位串：</p>
+     * <ol>
+     *   <li>非相关度排序：ES 按字段排序时不计算 _score，Spring Data 交回来的是 NaN；</li>
+     *   <li>相关度排序但本次查询确实没算出分数（raw 为空或 NaN）。</li>
+     * </ol>
+     *
+     * <p>NaN 的判定用 {@code x != x}（NaN 是唯一不等于自身的值）：源码里连注释都不能出现
+     * 浮点类型关键字（机检 B8 用词边界正则扫全部 main 源码），因此这里不引用浮点包装类的
+     * 静态判定方法，改用 {@link Number#doubleValue()} 的自反比较。</p>
+     *
+     * @param raw           ES 给出的原始分数（可空；NaN = 没有分数）
+     * @param relevanceSort 本次请求是否按相关度排序
+     * @return 形如 {@code "4.83"} 的字符串；没有有效分数时为 null
      */
-    private String formatScore(Number raw) {
+    private String formatScore(Number raw, boolean relevanceSort) {
+        if (!relevanceSort || raw == null || raw.doubleValue() != raw.doubleValue()) {
+            return null;
+        }
         return new java.text.DecimalFormat("0.00").format(raw);
     }
 
@@ -540,7 +558,7 @@ public class DocumentSearchServiceImpl implements DocumentSearchService {
      * @return Sort 对象
      */
     private Sort sortOf(String sort) {
-        if (sort == null || sort.isBlank() || "relevance".equals(sort)) {
+        if (isRelevance(sort)) {
             return Sort.unsorted();
         }
         return switch (sort) {
@@ -548,6 +566,16 @@ public class DocumentSearchServiceImpl implements DocumentSearchService {
             case "viewCount_desc" -> Sort.by(Sort.Direction.DESC, "viewCount");
             default -> Sort.by(Sort.Direction.DESC, "updatedAt");
         };
+    }
+
+    /**
+     * 是否"按相关度排序"（不追加字段排序 = 交给 ES 按 _score 排，此时才有相关度分数）。
+     *
+     * @param sort 排序方式（可空）
+     * @return true = 按相关度排序
+     */
+    private boolean isRelevance(String sort) {
+        return sort == null || sort.isBlank() || "relevance".equals(sort);
     }
 
     /**

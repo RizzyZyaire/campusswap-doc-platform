@@ -41,11 +41,15 @@ public class SearchHitVo {
     private String publishAt;
 
     /**
-     * 相关度分数（ES 引擎给出，保留两位小数的字符串如 {@code "4.83"}；MySQL 降级引擎为 null）。
+     * 相关度分数（ES 引擎给出，保留两位小数的字符串如 {@code "4.83"}）。
+     *
+     * <p><b>没有相关度时一律为 null，不会出现 {@code "NaN"}</b>：非相关度排序（按发布/更新时间、
+     * 阅读量）时 ES 不计算 _score，或本次查询拿不到有效分数，两种情况都给 null
+     * （见 {@code DocumentSearchServiceImpl#formatScore}）。MySQL 降级引擎无评分，同样为 null。</p>
      *
      * <p>用字符串而不是浮点类型：项目红线「金额与数值一律整数或定点表示」禁止后端源码里出现
      * 浮点类型关键字（由机检 verify-m6.ps1 的 B8 断言强制，正则扫描含注释），
-     * 而相关度本来就只用于展示排序依据，格式化成两位小数即可（见 SearchServiceImpl#formatScore）。</p>
+     * 而相关度本来就只用于展示排序依据，格式化成两位小数即可。</p>
      */
     private String score;
 
