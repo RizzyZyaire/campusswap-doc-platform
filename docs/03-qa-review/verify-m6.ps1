@@ -83,29 +83,77 @@ Check 'A2.each-ac-exactly-once' $dupOrMissing.Count 0
 if ($dupOrMissing.Count -gt 0) { Write-Host ('      offenders: ' + ($dupOrMissing -join ', ')) }
 $acTestFiles = @($TestFiles | Where-Object { (Split-Path $_ -Leaf) -like 'Ac*Test.java' })
 Check-True 'A3.ac-test-classes' ($acTestFiles.Count -ge 8) ('files=' + $acTestFiles.Count)
-# only the NEW BDD test classes must be context-free; the four pre-existing
-# integration tests (BulkUpdateStaleness / TagBindingConsistency / ViewCount /
-# PasswordHashCompat) are @SpringBootTest by design and stay untouched.
-$springBootTests = Count-In $acTestFiles '@SpringBootTest'
+# A4 -- whitelist form (rewritten 2026-10-15).
+#
+# The old assertion was "no @SpringBootTest anywhere under Ac*Test.java", which
+# was correct while the whole BDD suite was pure Mockito. Later milestones added
+# integration tests that genuinely need a Spring context, so the old wording
+# produced a permanent, meaningless [FAIL] on every run.
+#
+# A Spring context is allowed ONLY for the classes listed below; each entry
+# records why a hand-rolled mock would be the wrong tool there:
+#   SearchRebuildTaskStoreTest - M13 async index rebuild. Asserts the task state
+#     really lands in Redis through the Spring-managed redis template (key names,
+#     TTL, SUBMITTED -> RUNNING -> SUCCEEDED). A mock would only prove that the
+#     mock works, not that the wiring works.
+#   Ac10JwtTokenTest - M15 JWT login. Signing/verification depends on Spring
+#     Security property binding (secret, TTL) plus the real filter chain, and the
+#     ticket is AC-10, so the naming rule forces it into Ac*Test.java.
+#   BulkUpdateStalenessTest / TagBindingConsistencyTest /
+#   ViewCountConcurrencyTest / PasswordHashCompatTest - pre-M6 integration tests
+#     (batch-update staleness, tag binding consistency, view-count concurrency
+#     against a real transaction, bcrypt hash compatibility). Never Mockito tests.
+#
+# The check runs in BOTH directions so the list cannot rot either way:
+#   (a) a @SpringBootTest class that is NOT listed   -> offender
+#   (b) a listed class that has NO @SpringBootTest   -> stale entry
+$springWhitelist = @(
+    'SearchRebuildTaskStoreTest',
+    'Ac10JwtTokenTest',
+    'BulkUpdateStalenessTest',
+    'TagBindingConsistencyTest',
+    'ViewCountConcurrencyTest',
+    'PasswordHashCompatTest'
+)
+$springOffenders = @()
+$springSeen = @()
+foreach ($f in $TestFiles) {
+    if ((Read-Text $f) -notmatch '@SpringBootTest') { continue }
+    $base = (Split-Path $f -Leaf) -replace '\.java$', ''
+    $springSeen += $base
+    if ($springWhitelist -notcontains $base) { $springOffenders += ($base + ' (not whitelisted)') }
+}
+foreach ($w in $springWhitelist) {
+    if ($springSeen -notcontains $w) { $springOffenders += ($w + ' (whitelisted but no @SpringBootTest)') }
+}
+Check 'A4.spring-context-only-where-whitelisted' $springOffenders.Count 0
+if ($springOffenders.Count -gt 0) { Write-Host ('      offenders: ' + ($springOffenders -join ', ')) }
+else { Write-Host ('      whitelisted integration tests = ' + $springSeen.Count + ' : ' + ($springSeen -join ', ')) }
 $mockito = Count-In $acTestFiles '@ExtendWith\(MockitoExtension\.class\)'
-Check 'A4.no-spring-context-in-new-tests' $springBootTests 0
 Check-True 'A5.mockito-extension-used' ($mockito -ge 8) ('annotations=' + $mockito)
 
-# surefire summary of the last full run
+# surefire summary of the last full run.
+# NOTE (counter-drift bug, fixed 2026-10-15): these locals used to be named
+# $run / $fail / $err. PowerShell variable names are CASE-INSENSITIVE, so the
+# bare $fail in this block WAS the same variable as the script-scope failure
+# counter $script:Fail -- assigning 0 to it here silently wiped every failure
+# already recorded by the A1..A5 checks above (that is why the script could
+# print a [FAIL] line and still summarise "PASS=49 FAIL=0" with exit code 0).
+# Keep every local here prefixed so it can never alias $Pass / $Fail again.
 $surefire = Join-Path $Repo 'backend\target\surefire-reports'
-$run = 0; $fail = 0; $err = 0
+$sfRun = 0; $sfFail = 0; $sfErr = 0
 if (Test-Path $surefire) {
     foreach ($f in @(Get-ChildItem $surefire -Filter '*.txt')) {
         $t = Read-Text $f.FullName
         if ($t -match 'Tests run: (\d+), Failures: (\d+), Errors: (\d+)') {
-            $run += [int]$Matches[1]; $fail += [int]$Matches[2]; $err += [int]$Matches[3]
+            $sfRun += [int]$Matches[1]; $sfFail += [int]$Matches[2]; $sfErr += [int]$Matches[3]
         }
     }
 }
-Check-True 'A6.surefire-ran' ($run -gt 0) ('tests=' + $run)
-Check 'A7.surefire.failures' $fail 0
-Check 'A8.surefire.errors' $err 0
-Check-True 'A9.surefire.total-at-least-30' ($run -ge 30) ('tests=' + $run)
+Check-True 'A6.surefire-ran' ($sfRun -gt 0) ('tests=' + $sfRun)
+Check 'A7.surefire.failures' $sfFail 0
+Check 'A8.surefire.errors' $sfErr 0
+Check-True 'A9.surefire.total-at-least-30' ($sfRun -ge 30) ('tests=' + $sfRun)
 
 # ---------------------------------------------------------------- B. JPA red lines
 Write-Host ''
@@ -231,7 +279,10 @@ foreach ($pair in @(@('G1.seed-json', $SeedJson), @('G2.perf-json', $PerfJson)))
 
 Write-Host ''
 Write-Host '============================================================='
-Write-Host (' RESULT: PASS=' + $script:Pass + ' FAIL=' + $script:Fail)
+# TOTAL must always equal PASS + FAIL, and PASS + FAIL must equal the number of
+# Check / Check-True call sites above (50). If TOTAL ever drifts from that, a
+# counter was aliased again -- see the $sfRun/$sfFail/$sfErr note in section A.
+Write-Host (' RESULT: PASS=' + $script:Pass + ' FAIL=' + $script:Fail + ' TOTAL=' + ($script:Pass + $script:Fail))
 if ($script:Fail -gt 0) { Write-Host (' failed: ' + ($script:Failures -join ', ')) }
 Write-Host '============================================================='
 exit $script:Fail

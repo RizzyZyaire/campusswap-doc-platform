@@ -1,7 +1,9 @@
 # =============================================================================
 #  reload-db.ps1 -- CampusSwap database reload helper (M6 evidence hygiene)
 #
-#  What it does: replays backend/sql/schema.sql (15 tables, 23 indexes) and then
+#  What it does: replays backend/sql/schema.sql (15 tables; 24 plain INDEX +
+#  5 UNIQUE KEY + 1 FULLTEXT KEY = 30 secondary indexes, plus 15 primary keys)
+#  and then
 #  backend/sql/data.sql (45 documents / 20 tags / 99 versions / 39 favorites).
 #  Both files are idempotent: schema.sql drops+creates every table, data.sql
 #  truncates before inserting explicit ids.
@@ -54,7 +56,7 @@ function Invoke-SqlFile {
     if ($LASTEXITCODE -ne 0) { throw "mysql failed on $File (exit $LASTEXITCODE)" }
 }
 
-Write-Host '[1/3] schema.sql (DROP + CREATE 14 tables / 20 indexes) ...'
+Write-Host '[1/3] schema.sql (DROP + CREATE 15 tables / 24 plain + 5 unique + 1 fulltext indexes) ...'
 Invoke-SqlFile -File $schema
 Write-Host '[2/3] data.sql (TRUNCATE + seed data) ...'
 Invoke-SqlFile -File $data -Extra @('campusswap_db')

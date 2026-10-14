@@ -16,7 +16,7 @@
 --   5. 严禁外键约束（关联靠逻辑外键 + 代码校验），删除与迁移不被约束阻塞
 --   6. 每张表、每个字段都有 COMMENT
 --   7. 复合索引结合 deleted 设计，并遵守最左前缀原则（见各表索引注释）
---   8. 表清单（14 张）= 系统域 8 + 文档域 6
+--   8. 表清单（15 张）= 系统域 8 + 文档域 6 + 运维域 1（sys_operation_log，见文件末尾第 15 节）
 -- =============================================================================
 
 CREATE DATABASE IF NOT EXISTS `campusswap_db` DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
