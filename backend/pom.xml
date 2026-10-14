@@ -62,6 +62,12 @@
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-data-redis</artifactId>
         </dependency>
+        <!-- 消息队列（课件 13.1）：RabbitMQ 异步索引重建；broker 没起也不影响应用启动 -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-amqp</artifactId>
+        </dependency>
+
         <!-- 全文检索（课件 10.1）：ES 8.18 + IK 分词器；连不上时由服务层自动降级到 MySQL 引擎 -->
         <dependency>
             <groupId>org.springframework.boot</groupId>

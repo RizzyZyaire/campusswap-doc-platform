@@ -12,7 +12,7 @@ import { useUserStore } from '@/stores/user'
 import { PERM } from '@/utils/perm'
 import { relativeTime } from '@/utils/format'
 import type { CategoryVo, DocumentSort, DocumentVo, TagVo } from '@/types'
-import { SEARCH_SCOPE_TEXT, type SearchEngineStatusVo, type SearchScope } from '@/types/search'
+import { SEARCH_SCOPE_TEXT, type SearchEngineStatusVo, type SearchRebuildTask, type SearchScope } from '@/types/search'
 
 /**
  * 文档检索（§8.4 + 课件 10.1 ES 全文检索）。
@@ -64,6 +64,10 @@ const errorText = ref('')
 const engineName = ref<string>('')
 const engineMessage = ref<string>('')
 const indexStatus = ref<SearchEngineStatusVo | null>(null)
+/** 当前重建任务（提交后轮询更新，界面显示 已提交→执行中→已完成）。 */
+const rebuildTask = ref<SearchRebuildTask | null>(null)
+/** 是否正在处理重建（防重复点击）。 */
+const rebuildBusy = ref(false)
 
 const categories = ref<CategoryVo[]>([])
 const tags = ref<TagVo[]>([])
@@ -179,19 +183,46 @@ async function loadEngineStatus(): Promise<void> {
   }
 }
 
-/** 重建索引（doc:manage）：把主库所有已发布文档重新同步进 ES。 */
+/**
+ * 提交全量重建任务并轮询进度（课件 13.1：走 RabbitMQ 异步）。
+ *
+ * 接口只负责"下单"（服务端实测 3~17ms 返回 SUBMITTED + taskId），真正的重建在后台消费者里跑；
+ * 这里每 800ms 查一次任务状态，界面能完整看到 已提交 → 执行中 → 已完成 的过程。
+ */
 async function rebuildIndex(): Promise<void> {
+  if (rebuildBusy.value) return
+  rebuildBusy.value = true
   try {
-    const res = await searchApi.rebuildSearchIndex()
-    if (res.success) {
-      ui.ok(`索引重建完成：同步 ${res.indexed} 篇，索引内 ${res.indexCount} 篇，用时 ${res.elapsedMs} ms`)
-      await loadEngineStatus()
-      await load()
-    } else {
-      ui.warn(res.message)
+    const task = await searchApi.submitRebuild()
+    rebuildTask.value = task
+    if (task.status === 'FAILED') {
+      ui.err(task.message || '任务提交失败')
+      return
     }
+    ui.ok(`重建任务已提交（${task.submitCostMs ?? 0} ms），后台消费者执行中…`)
+    for (let i = 0; i < 60; i += 1) {
+      await new Promise((r) => setTimeout(r, 800))
+      const latest = await searchApi.getRebuildTask(task.taskId)
+      rebuildTask.value = latest
+      if (latest.status === 'SUCCEEDED') {
+        ui.ok(
+          `索引重建完成：同步 ${latest.indexed} 篇，索引内 ${latest.indexCount} 篇，用时 ${latest.elapsedMs} ms`
+        )
+        await loadEngineStatus()
+        await load()
+        return
+      }
+      if (latest.status === 'FAILED') {
+        ui.err(latest.message || '索引重建失败（消息已进死信队列，可查 RabbitMQ 控制台）')
+        await loadEngineStatus()
+        return
+      }
+    }
+    ui.warn('任务仍在后台执行，可稍后回本页查看状态')
   } catch (e) {
-    ui.err(e instanceof ApiError ? e.message : '索引重建失败')
+    ui.err(e instanceof ApiError ? e.message : '提交重建任务失败')
+  } finally {
+    rebuildBusy.value = false
   }
 }
 
@@ -270,7 +301,9 @@ onMounted(async () => {
         </div>
       </div>
       <div class="acts">
-        <button v-if="user.hasPerm(PERM.docManage)" class="btn btn-sm" @click="rebuildIndex">重建检索索引</button>
+        <button v-if="user.hasPerm(PERM.docManage)" class="btn btn-sm" :disabled="rebuildBusy" @click="rebuildIndex">
+          {{ rebuildBusy ? '重建中…' : '重建检索索引' }}
+        </button>
         <RouterLink v-if="user.hasPerm(PERM.docCreate)" class="btn btn-primary" to="/docs/edit">新建文档</RouterLink>
       </div>
     </div>
@@ -342,6 +375,16 @@ onMounted(async () => {
           <span v-if="indexStatus && indexStatus.elasticsearchAvailable" class="xs t3">
             索引文档数：{{ indexStatus.indexCount }}
           </span>
+          <!-- 异步重建任务状态（课件 13.1：RabbitMQ 后台消费，前端轮询） -->
+          <span
+            v-if="rebuildTask"
+            class="badge"
+            :class="rebuildTask.status === 'SUCCEEDED' ? 'primary' : rebuildTask.status === 'FAILED' ? 'danger' : ''"
+          >
+            重建任务：{{ rebuildTask.statusLabel }}
+            <template v-if="rebuildTask.indexed"> · {{ rebuildTask.indexed }} 篇</template>
+          </span>
+          <span v-if="rebuildTask" class="xs t3">taskId {{ rebuildTask.taskId.slice(0, 8) }}…</span>
         </div>
       </div>
 

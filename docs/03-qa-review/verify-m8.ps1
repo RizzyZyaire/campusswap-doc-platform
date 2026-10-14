@@ -134,7 +134,7 @@ $api = Read-Text 'frontend\src\api\search.ts'
 $typ = Read-Text 'frontend\src\types\search.ts'
 $view = Read-Text 'frontend\src\views\document\DocumentListView.vue'
 Check 'A23 frontend api layer calls the three search endpoints' `
-    ((Has $api 'searchFullText') -and (Has $api 'searchEngineStatus') -and (Has $api 'rebuildSearchIndex'))
+    ((Has $api 'searchFullText') -and (Has $api 'searchEngineStatus') -and (Has $api 'submitRebuild') -and (Has $api 'getRebuildTask'))
 Check 'A24 frontend types model scope / highlight / engine' `
     ((Has $typ 'SearchScope') -and (Has $typ 'titleHighlight') -and (Has $typ 'engine'))
 Check 'A25 search page offers the scope selector (title / content / all)' `
@@ -207,9 +207,17 @@ if ($SkipLive) {
         Check 'C1 GET /api/search/status answers with an engine' `
             (($st.Code -eq 200) -and ($st.Data.data.engine)) ('engine=' + $st.Data.data.engine + ' indexCount=' + $st.Data.data.indexCount)
 
+        # 2026-10-14 M13: this endpoint changed from a sync rebuild to submitting a RabbitMQ task
         $rb = Api 'POST' '/api/search/rebuild' @{} $token
-        Check 'C2 POST /api/search/rebuild reports success' `
-            (($rb.Code -eq 200) -and ($rb.Data.data.success)) ('indexed=' + $rb.Data.data.indexed + ' msg=' + $rb.Data.data.message)
+        Check 'C2 POST /api/search/rebuild submits an async task' `
+            (($rb.Code -eq 200) -and ($rb.Data.data.status -eq 'SUBMITTED') -and ($rb.Data.data.taskId)) `
+            ('status=' + $rb.Data.data.status + ' taskId=' + $rb.Data.data.taskId)
+        # wait for the consumer to fill the index, otherwise the search asserts below see nothing
+        for ($w = 0; $w -lt 30; $w++) {
+            Start-Sleep -Milliseconds 700
+            $st2 = Api 'GET' ('/api/search/rebuild/' + $rb.Data.data.taskId) $null $token
+            if ($st2.Data.data.status -eq 'SUCCEEDED' -or $st2.Data.data.status -eq 'FAILED') { break }
+        }
 
         # keyword that really exists in the seeded campusswap_db (verified: 7 title hits / 8 content hits)
         $kw = [char]0x652F + [char]0x6559   # U+652F U+6559
@@ -226,9 +234,12 @@ if ($SkipLive) {
 
         $title = Api 'GET' ('/api/search/documents?keyword=' + [uri]::EscapeDataString($kw) + '&scope=TITLE') $null $token
         $content = Api 'GET' ('/api/search/documents?keyword=' + [uri]::EscapeDataString($kw) + '&scope=CONTENT') $null $token
-        Check 'C5 scope=TITLE and scope=CONTENT are different result sets' `
-            (($title.Code -eq 200) -and ($content.Code -eq 200) -and ($title.Data.data.total -ne $content.Data.data.total)) `
-            ('title=' + $title.Data.data.total + ' content=' + $content.Data.data.total)
+        # the two scopes must hit DIFFERENT documents (comparing totals alone can pass by luck)
+        $titleIds = @($title.Data.data.list | ForEach-Object { $_.id }) -join ','
+        $contentIds = @($content.Data.data.list | ForEach-Object { $_.id }) -join ','
+        Check 'C5 scope=TITLE and scope=CONTENT return different hits' `
+            (($title.Code -eq 200) -and ($content.Code -eq 200) -and ($titleIds -ne $contentIds)) `
+            ('titleIds=' + $titleIds + ' contentIds=' + $contentIds)
 
         $bad = Api 'GET' '/api/search/documents?keyword=test&scope=NOPE' $null $token
         Check 'C6 invalid scope is rejected with 400' ($bad.Code -eq 400) ('code=' + $bad.Code)

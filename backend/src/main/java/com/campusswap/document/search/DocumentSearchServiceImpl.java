@@ -3,6 +3,11 @@ package com.campusswap.document.search;
 import com.campusswap.common.api.PageVo;
 import com.campusswap.document.dto.DocumentSearchDtoReq;
 import com.campusswap.document.dto.DocumentSearchEsDtoReq;
+import com.campusswap.common.exception.BusinessException;
+import com.campusswap.common.api.ErrorCode;
+import com.campusswap.document.search.mq.SearchRebuildProducer;
+import com.campusswap.document.search.mq.SearchRebuildTask;
+import com.campusswap.document.search.mq.SearchRebuildTaskStore;
 import com.campusswap.document.service.DocumentService;
 import com.campusswap.document.vo.DocumentVo;
 import com.campusswap.document.vo.SearchEngineStatusVo;
@@ -76,6 +81,12 @@ public class DocumentSearchServiceImpl implements DocumentSearchService {
 
     /** 既有 MySQL 检索实现（降级引擎）。 */
     private final DocumentService documentService;
+
+    /** 异步重建任务状态仓库（Redis）。 */
+    private final SearchRebuildTaskStore rebuildTaskStore;
+
+    /** 异步重建消息生产者（RabbitMQ）。 */
+    private final SearchRebuildProducer rebuildProducer;
 
     /** ES 地址（回显给状态接口，便于排障）。 */
     @Value("${spring.elasticsearch.uris:http://127.0.0.1:9200}")
@@ -206,6 +217,29 @@ public class DocumentSearchServiceImpl implements DocumentSearchService {
         }
         vo.setElapsedMs(System.currentTimeMillis() - start);
         return vo;
+    }
+
+    @Override
+    public SearchRebuildTask submitRebuildTask(Long operatorId) {
+        long start = System.currentTimeMillis();
+        SearchRebuildTask task = rebuildTaskStore.create(operatorId, 0L);
+        boolean sent = rebuildProducer.send(task);
+        long cost = System.currentTimeMillis() - start;
+        task.setSubmitCostMs(cost);
+        if (sent) {
+            task.setMessage("任务已提交，等待后台消费者执行（提交耗时 " + cost + " ms）");
+        }
+        rebuildTaskStore.save(task);
+        return task;
+    }
+
+    @Override
+    public SearchRebuildTask getRebuildTask(String taskId) {
+        SearchRebuildTask task = rebuildTaskStore.get(taskId);
+        if (task == null) {
+            throw new BusinessException(ErrorCode.NOT_FOUND, "重建任务不存在或已过期（任务记录保留 2 小时）");
+        }
+        return task;
     }
 
     @Override

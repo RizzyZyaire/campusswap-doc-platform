@@ -1,6 +1,7 @@
 package com.campusswap.document.search;
 
 import com.campusswap.document.dto.DocumentSearchEsDtoReq;
+import com.campusswap.document.search.mq.SearchRebuildTask;
 import com.campusswap.document.vo.SearchEngineStatusVo;
 import com.campusswap.document.vo.SearchRebuildVo;
 import com.campusswap.document.vo.SearchResultVo;
@@ -24,6 +25,22 @@ public interface DocumentSearchService {
      * @return 检索结果（含实际使用的引擎说明）
      */
     SearchResultVo search(DocumentSearchEsDtoReq req);
+
+    /**
+     * 提交全量重建任务（课件 13.1：走 RabbitMQ 异步，接口立即返回 SUBMITTED + taskId）。
+     *
+     * @param operatorId 触发人 ID
+     * @return 任务（消息队列不可用时 status=FAILED 并带原因）
+     */
+    SearchRebuildTask submitRebuildTask(Long operatorId);
+
+    /**
+     * 查询重建任务状态。
+     *
+     * @param taskId 任务 ID
+     * @return 任务
+     */
+    SearchRebuildTask getRebuildTask(String taskId);
 
     /**
      * 全量重建索引：把主库里所有 PUBLISHED 文档同步进 ES（课件 10.1 §5.2 的

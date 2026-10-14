@@ -285,7 +285,7 @@ public record ResponseResult<T>(int code, String message, T data) { }
 
 ---
 
-## 3. 接口总表（60 条）
+## 3. 接口总表（62 条）
 
 > 「用途」列说明该接口**解决什么问题、为哪个页面/故事服务**。
 
@@ -393,7 +393,7 @@ public record ResponseResult<T>(int code, String message, T data) { }
 
 | 项 | 值 |
 |---|---|
-| 接口总数 | **60**（原 57 + 2026-10-11 M8 全文检索 3 条，见表 3.12） |
+| 接口总数 | **62**（57 + M8 全文检索 3 条 + M13 异步重建 **2** 条；另有原 60 号接口语义变更，见表 3.12 / 3.13） |
 | 按方法 | GET **19** / POST **18** / PUT **12** / DELETE **8** |
 | 按鉴权 | 公开 **1** / 登录即可 **3** / 权限点 **53** |
 | 按模块 | 认证 4 · 用户 6 · 角色 6 · 权限 4 · 部门 6 · 文档 15 · 审核与治理 6 · 分类与标签 8 · 文件与统计 2 |
@@ -420,6 +420,16 @@ public record ResponseResult<T>(int code, String message, T data) { }
 | 59 | 检索 | GET | `/api/search/status` | 汇报当前检索引擎（ES 已连接 / 已降级）、索引文档数与 IK 就绪状态，供检索页徽标显示与排障 | `doc:search` | 无 | `SearchEngineStatusVo` | 401 / 403 |
 | 60 | 检索 | POST | `/api/search/rebuild` | 管理员一键把主库全部 `PUBLISHED` 文档全量重建进 ES 索引（课件 §5.2 的 `rebuildAllPublishedDocuments()`，游标分页 + 批量写入） | `doc:manage` | 无 | `SearchRebuildVo` | 401 / 403 |
 
+### 3.13 异步索引重建（2026-10-14 M13 新增，3 条）
+
+> 课件 13.1 落地：索引重建走 RabbitMQ 异步，接口只"下单"，后台消费者执行。设计见 `M13-CLOSURE.md`。
+> 编号沿用"追加在表尾"策略：**新增 2 条（61 / 62）**；另有原 60 号 `POST /api/search/rebuild` **语义变更**（由"同步重建"改为"提交异步任务"，路径与权限不变，故编号不新增）。
+
+| 序号 | 模块 | 方法 | 路径 | 用途 | 权限点 | 入参 DTO | 出参 VO | 主要错误码 |
+|---|---|---|---|---|---|---|---|---|
+| 60（语义变更） | 检索 | POST | `/api/search/rebuild` | **改为提交异步重建任务**（RabbitMQ）：落任务 + 发消息 + **20ms 内**返回 `SUBMITTED` 与 `taskId`；broker 不可用时返回 `FAILED` 并带原因 | `doc:manage` | 无 | `SearchRebuildTask` | 401 / 403 |
+| 61 | 检索 | GET | `/api/search/rebuild/{taskId}` | 查询重建任务状态（`SUBMITTED`/`RUNNING`/`SUCCEEDED`/`FAILED`，含同步条数、索引总数、耗时） | `doc:manage` | 无 | `SearchRebuildTask` | 401 / 403 / 404 |
+| 62 | 检索 | GET | `/api/search/rebuild/recent` | 最近 20 次重建任务（新→旧），界面初始化显示"上次重建结果" | `doc:manage` | 无 | `List<SearchRebuildTask>` | 401 / 403 |
 ## 4. 逐模块详规
 
 > 阅读约定：入参 DTO 一律给完整字段表；出参 VO 给出字段清单，字段的类型与说明以 §2.7 字典为准（该字典即出参字段表）。

@@ -882,6 +882,18 @@ grep -rn "password" backend/src/main/resources/ | grep -v '\${'   # 不应出现
 - [x] **T8.8** 文档与机检：`ES-SEARCH-DESIGN.md`、`API_SPECIFICATION` §3.12/§4.8（57 → **60** 条）、`GLOSSARY` §3.8/§4.2（v2.3）、`verify-m8.ps1` 38 项、`M8-CLOSURE.md`；回归 m4-http 205 / m5 62 / m6 50 / 单测 30 全绿
 
 **M8 实测修掉的 9 个问题**（详见 `M8-CLOSURE.md` §4）：ES 8.18 服务端与 9.4.5 客户端协议不兼容（`compatible-with=9` → 400，服务端改 9.4.5）；IK 官方已停止 GitHub 发布且插件 CLI 必须加 `-b`；原生查询时间列须用 `LocalDateTime` 而非 `Timestamp`；`status` 若落成 `text` 会让 `term` 过滤恒 0 命中；后端禁浮点红线 → 相关度改两位小数字符串；机检脚本自身 4 个 bug（变量大小写撞车 / 自动变量 `$args` / 401 探活 / 关键词不在种子数据）。
+### M13 异步索引重建（RabbitMQ）（1 天）　✅ 已完成（2026-10-14；机检 `verify-m13.ps1` 32 项，收口 `docs/03-qa-review/M13-CLOSURE.md`）
+
+> 触发：老师《作业说明》功能模块「异步索引重建：提交任务 → RabbitMQ 后台消费执行」+ 扣分表「未集成 RabbitMQ -10」。
+
+- [x] **T13.1** 原生安装 Erlang/OTP 27.3.4 + RabbitMQ 4.0.9（D 盘、`RABBITMQ_BASE` 落 D 盘、启用 management、建 `campusswap` 账号），15672 控制台可登录
+- [x] **T13.2** `spring-boot-starter-amqp` + `MqConfig`（direct 交换机 + 业务队列 + 死信交换机/队列 + Jackson 3 JSON 转换器）
+- [x] **T13.3** 生产者：`POST /api/search/rebuild` 落任务 + 发消息，**服务端 3~17ms 返回 SUBMITTED + taskId**（验收要求 20ms 内）
+- [x] **T13.4** 消费者：`@RabbitListener(ackMode = MANUAL)` + 手动 `basicAck` + 失败 `basicNack(requeue=false)` 进 DLQ + 幂等 + Redis 串行锁
+- [x] **T13.5** 任务状态查询与最近任务接口 + 前端轮询展示（已提交 → 执行中 → 已完成）
+- [x] **T13.6** 测试与文档：`SearchRebuildMqTest`（6 例）+ `SearchRebuildTaskStoreTest`（4 例）→ `mvn test` **40/40**；`verify-m13.ps1`；ARCHITECTURE §18、API_SPECIFICATION §3.13/§4.9（60 → **63** 条）、GLOSSARY v2.4（§3.9）
+
+**M13 实测证据**：拓扑自动声明；提交 3~17ms；消费者 `RUNNING → SUCCEEDED`（28 篇 / 785ms）；停 ES 造错 → 任务 FAILED + **DLQ 收到 1 条**、主队列 0 条（无死循环）；停 broker 重启应用 → **启动正常**、检索可用、提交返回 FAILED+原因。
 ## 附录 A　术语表（GLOSSARY 起始草案，P4 产出后替换）
 
 | 中文概念 | 英文标识符 | 数据库/代码命名 | 说明 |
@@ -942,6 +954,7 @@ grep -rn "password" backend/src/main/resources/ | grep -v '\${'   # 不应出现
 
 | 日期 | 变更 |
 |---|---|
+| 2026-10-14 | **v2.8（M13 收口）**：课件 13.1 异步索引重建落地 —— RabbitMQ **4.0.9** + Erlang/OTP **27.3.4**（原生安装、D 盘、`RABBITMQ_BASE` 落 D 盘、management 控制台 15672）；`POST /api/search/rebuild` 改为**提交异步任务**（实测 3~17ms 返回 SUBMITTED + taskId），消费者手动 ack、失败进死信队列 `campusswap.search.rebuild.dlq`、任务幂等 + Redis 串行锁；任务状态存 Redis（2h TTL + 最近 20 条），新增 3 个端点（60 → **63** 条）与前端轮询展示；`mvn test` **40/40**（M13 新增 10 例）；新增 `verify-m13.ps1`（32 项）与 `M13-CLOSURE.md`；`ARCHITECTURE` 新增 §18（原 18/19 顺延为 19/20）、`GLOSSARY` 升 v2.4（§3.9 / `RebuildTaskStatus`） |
 | 2026-10-11 | **v2.7（M8 收口）**：课件 10.1 全文检索落地 —— Elasticsearch **9.4.5** + analysis-ik 9.4.5（**服务端版本必须与 Boot 4.1.1 管辖的 9.4.5 客户端同大版本**，8.x 服务端会因 `compatible-with=9` 版本头被 400 拒绝）；新增 3 个接口（57 → **60** 条）：范围检索 + 引擎状态 + 全量重建；**双引擎降级**（ES 优先、连不上自动回落 MySQL，接口结构与高亮不变）；索引实体/仓储 JSON DSL（`ik_max_word` 入库 + `ik_smart` 查询，`title^3/summary^2/content`）；增量镜像挂在 `writeVersion` 统一咽喉 + 删除两处钩子（事务提交后、失败不影响业务）；高亮统一在 Java 侧转义后插 `<mark>`；新增 `verify-m8.ps1`（38 项全绿）、`ES-SEARCH-DESIGN.md`、`M8-CLOSURE.md`；`GLOSSARY` 升 v2.3（§3.8 检索字段字典 + §4.2 `SearchScope`） |
 | 2026-09-20 | v1.0 初版：汇总三份课件（需求工程 SOP / JPA 实体规约 / 老师 AGENTS.md）与碎片要求 |
 | 2026-09-21 | **v2.0 冻结版**：业务定为文档管理平台；前端自研；权限 3 层；Redis 用本机；交付三文件夹 + GitHub（含忽略清单）；评分只看源码；删除全部"待确认"表述，新增 M0~M7 可勾选任务看板与 7 组 Prompt |

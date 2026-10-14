@@ -356,6 +356,25 @@
 | `elapsedMs` | number | `SearchRebuildVo` | 重建耗时（毫秒） |
 | `message` | string | `SearchRebuildVo` | 中文结果说明（成功条数或失败原因） |
 
+### 3.9 异步重建任务字段字典（M13，2026-10-14 增补；`/api/search/rebuild*` 出参）
+
+> 登记口径：本表是 `frontend/src/types/search.ts` 中 `SearchRebuildTask` 的字段真源（机检 `verify-m5.ps1` D13 逐字段核对）。
+
+| 字段 | 类型 | 含义 |
+|---|---|---|
+| `taskId` | string | 全局唯一任务 ID（提交接口返回，轮询时回传） |
+| `status` | `RebuildTaskStatus` | `SUBMITTED` / `RUNNING` / `SUCCEEDED` / `FAILED` |
+| `statusLabel` | string | 状态中文名（已提交 / 执行中 / 已完成 / 失败），后端回显 |
+| `operatorId` | string | 触发人 ID（按铁律序列化为字符串） |
+| `submittedAt` / `startedAt` / `finishedAt` | string | 提交 / 开始 / 结束时间（`yyyy-MM-dd HH:mm:ss`） |
+| `indexed` | number | 本次同步进索引的文档数 |
+| `indexCount` | number | 重建后索引内文档总数 |
+| `elapsedMs` | number | 消费者侧重建耗时（毫秒） |
+| `message` | string | 中文说明或失败原因 |
+| `attempts` | number | 投递尝试次数（排查重复投递） |
+| `submitCostMs` | number | 提交接口耗时（毫秒）——课件验收要求 20ms 内返回 |
+
+**`RebuildTaskStatus`（M13 新增枚举）**：`SUBMITTED`（已提交）/ `RUNNING`（执行中）/ `SUCCEEDED`（已完成）/ `FAILED`（失败）。
 ## 4. 核心领域枚举（Enum）
 
 ### 4.1 `DocumentStatus` 文档生命周期
@@ -513,8 +532,9 @@ export interface PageVo<T> {
 | 禁用别名明确列出（M5 代码走查检查表） | ✅ | §6 |
 | TS 类型与后端 VO 字段逐字对齐 | ✅ | §7 |
 | v2.3（2026-10-11，M8 全文检索）新增字段全部登记 | ✅ | §3.8（检索出参 24 字段）、§4.2（`SearchScope`） |
+| v2.4（2026-10-14，M13 异步重建）新增字段全部登记 | ✅ | §3.9（任务 11 字段）、§4.2（`RebuildTaskStatus`） |
 | v2.2 三项接口变更的新字段/新类型全部登记 | ✅ | §3.6（`keyword` 全文口径、`relevance`）、§3.7（`highlight` / `matchedIn` / `DocumentManageDtoReq` / `PasswordChangeDtoReq`）、§7（`MatchedIn`） |
 
 ---
 
-**冻结签署**：本文件 v2.1 自 2026-09-21 起冻结；**v2.2（2026-09-23）为 M5 前置的登记性增补，v2.1 的命名口径未变**；**v2.3（2026-10-11）为 M8 全文检索的登记性增补（§3.8 / §4.2 `SearchScope`），命名口径同样未变**。任何新字段必须先在此登记，再写代码。
+**冻结签署**：本文件 v2.1 自 2026-09-21 起冻结；**v2.2（2026-09-23）为 M5 前置的登记性增补，v2.1 的命名口径未变**；**v2.3（2026-10-11）为 M8 全文检索的登记性增补（§3.8 / §4.2 `SearchScope`）**；**v2.4（2026-10-14）为 M13 异步索引重建的登记性增补（§3.9 / §4.2 `RebuildTaskStatus`）**，命名口径均未变。任何新字段必须先在此登记，再写代码。

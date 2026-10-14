@@ -707,7 +707,38 @@ graph LR
 
 ---
 
-## 18. 关键风险与对策
+## 18. 异步任务与消息队列（M13，2026-10-14）
+
+> 课件 13.1：把耗时任务从请求链路里摘出去。落地细节与实测见 `docs/03-qa-review/M13-CLOSURE.md`。
+
+### 18.1 拓扑
+
+```
+POST /api/search/rebuild            （生产者：落任务 + 发消息，实测 3~17ms 返回）
+        │  campusswap.search.exchange (direct)   routingKey = search.rebuild
+        ▼
+campusswap.search.rebuild           （消费者：@RabbitListener + 手动 ack）
+        │  成功 → basicAck
+        │  失败 → basicNack(requeue=false)
+        ▼
+campusswap.search.dlx → campusswap.search.rebuild.dlq   （死信队列，保留现场待人工排查）
+```
+
+### 18.2 可靠性四道防线
+
+| 防线 | 做法 |
+|---|---|
+| 生产不丢 | 持久化交换机/队列 + 消息 JSON 序列化（管理台可读）+ 提交即落任务状态 |
+| 消费不丢 | **手动 ack**：业务真正成功才确认，中途宕机消息会重新投递 |
+| 失败不堵 | 失败 `requeue=false` → 死信队列；**绝不原地重投**（那是队列堵塞与日志刷屏的根源） |
+| 重复不乱 | 消费端**幂等**（任务已成功直接 ack 跳过）+ Redis 串行锁（同一时刻只允许一个重建真正执行） |
+
+### 18.3 与检索链路的关系
+
+- 任务状态存 **Redis**（JSON + 2h TTL + 最近 20 条），不新增库表；接口 `GET /api/search/rebuild/{taskId}` 供前端轮询；
+- 重建本身仍是 `DocumentSearchService#rebuildAll()`（清索引 → 游标分页读主库 → 批量写 → 显式 refresh），只是**调用者从 HTTP 线程换成了 MQ 消费者**；
+- RabbitMQ 没启动时：应用照常启动（`missing-queues-fatal: false`），检索照常可用，只有"提交重建任务"返回 `FAILED` + 中文原因——与 ES 的降级策略一致（教程环境友好）。
+## 19. 关键风险与对策
 
 | 风险 | 影响 | 对策 |
 |---|---|---|
@@ -720,7 +751,7 @@ graph LR
 
 ---
 
-## 19. 冻结自检
+## 20. 冻结自检
 
 | 自查项 | 结论 | 证据 |
 |---|---|---|

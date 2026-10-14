@@ -247,7 +247,7 @@ $uncovered = @()
 foreach ($p in $bePaths) {
     if ($fePaths -notcontains $p) { $uncovered += $p }
 }
-Check 'D9a 60 backend endpoints inventoried (method+path)' ($beOps.Count -eq 60) ('count=' + $beOps.Count)
+Check 'D9a 62 backend endpoints inventoried (method+path)' ($beOps.Count -eq 62) ('count=' + $beOps.Count)
 Check 'D9b every backend endpoint path is called from src/api' ($uncovered.Count -eq 0) ('uncovered=' + ($uncovered -join ','))
 
 # --- D10: generated styles stay generated ----------------------------------
