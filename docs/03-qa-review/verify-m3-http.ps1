@@ -138,7 +138,9 @@ $login = Api -Method POST -Path '/api/auth/login' -Body @{ username = $AdminUser
 Check 'login.http' $login.Status 200
 Check 'login.code' $login.Data.code 200
 $adminToken = $login.Data.data.token
-Check-True 'login.token.32chars' ($adminToken.Length -eq 32) ('len=' + $adminToken.Length)
+# 2026-10-14 M15: token changed from a 32-char random string to an HS256 JWT
+        $tokenParts = @($adminToken -split '\.')
+        Check-True 'login.token.jwt' (($tokenParts.Count -eq 3) -and $adminToken.StartsWith('eyJ')) ('parts=' + $tokenParts.Count)
 Check 'login.userInfo.id' $login.Data.data.userInfo.id '1'
 Check 'login.roles[0]' $login.Data.data.userInfo.roles[0] 'SYS_ADMIN'
 Check 'login.permission.count' ($login.Data.data.permissions.Count) 39
@@ -445,7 +447,7 @@ Write-Host '[8b] Self-service password change (API_SPECIFICATION 9.1)'
 # affected by an interrupted run.
 $pwdT1 = (Api -Method POST -Path '/api/auth/login' -Body @{ username = $StaffUser; password = $StaffPass }).Data.data.token
 $pwdT2 = (Api -Method POST -Path '/api/auth/login' -Body @{ username = $StaffUser; password = $StaffPass }).Data.data.token
-Check-True 'pwd.setup.two-sessions' (($pwdT1.Length -eq 32) -and ($pwdT2.Length -eq 32)) ('len=' + $pwdT1.Length + '/' + $pwdT2.Length)
+Check-True 'pwd.setup.two-sessions' ((@($pwdT1 -split '\.').Count -eq 3) -and (@($pwdT2 -split '\.').Count -eq 3) -and ($pwdT1 -ne $pwdT2)) ('parts=3/3, distinct=' + ($pwdT1 -ne $pwdT2))
 
 Check 'pwd.no-token.http' (Api -Method PUT -Path '/api/auth/password' -Body @{ oldPassword = $StaffPass; newPassword = 'NewStaff@456' }).Status 401
 

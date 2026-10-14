@@ -1,7 +1,7 @@
 package com.campusswap.system.service;
 
 /**
- * Token 服务：随机串 + Redis（<b>不用 JWT</b>，ARCHITECTURE §5.2）。
+ * Token 服务：<b>HS256 JWT + Redis 撤销名单</b>（老师《作业说明》"JWT 登录；登录状态保存在 Redis；退出后 Token 立即失效"，ARCHITECTURE §5.2）。
  *
  * <p>键设计（ARCHITECTURE §7）：</p>
  * <ul>

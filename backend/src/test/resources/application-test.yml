@@ -51,6 +51,16 @@ spring:
         missing-queues-fatal: false
         prefetch: 1
 
+  # 测试同样走真实 JWT 签发（不 mock 掉安全链路）
+  # JWT（老师《作业说明》"JWT 登录"）：HS256 签名，密钥至少 32 字节。
+# token 仍写入 Redis（login:token:*）以保留"退出后立即失效 / 一键踢人"能力，见 ARCHITECTURE §5.2。
+campusswap:
+  security:
+    jwt:
+      secret: ${JWT_SECRET:CampusSwap-Dev-HS256-Secret-Key-Do-Not-Use-In-Production-2026}
+      issuer: campusswap
+      ttl-minutes: 120
+
 logging:
   level:
     com.campusswap: warn

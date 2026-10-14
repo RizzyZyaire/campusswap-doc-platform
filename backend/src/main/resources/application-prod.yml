@@ -24,3 +24,10 @@ logging:
   level:
     root: info
     com.campusswap: info
+  # JWT：生产环境必须通过环境变量提供密钥（刻意不给默认值 —— 缺了就启动失败，好过用弱密钥裸奔）
+campusswap:
+  security:
+    jwt:
+      secret: ${JWT_SECRET}
+      issuer: campusswap
+      ttl-minutes: 120

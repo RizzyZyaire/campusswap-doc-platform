@@ -137,7 +137,7 @@ $adminLogin = Api -Method POST -Path '/api/auth/login' -Body @{ username = $Admi
 $admin = $adminLogin.Data.data.token
 $docAdmin = (Api -Method POST -Path '/api/auth/login' -Body @{ username = $DocAdminUser; password = $DocAdminPass }).Data.data.token
 $staff = (Api -Method POST -Path '/api/auth/login' -Body @{ username = $StaffUser; password = $StaffPass }).Data.data.token
-Check 'setup.tokens' (($admin.Length -eq 32) -and ($docAdmin.Length -eq 32) -and ($staff.Length -eq 32)) $true
+Check 'setup.tokens' ((@($admin -split '\.').Count -eq 3) -and (@($docAdmin -split '\.').Count -eq 3) -and (@($staff -split '\.').Count -eq 3)) $true
 
 $stamp = Get-Date -Format 'HHmmss'
 $titleA = 'M4-A-' + $stamp

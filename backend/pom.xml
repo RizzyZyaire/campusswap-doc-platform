@@ -23,6 +23,8 @@
     <description>CampusSwap 文档管理平台后端（课程大作业）</description>
 
     <properties>
+        <!-- jjwt 不在 Spring Boot 的依赖管辖范围内，必须显式指定版本 -->
+        <jjwt.version>0.12.6</jjwt.version>
         <java.version>17</java.version>
         <hutool.version>5.8.47</hutool.version>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
@@ -61,6 +63,24 @@
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-data-redis</artifactId>
+        </dependency>
+        <!-- JWT（老师《作业说明》"JWT 登录"）：HS256 签名；token 仍存 Redis 以保留"可主动作废"能力 -->
+        <dependency>
+            <groupId>io.jsonwebtoken</groupId>
+            <artifactId>jjwt-api</artifactId>
+            <version>${jjwt.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>io.jsonwebtoken</groupId>
+            <artifactId>jjwt-impl</artifactId>
+            <version>${jjwt.version}</version>
+            <scope>runtime</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.jsonwebtoken</groupId>
+            <artifactId>jjwt-jackson</artifactId>
+            <version>${jjwt.version}</version>
+            <scope>runtime</scope>
         </dependency>
         <!-- 消息队列（课件 13.1）：RabbitMQ 异步索引重建；broker 没起也不影响应用启动 -->
         <dependency>

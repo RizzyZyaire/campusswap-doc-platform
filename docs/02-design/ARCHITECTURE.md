@@ -209,15 +209,21 @@ sequenceDiagram
 > 而拦截器对无效 token 一律 401，会把第二次登出挡在 Controller 之前。因此 `/api/auth/logout` 放行到 Controller，
 > 由它用 `BearerToken.parse(请求头)` 取 token → `TokenService.revoke`（DEL 一个不存在的键是安全空操作）；**请求头为空才 401**。
 
-### 5.2 Token 方案：随机串 + Redis（**不用 JWT**）
+### 5.2 Token 方案：HS256 JWT + Redis 撤销名单（2026-10-14 M15 改造）
 
-| 维度 | 本方案 | 为什么不是 JWT |
+> **口径变更说明**：M1 冻结时本节的结论是"随机串 + Redis，不用 JWT"，理由是"JWT 签发后无法主动作废"。
+> 老师《作业说明》明确要求"**JWT 登录**；登录状态保存在 Redis；退出后 Token 立即失效"三项同时成立 ——
+> 这三条并不互斥：**用 JWT 自证身份，用 Redis 负责撤销**即可全部满足。故本节按新口径重写（旧口径与理由保留在本段）。
+
+| 维度 | 现方案（M15） | 说明 |
 |---|---|---|
-| 形态 | `UUID` 去横线（32 位）随机串，Redis `login:token:{token} → userId` | JWT 自包含，签发后无法主动作废 |
-| 有效期 | 2 小时（`BR-19`），每次请求不自动续期（简单可预期） | 续期逻辑容易写错 |
-| 主动失效 | 登出、停用用户、重置密码 → 直接 `DEL` token | JWT 需额外维护黑名单，等于又用回 Redis |
-| 取权限 | 再从 `perm:user:{userId}` 读权限集合 | JWT 塞权限会导致改权限后 token 内的权限过期不一致 |
-
+| 形态 | **HS256 JWT**（`header.payload.signature`，实测 205 字符） | claims：`iss=campusswap`、`sub=用户ID`、`jti`=一次性随机 ID、`iat`、`exp`（2 小时，`BR-19`） |
+| 密钥 | `campusswap.security.jwt.secret`（≥32 字节，HS256 硬要求） | dev/demo/test 走 yml 默认值；**prod 只读环境变量 `JWT_SECRET` 且不给默认值**（缺了就启动失败，好过弱密钥裸奔） |
+| 登录状态 | **Redis `login:token:{jwt 原文} → userId`**（TTL 与 JWT 有效期一致） | 老师要求的"登录状态保存在 Redis"字面可见：`redis-cli keys "login:token:*"` 能数出在线会话 |
+| 校验顺序 | ① 本地**验签 + 过期**（伪造/篡改/过期在这一步就拒，不查 Redis）→ ② Redis 存在性检查（撤销判定） | 绝大多数无效请求挡在本地计算里，不给 Redis 添无谓压力（实测：篡改 payload → 401） |
+| 主动失效 | 登出、停用用户、重置密码 → `DEL` 对应 Redis 键 | **签名依然有效的 JWT 也会立即失效**（实测：登出后同一 token → 401）——纯 JWT 做不到 |
+| 一键踢人 | `user:tokens:{userId}` 集合记录该用户全部 token | 停用/改密时整集合清理 |
+| 取权限 | 仍从 `perm:user:{userId}` 读权限集合（权限**不塞进 JWT**） | 塞进去会导致"改权限后 token 内权限过期不一致"；权限缓存 30 分钟 + 事务提交后失效 |
 ### 5.3 代码骨架（M3 直接照抄）
 
 ```java
@@ -696,7 +702,7 @@ graph LR
 | ADR-01 | 主键策略 | 雪花 ID / DB 自增 | **自增**：与老师 MySQL 示例一致；单机无分布式需求；`AUTO_INCREMENT` 让 `schema.sql` 可读性更好。前端仍统一字符串（预留切换空间） |
 | ADR-02 | 审计列命名 | 旧前缀方案 / 统一 `created_*` `updated_*` | **`created_at/created_by/updated_at/updated_by/deleted`**：逐字对齐老师示例 |
 | ADR-03 | 逻辑删除实现 | 手写 `WHERE deleted = 0` / `@SQLRestriction` | **注解**：一处声明全局生效，业务代码零负担（课件《2.1》明确收益） |
-| ADR-04 | 认证方案 | JWT / 随机 token + Redis | **随机 token**：可主动失效（登出、停用、改密），实现更短更可控 |
+| ADR-04 | 认证方案 | 纯 JWT / 纯随机 token / **JWT + Redis 撤销名单** | **JWT + Redis**（2026-10-14 M15 修订）：JWT 自证身份（验签 + 过期本地判定），Redis 负责可撤销（登出/停用/改密后立即失效、一键踢人）。老师《作业说明》三项要求全部满足；纯 JWT 不可撤销，纯随机串不满足"JWT 登录"字面要求 |
 | ADR-05 | 权限模型 | 仅角色 / 角色 + 部门 + 直授 | **三者合并**：覆盖"岗位继承"与"个别补权"两个真实场景，且课件表清单含 `sys_user_permission` |
 | ADR-06 | 中间表形态 | 各带自增 `id` / 复合主键 | **复合主键**：天然去重，少一列少一个索引，与课件示例一致 |
 | ADR-07 | 并发控制 | ① JPA `@Version` 乐观锁 ② **应用层版本比对（现）** ③ 状态机 + 后写覆盖（原决策） | **2026-09-23 变更为 ②**（原为 ③"不做乐观锁、后写覆盖"）：`PUT /api/documents/{id}` **必填** `versionNum`，与库中当前 `version_num` 不一致即 **409**「该文档已被他人修改（当前版本 v3），请刷新后重试」。<br>**为什么不选 ①**：`version_num` 本身就是业务版本号（每次正文写入或状态流转 +1，BR-06），复用它就能拿到课件《4.1》"陈旧表单校验 + 409 结构化 JSON"的全部语义；而新增 `lock_version` 列 + `@Version` 会让"状态流转"与"并发冲突检测"两套语义互相污染（提交/审核/归档/回收都 +1，挂上 `@Version` 后这些正常操作会在并发下开始抛冲突），还要给 14 条保存路径逐一评估重试语义 —— 收益只是"能在日志里看到一条 `WHERE id=? AND version=?`"。<br>**触发**：老师课件《4.1 高并发与一致性进阶：乐观锁与 SQL 原子操作》把"Web 全链路防覆盖"列为 DoD。<br>**回退**：若日后确实需要数据库级兜底，再加独立列 `lock_version` 即可，`versionNum` 这一层契约不受影响。<br>**记录**：`docs/03-qa-review/COURSEWARE-CLOSURE.md` §2、`API_SPECIFICATION §9.5` |

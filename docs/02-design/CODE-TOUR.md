@@ -60,9 +60,9 @@
 
 ### M1 设计定稿 —— `747e47a` + `104999e`
 - **做了什么**：`ARCHITECTURE`（33.7 KB）、`API_SPECIFICATION`（≈120 KB）、`UI_UX_SPECIFICATION`（98 KB）。
-- **关键决策（两次）**：① 冻结架构口径：分层、事务边界、缓存策略、**登录方案（§5.2：拦截器 + Redis 不透明 token，明确否决 JWT）**；② 你拍板"全面对齐老师课件"后的一次**冻结决策变更**：主键 `BIGINT AUTO_INCREMENT`、审计列 `created_at/created_by/updated_at/updated_by/deleted`、中间表复合主键无 `id`、库名 `docs_db → campusswap_db`、包结构"按模块分包 + entity 顶层"、端口 10087 / Vite 5173。③ 课件 3.1 落地：JPA 口径"**写 ID、读关联**"。
+- **关键决策（两次）**：① 冻结架构口径：分层、事务边界、缓存策略、**登录方案（§5.2：拦截器 + JWT + Redis 撤销名单；M1 冻结时曾否决 JWT，M15 按老师《作业说明》改为 JWT + Redis 并存）**；② 你拍板"全面对齐老师课件"后的一次**冻结决策变更**：主键 `BIGINT AUTO_INCREMENT`、审计列 `created_at/created_by/updated_at/updated_by/deleted`、中间表复合主键无 `id`、库名 `docs_db → campusswap_db`、包结构"按模块分包 + entity 顶层"、端口 10087 / Vite 5173。③ 课件 3.1 落地：JPA 口径"**写 ID、读关联**"。
 - **证据**：`verify-m1.ps1` 15/15 + `verify-api-spec.ps1` 24/24。
-- **你要能讲**：登录方案为什么这么定——依据老师的需求工程 SOP + "防 IDOR"红线 + Redis 会话口径，加上 JWT 不可撤销（要撤销就得在 Redis 存版本号比对，等于没省 Redis）。**这就是老师问"为什么不用我那套"的完整答案。**
+- **你要能讲**：登录方案为什么这么定——依据老师的需求工程 SOP + "防 IDOR"红线 + Redis 会话口径，加上纯 JWT 不可撤销（M15 起改为"JWT 验签 + Redis 撤销名单"并存：老师的"JWT 登录 / Redis 存登录状态 / 退出立即失效"三条同时满足）。**这就是老师问"为什么不用我那套"的完整答案。**
 
 ### M2 数据库落地 —— `6397964`
 - **做了什么**：`backend/sql/{schema.sql,data.sql,perf-fixture.sql}`；15 张表 + 23 索引 + 种子数据（39 权限点三层树 / 3 角色 / 3 部门 / 4 分类 / 20 标签 / 45 篇覆盖四种状态的文档 / 99 条版本留痕 / 3 条收藏）。
@@ -184,13 +184,13 @@
 | `SecurityFilterChain` | `WebMvcConfig.addInterceptors` | `config/WebMvcConfig.java` |
 | `WHITE_LIST` + `requestMatchers().permitAll()` | `excludePathPatterns("/api/auth/login","/api/auth/logout")` | 同上（我们只放行 2 条，更保守） |
 | `anyRequest().authenticated()` | `addPathPatterns("/api/**")` 全拦 | 同上 |
-| `JwtFilter` | `LoginInterceptor`（每请求查一次 Redis） | `common/security/LoginInterceptor.java`（104 行） |
+| `JwtFilter` | `LoginInterceptor` + `JwtService`（先本地验签，再查一次 Redis 判撤销） | `common/security/{LoginInterceptor,JwtService}.java` |
 | `SecurityContextHolder` | `SecurityContext`（ThreadLocal） | 同目录 |
 | `UserDetailsService` + `authorities` | 登录查用户 + **登录后按需加载 39 个权限点** | `PermissionAspect` + 权限仓储 |
 | `@PreAuthorize("hasAuthority('x')")` | `@RequiresPermission("x")`（53 处 / 11 个文件） | 各 Controller |
 | `AuthenticationEntryPoint` / `AccessDeniedHandler` | `GlobalExceptionHandler` → `ErrorCode.UNAUTHORIZED(401)` / `NO_PERMISSION(403)` | `common/api/ErrorCode.java` |
 | `ProviderManager`（Dao / Sms / WeChat） | 目前只有密码登录一个入口 —— **这是我们唯一真的少的能力**（短信/微信没做） |
-| JWT 不可撤销 → Redis 比对 `token_version` | 直接删 Redis 键即失效（少一层签名与版本比对） | `common/security/RedisKeys.java` |
+| JWT 不可撤销 → Redis 比对 `token_version` | 直接删 Redis 键即失效（且保留 JWT 验签，省掉版本号字段） | `common/security/{RedisKeys,JwtService}.java` |
 
 一句话版本：**认证层我们用的是拦截器 + 一条 Redis 查询，老师用的是过滤器链 + Provider；授权层我们比他的示例更细（他示例的 `authorities` 是空集，我们有 39 个权限点、角色/部门继承、30 分钟缓存、改完即时生效）。原理一致，规范性上 Spring Security 是行业标准件。**
 
@@ -198,7 +198,7 @@
 
 | # | 问题 | 一句话答案 | 看哪里 | 怎么自己验 |
 |---|---|---|---|---|
-| 1 | 为什么不用 JWT？ | 不可撤销；要撤销就得 Redis 存版本号比对，等于没省 Redis | `ARCHITECTURE §5.2` | 读该节 + `DIFF-VS-TEACHER.md §7` |
+| 1 | 为什么是"JWT + Redis"而不是纯 JWT 或纯随机串？ | 老师要求三条同时成立：JWT 登录 + 登录状态存 Redis + 退出立即失效。纯 JWT 不可撤销，纯随机串不满足"JWT 登录"；两者并用各司其职 | `ARCHITECTURE §5.2` | 读该节 + `DIFF-VS-TEACHER.md §7` |
 | 2 | 服务端怎么认人？ | Redis `login:token:{token}` → userId，TTL 2h | `LoginInterceptor` + `RedisKeys` | 登录后 `redis-cli KEYS login:*` |
 | 3 | 权限怎么算出来？ | 直授权 ∪ 角色权限 ∪ 部门继承角色，1 条 UNION SQL，缓存 30 分钟 | `PermissionAspect` + 权限仓储 | 开 SQL 日志数条数 |
 | 4 | 改权限为什么立刻生效？ | 授权接口写入后在事务提交后删缓存 | `TxUtil.afterCommit` | 收回权限后用旧 token 请求 → 立刻 403 |

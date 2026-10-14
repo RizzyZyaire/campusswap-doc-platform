@@ -906,6 +906,19 @@ grep -rn "password" backend/src/main/resources/ | grep -v '\${'   # 不应出现
 - [x] **T14.6** 测试与文档：`Ac09OperationLogTest`（5 例）→ `mvn test` **45/45**；`verify-m14.ps1`；ARCHITECTURE §19（原 19/20 → 20/21）、API_SPECIFICATION §3.14/§4.10（62 → **64** 条）、GLOSSARY v2.5（§3.10 + 15 张表）、PRD §9、CODE-TOUR、data.sql 注释、机检基线（m0/m2 表数、m2 自增与审计列、m5 端点数、db-deep 逻辑外键 15 组）
 
 **M14 实测证据**：新增/编辑/删除分类与标签、提交索引重建、登录都会被记录（模块·动作、方法、URI、目标 ID、耗时、IP）；失败操作记下原因（重复标签 → 409 → 日志"标签已存在，请直接选择"）；登录日志账号 `admin` 且密码打码 `***`；staff 访问 `/api/logs` → **403**；顺带修掉"方法不支持返回 500"→ 现在 **405** + 中文提示。
+### M15 登录改造：HS256 JWT + Redis 撤销名单（0.5 天）　✅ 已完成（2026-10-14；机检 `verify-m15.ps1` 20 项，收口 `docs/03-qa-review/M15-CLOSURE.md`）
+
+> 触发：老师《作业说明》「登录认证：密码加密存储；**JWT 登录**；登录状态保存在 **Redis**；退出后 Token **立即失效**」。
+> M1 冻结时本项目**明确否决过 JWT**（`ARCHITECTURE §5.2` 旧版 / `ADR-04`），本次按老师口径改造：**JWT 自证身份 + Redis 负责撤销**并存。
+
+- [x] **T15.1** `JwtService`：HS256 签发/校验（claims `iss/sub/jti/iat/exp`），密钥 <32 字节直接拒绝构造
+- [x] **T15.2** `TokenServiceImpl`：签发 JWT 的同时写 Redis（`login:token:{jwt} → userId` + `user:tokens:{userId}`），校验顺序 = **先验签、再查 Redis**
+- [x] **T15.3** 依赖 `io.jsonwebtoken:jjwt-{api,impl,jackson}:0.12.6`（Boot 4.1.1 BOM 不管辖，显式版本）
+- [x] **T15.4** 配置 `campusswap.security.jwt.{secret,issuer,ttl-minutes}`：dev/demo/test 带默认值，**prod 只读 `JWT_SECRET` 且不给默认值**
+- [x] **T15.5** 测试 `Ac10JwtTokenTest`（9 例：签发验签 / 篡改 / 换密钥 / 签发者不符 / 弱密钥 / 过期 / **登出立即失效** / 一键下线 / Redis 无记录）→ `mvn test` **54/54**
+- [x] **T15.6** 文档：`ARCHITECTURE §5.2` 重写（含旧口径变更说明）+ `ADR-04` 修订、`CODE-TOUR` 对应物与"你要能讲"同步、机检 `verify-m3-http.ps1` 的 token 形状断言改为 JWT
+
+**M15 实测证据**：token 205 字符 / 3 段 / `{"alg":"HS256"}`，payload 含 `iss=campusswap, sub=1, jti, iat, exp`（`exp-iat=7200s`）；正常鉴权 200；**篡改 payload → 401**（验签拦下）；乱造 token → 401；Redis 中 `login:token:*` 41 个键（值=userId、TTL≈2h）、`user:tokens:*` 3 个集合；**登出后该键立即消失且同一 JWT 再访问 401**。
 ## 附录 A　术语表（GLOSSARY 起始草案，P4 产出后替换）
 
 | 中文概念 | 英文标识符 | 数据库/代码命名 | 说明 |
@@ -966,6 +979,7 @@ grep -rn "password" backend/src/main/resources/ | grep -v '\${'   # 不应出现
 
 | 日期 | 变更 |
 |---|---|
+| 2026-10-14 | **v3.0（M15 收口）**：登录 token 由"32 位随机串"改造为 **HS256 JWT + Redis 撤销名单** —— 老师《作业说明》要求的三条同时成立（JWT 登录 / 登录状态存 Redis / 退出立即失效）。新增 `JwtService`（HS256、claims `iss/sub/jti/iat/exp`、弱密钥拒绝）、`jjwt 0.12.6`（Boot BOM 不管辖需显式版本）、`campusswap.security.jwt.*` 配置（**prod 无默认值，缺 `JWT_SECRET` 即启动失败**）；`TokenServiceImpl` 校验顺序改为**先验签再查 Redis**；`Ac10JwtTokenTest` **9 例** → `mvn test` **54/54**；新增 `verify-m15.ps1`（20 项）与 `M15-CLOSURE.md`；`ARCHITECTURE §5.2` 重写 + `ADR-04` 修订（旧口径"不用 JWT"的结论与理由保留在变更说明中）、`CODE-TOUR` 同步；实测篡改 payload → **401**、登出后同一 JWT → **401**、Redis 中 41 个 `login:token:*` 键（值=userId、TTL≈2h） |
 | 2026-10-14 | **v2.9（M14 收口）**：补上老师《作业说明》的另一项硬要求 —— **操作日志**。新增第 **15** 张表 `sys_operation_log`（19 列 + 3 索引 + 列注释）；AOP 切面覆盖**全部写接口**（控制器包切点 + 只记 POST/PUT/DELETE，模块/动作按路径与 `@OperationLog` 推断，入参脱敏 `***` 并截断 1000 字符，失败留痕中文原因）；异步落库（独立 Bean + 有界队列 1000 + CallerRunsPolicy）；新增 2 个端点（62 → **64** 条）`GET /api/logs`、`GET /api/logs/filters`，权限沿用 `sys:center`（**不新增权限点**，39 个口径不变）；前端新增「系统运维 → 操作日志」页；`mvn test` **45/45**（M14 新增 5 例）；新增 `verify-m14.ps1`（31 项）与 `M14-CLOSURE.md`；`ARCHITECTURE` 新增 §19、`GLOSSARY` 升 v2.5（§3.10 / 15 张表）、`PRD §9`、`CODE-TOUR`、机检基线（m0/m2 表数 15、m2 自增 9 与审计列 9、m5 端点 64、db-deep 逻辑外键 15 组）；顺带把"HTTP 方法不支持"从 500 修成 **405 + 中文提示** |
 | 2026-10-14 | **v2.8（M13 收口）**：课件 13.1 异步索引重建落地 —— RabbitMQ **4.0.9** + Erlang/OTP **27.3.4**（原生安装、D 盘、`RABBITMQ_BASE` 落 D 盘、management 控制台 15672）；`POST /api/search/rebuild` 改为**提交异步任务**（实测 3~17ms 返回 SUBMITTED + taskId），消费者手动 ack、失败进死信队列 `campusswap.search.rebuild.dlq`、任务幂等 + Redis 串行锁；任务状态存 Redis（2h TTL + 最近 20 条），新增 3 个端点（60 → **63** 条）与前端轮询展示；`mvn test` **40/40**（M13 新增 10 例）；新增 `verify-m13.ps1`（32 项）与 `M13-CLOSURE.md`；`ARCHITECTURE` 新增 §18（原 18/19 顺延为 19/20）、`GLOSSARY` 升 v2.4（§3.9 / `RebuildTaskStatus`） |
 | 2026-10-11 | **v2.7（M8 收口）**：课件 10.1 全文检索落地 —— Elasticsearch **9.4.5** + analysis-ik 9.4.5（**服务端版本必须与 Boot 4.1.1 管辖的 9.4.5 客户端同大版本**，8.x 服务端会因 `compatible-with=9` 版本头被 400 拒绝）；新增 3 个接口（57 → **60** 条）：范围检索 + 引擎状态 + 全量重建；**双引擎降级**（ES 优先、连不上自动回落 MySQL，接口结构与高亮不变）；索引实体/仓储 JSON DSL（`ik_max_word` 入库 + `ik_smart` 查询，`title^3/summary^2/content`）；增量镜像挂在 `writeVersion` 统一咽喉 + 删除两处钩子（事务提交后、失败不影响业务）；高亮统一在 Java 侧转义后插 `<mark>`；新增 `verify-m8.ps1`（38 项全绿）、`ES-SEARCH-DESIGN.md`、`M8-CLOSURE.md`；`GLOSSARY` 升 v2.3（§3.8 检索字段字典 + §4.2 `SearchScope`） |
