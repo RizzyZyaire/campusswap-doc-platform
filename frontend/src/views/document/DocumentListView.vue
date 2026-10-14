@@ -433,7 +433,12 @@ onMounted(async () => {
                 <span v-if="d.snippetHtml" class="hl" v-html="d.snippetHtml"></span>
                 <span v-if="d.matched.length" class="hit-note">
                   命中位置：{{ d.matched.map((m) => MATCHED_TEXT[m] ?? m).join('、') }}
-                  <template v-if="d.score !== null"> · 相关度 {{ d.score }}</template>
+                  <!-- 相关度只在"按相关度排序"且分数确实有效时才显示：
+                       ES 在按字段排序时不计算 _score，后端会把它序列化成字符串 "NaN"，
+                       原先只判 null 会把这串字样直接印到界面上（2026-10-14 修复）。 -->
+                  <template v-if="sort === 'relevance' && d.score && d.score !== 'NaN'">
+                    · 相关度 {{ d.score }}
+                  </template>
                 </span>
               </td>
               <td class="sm t2">{{ d.categoryName ?? '未分类' }}</td>
