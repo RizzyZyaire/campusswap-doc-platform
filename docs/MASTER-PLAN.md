@@ -145,7 +145,7 @@ campusswap/                        ← 交付根目录（只有三个文件夹�
 
 ---
 
-## 4. 数据模型（14 张表 · 权威字段表）
+## 4. 数据模型（15 张表 · 权威字段表）
 
 ### 4.1 公共字段（所有业务表都有）
 
@@ -202,7 +202,42 @@ campusswap/                        ← 交付根目录（只有三个文件夹�
 | `doc_version` | `document_id`、`version_num` INT、`title` VARCHAR(128)、`content_md` MEDIUMTEXT、`change_type` VARCHAR(32)、`change_remark` VARCHAR(255)、`created_by`（= 操作人） | `uk_doc_version(document_id, version_num)` |
 | `doc_favorite` | `user_id`、`document_id`（**复合主键**） | `idx_fav_doc(document_id)` |
 
-### 4.4 权限合并算法（Service 层实现，结果缓存进 Redis）
+### 4.4 运维域（1 张表）
+
+| 表名 | 关键列（除公共字段外） | 索引 |
+|---|---|---|
+| `sys_operation_log` | `user_id` BIGINT NULL、`username` VARCHAR(64) NULL、`module` VARCHAR(32) NOT NULL、`action` VARCHAR(32) NOT NULL、`method` VARCHAR(8) NULL、`uri` VARCHAR(255) NULL、`target_id` VARCHAR(32) NULL、`summary` VARCHAR(255) NULL、`params` VARCHAR(1000) NULL、`ip` VARCHAR(45) NULL、`success` TINYINT(1) NOT NULL DEFAULT 1、`error_msg` VARCHAR(500) NULL、`cost_ms` INT NULL（**13 列**） | `idx_oplog_created(created_at)`、`idx_oplog_user_created(user_id, created_at)`、`idx_oplog_module_created(module, created_at)` |
+
+> M14（2026-10-14）新增的第 **15** 张表，对应老师《作业说明》的"操作日志"功能模块；由 `OperationLogAspect` AOP 切面自动记录全部写操作（POST/PUT/DELETE），经独立 Bean + 有界队列异步落库。
+
+**`sys_operation_log` 逐列清单（19 列，与 `backend/sql/schema.sql:327-351` 的 DDL 逐列对齐）**
+
+| # | 列名 | 类型 | 约束 | 注释 |
+|---|---|---|---|---|
+| 1 | `id` | `BIGINT` | `NOT NULL AUTO_INCREMENT`，`PRIMARY KEY` | 主键 |
+| 2 | `user_id` | `BIGINT` | `NULL` | 操作人ID（关联 `sys_user.id`；系统任务为空） |
+| 3 | `username` | `VARCHAR(64)` | `NULL` | 操作人账号（冗余：用户改名后日志仍可读） |
+| 4 | `module` | `VARCHAR(32)` | `NOT NULL` | 模块（文档/分类/标签/用户/角色/机构/检索…） |
+| 5 | `action` | `VARCHAR(32)` | `NOT NULL` | 动作（新增/修改/删除/发布/审核/重建索引…） |
+| 6 | `method` | `VARCHAR(8)` | `NULL` | HTTP 方法（POST/PUT/DELETE） |
+| 7 | `uri` | `VARCHAR(255)` | `NULL` | 请求路径 |
+| 8 | `target_id` | `VARCHAR(32)` | `NULL` | 目标对象ID（能从路径解析时记录） |
+| 9 | `summary` | `VARCHAR(255)` | `NULL` | 中文摘要（一句话说明做了什么） |
+| 10 | `params` | `VARCHAR(1000)` | `NULL` | 入参摘要（已脱敏、已截断） |
+| 11 | `ip` | `VARCHAR(45)` | `NULL` | 客户端IP |
+| 12 | `success` | `TINYINT(1)` | `NOT NULL DEFAULT 1` | 是否成功（0 否 1 是） |
+| 13 | `error_msg` | `VARCHAR(500)` | `NULL` | 失败原因 |
+| 14 | `cost_ms` | `INT` | `NULL` | 耗时（毫秒） |
+| 15 | `created_at` | `DATETIME` | `NOT NULL DEFAULT CURRENT_TIMESTAMP` | 记录时间 |
+| 16 | `created_by` | `BIGINT` | `NULL` | 创建人 |
+| 17 | `updated_at` | `DATETIME` | `NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP` | 更新时间 |
+| 18 | `updated_by` | `BIGINT` | `NULL` | 更新人 |
+| 19 | `deleted` | `TINYINT(1)` | `NOT NULL DEFAULT 0` | 逻辑删除（0 否 1 是） |
+
+> **与 §4.1 公共字段的差异（以 DDL 为准）**：本表的 `created_by` / `updated_by` **允许 NULL**（切面在异步线程落库，"登录"这类未登录场景没有操作人）；`created_at` / `updated_at` / `deleted` 口径与 §4.1 一致，仅 `deleted` 写作 `TINYINT(1)`。
+> **实体侧**：`SysOperationLog extends BaseEntity`（复用 §4.1 的五个审计列声明），并同样挂 `@SQLDelete` + `@SQLRestriction`；业务代码不直接写 `deleted`。字段字典（出参视角的 15 个 camelCase 字段）见 `GLOSSARY §3.10`。
+
+### 4.5 权限合并算法（Service 层实现，结果缓存进 Redis）
 
 ```text
 effectivePermissions(userId):
@@ -215,7 +250,7 @@ effectivePermissions(userId):
 - **失效时机**：给用户/角色/部门增删授权、改动角色权限、停用用户时主动 `DEL`；
 - 鉴权入口：自定义注解 `@RequiresPermission("doc:publish")` + AOP 切面校验（见 §5.5）。
 
-### 4.5 文档状态机（写进 PRD，代码里用枚举实现）
+### 4.6 文档状态机（写进 PRD，代码里用枚举实现）
 
 ```mermaid
 stateDiagram-v2
@@ -400,7 +435,7 @@ if (!doc.getCreatedBy().equals(operatorId) && !hasPerm(operatorId, "doc:manage")
 - [x] **T0.1** 创建目录 `docs/01-requirements/`
 - [x] **T0.2** 用 **P1** 生成"三角色用户旅程 + 8 个原子用户故事"，人工审校后写入 `docs/01-requirements/USER_STORIES.md`（角色固定 `STAFF/DOC_ADMIN/SYS_ADMIN`；编号固定 `US-01~US-08`）
 - [x] **T0.3** 用 **P2** 为每个故事补 **Given-When-Then** 验收标准（每故事 **1 正常流 + ≥2 异常流**），追加进同一文件
-- [x] **T0.4** 用 **P3** 生成 `docs/01-requirements/PRD.md`（必含：系统概述与 MVP 边界、RBAC 权限矩阵、Mermaid 状态机（对应本计划 §4.5）、模块详规与业务规则字典、NFR、显式非目标）
+- [x] **T0.4** 用 **P3** 生成 `docs/01-requirements/PRD.md`（必含：系统概述与 MVP 边界、RBAC 权限矩阵、Mermaid 状态机（对应本计划 §4.6）、模块详规与业务规则字典、NFR、显式非目标）
 - [x] **T0.5** 用 **P4** 生成 `docs/01-requirements/GLOSSARY.md`（实体/枚举/业务动作三类表）
 - [x] **T0.6** 冻结自检（5 条红线，全绿才进 M1）：
       - [x] INVEST 完备（无史诗级大故事，每故事 1~2 天可测完）
@@ -428,7 +463,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File docs/03-qa-review/verify-m0.
 
 **目标**：把需求翻译成架构、接口契约、UI 规范。**前置**：M0 冻结通过。
 
-- [x] **T1.1** 用 **P6-1** 生成 `docs/02-design/ARCHITECTURE.md`：分层架构图、请求流转、RBAC 权限合并算法（§4.4）、Redis 键设计与失效时机、事务边界、统一响应与全局异常、鉴权拦截链路（+ §16 功能价值说明、§17 ADR）
+- [x] **T1.1** 用 **P6-1** 生成 `docs/02-design/ARCHITECTURE.md`：分层架构图、请求流转、RBAC 权限合并算法（§4.5）、Redis 键设计与失效时机、事务边界、统一响应与全局异常、鉴权拦截链路（+ §16 功能价值说明、§17 ADR）
 - [x] **T1.2** 用 **P6-2** 生成 `docs/02-design/API_SPECIFICATION.md`：逐接口表（模块｜方法｜路径｜**用途**｜入参 DTO｜出参 VO｜权限点｜错误码｜示例 JSON），覆盖全部 8 个用户故事
 - [x] **T1.3** 用 **P6-3** 生成 `docs/02-design/UI_UX_SPECIFICATION.md`：路由表（§6.1）、每页组件树、四态设计、Tailwind 令牌、表单校验规则与中文文案
 - [x] **T1.4** 在 APIFOX 建项目并录入接口 —— **已产出 `docs/02-design/openapi-campusswap.json`（OpenAPI 3.0.3，**55 个端点 / 52 个 schema**，JSON 校验通过），Apifox 里「导入 → OpenAPI/Swagger → 选文件」即可**；M3 交付 25 条系统域、M4 追加 30 条文档域，端点清单与 `API_SPECIFICATION.md` 逐条对账 0 缺失
@@ -499,7 +534,7 @@ SELECT TABLE_NAME,COLUMN_TYPE FROM information_schema.COLUMNS
 - [x] **T3.6** `dto/` `vo/`：登录三件套 + 用户/角色/权限/部门各自的 DTO 与 VO
       （**范围澄清**：文档域 DTO/VO 随 M4 文档接口一起落地，本里程碑只做系统域）
 - [x] **T3.7** `service` + `service/impl`：`AuthService`（登录/登出/改密）、`UserService`、`RoleService`、`PermissionService`、`DeptService`；写操作加 `@Transactional`
-- [x] **T3.8** 鉴权：`@RequiresPermission` + `PermissionAspect`（§5.5）+ `PermissionCacheService`（Redis 缓存 §4.4 结果）
+- [x] **T3.8** 鉴权：`@RequiresPermission` + `PermissionAspect`（§5.5）+ `PermissionCacheService`（Redis 缓存 §4.5 结果）
 - [x] **T3.9** `controller/`：登录、用户 CRUD、角色 CRUD 与授权、权限树查询、部门树 CRUD；入参 `@Valid`、出参 VO（5 个 Controller / 25 个端点）
 - [x] **T3.10** 验证：`./mvnw clean compile` 零错误；「登录 → 查权限树 → 新增用户 → 查询用户列表 → 给用户授角色」跑通
       → 机检脚本 **`docs/03-qa-review/verify-m3-http.ps1`（122 项全绿，可重跑）**
@@ -533,7 +568,7 @@ curl -s -X POST http://localhost:10087/api/auth/login \
 - [x] **T4.5** 派生：`derived_from_id` 指向源文档、正文预填、标题「原标题（副本）」；源文档无权访问 403、回收站 409 → `US-05`
 - [x] **T4.6** 收藏 + 阅读量：`doc_favorite` 幂等增删；阅读量 `view:doc:{docId}:{userId}` SETNX 去重后 `view_count` 原子自增 → `US-05`
 - [x] **T4.7** 审核：`DOC_ADMIN` 通过（不改状态只留痕）/ 驳回（退回 `DRAFT` + `reject_reason`）→ `US-07`；归档与恢复上架同批实现（T5/T7 边）
-- [x] **T4.8** 归档 / 回收站 / 恢复（状态机 §4.5 全分支）：T2/T3/T5/T6/T7/T8/T9/T10/T11 全部有接口与实测记录
+- [x] **T4.8** 归档 / 回收站 / 恢复（状态机 §4.6 全分支）：T2/T3/T5/T6/T7/T8/T9/T10/T11 全部有接口与实测记录
 - [x] **T4.9** 图片上传：≤5MB，扩展名 + MIME 双重白名单，存 `backend/uploads/yyyy/MM/{uuid}.{ext}`，返回相对 URL；原始文件名不参与路径拼接
 - [x] **T4.10** 分类树与标签维护接口（`DOC_ADMIN`）：分类树/增删改（≤3 层、环检测、级联重写 `ancestors`）、标签分页/增删改（软删除释放唯一键）
 - [x] **T4.11** **零 N+1 验收（课件 3.1 §2）**：dev 开 `spring.jpa.show-sql` 抓日志，任一列表接口的 SQL 条数**为常数**且不随 `pageSize` 增长（实测：检索 3~5 / 我的 3 / 回收站 1 / 收藏 3 / 审核队列 3 / 分类树 1 / 标签 1 / 统计 1）；列表出参 `DocumentVo` **不含 `contentMd`**（投影 SQL 实测无该列）；结论写入 `M4-CLOSURE.md` 与 `TEST_CHECKLIST.md`
@@ -827,7 +862,7 @@ grep -rn "password" backend/src/main/resources/ | grep -v '\${'   # 不应出现
 - [x] 接口文档导出 —— 交付 `docs/02-design/openapi-campusswap.json`（OpenAPI 3.0.3，57 端点 / 52 schema，Apifox 可一键导入）；原计划的 `apifox-export/` 目录不再需要
 
 **数据库**
-- [x] `backend/sql/schema.sql` 建出 14 张表；外键数 0；`price_cents` 为 `int unsigned`；注释 0 缺失 —— `verify-m2.ps1` 18/18 + `verify-db-deep.ps1` 9/9；索引 27 个（M6 收尾按实测补 7 条排序索引）
+- [x] `backend/sql/schema.sql` 建出 **15 张表**（系统域 8 + 文档域 6 + 运维域 1）；外键数 0；`price_cents` 为 `int unsigned`；注释 0 缺失 —— `verify-m2.ps1` 18/18 + `verify-db-deep.ps1` 9/9；索引 **24 个普通索引 + 5 个唯一键 + 1 个全文索引**（另 15 个主键，库内合计 45 个索引对象；M6 收尾按实测补 7 条排序索引）
 - [x] **口径变更登记**：本清单原写"主键无自增"，M1 冻结时已按老师《1.2 示例-数据库物理建表脚本》改为 `BIGINT NOT NULL AUTO_INCREMENT`（6 张纯关联中间表仍用复合主键、无 `id` 列）
 
 **后端源码**
