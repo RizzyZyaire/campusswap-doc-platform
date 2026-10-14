@@ -202,7 +202,7 @@ INSERT INTO `doc_version` (`document_id`,`version_num`,`title`,`content_md`,`cha
 -- CampusSwap（河北师范大学校内文档平台）演示用文档种子数据 · 第二批
 -- 文件: backend/sql/data-documents.sql        字符集: utf8mb4（无 BOM）
 -- 依据: docs/01-requirements/GLOSSARY.md §3.7（字段命名唯一真源，含 §3.2/§3.3 表字段）
---       backend/sql/schema.sql（14 张表结构与约束，注意版本表名为 doc_version）
+--       backend/sql/schema.sql（15 张表结构与约束，注意版本表名为 doc_version）
 --       backend/sql/data.sql（第一批种子：3 用户 / 4 分类 / 5 标签 / 5 文档 / 9 条版本留痕）
 --
 -- ⚠️ 执行顺序（必须严格遵守，本文件只跑一次）

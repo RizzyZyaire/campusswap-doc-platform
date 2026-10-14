@@ -318,3 +318,34 @@ CREATE TABLE `doc_favorite` (
 --     SELECT * FROM sys_permission
 --      WHERE deleted = 0 AND (ancestors = '0,1' OR ancestors LIKE CONCAT('0,1', ',%'));
 -- =============================================================================
+
+-- =============================================================================
+-- 15. sys_operation_log 操作日志（M14，2026-10-14 新增）
+--     由 AOP 切面自动记录"重要写操作"（老师《作业说明》功能模块：操作日志）
+-- =============================================================================
+DROP TABLE IF EXISTS `sys_operation_log`;
+CREATE TABLE `sys_operation_log` (
+    `id`         BIGINT        NOT NULL AUTO_INCREMENT COMMENT '主键',
+    `user_id`    BIGINT        NULL     COMMENT '操作人ID（关联 sys_user.id；系统任务为空）',
+    `username`   VARCHAR(64)   NULL     COMMENT '操作人账号（冗余：用户改名后日志仍可读）',
+    `module`     VARCHAR(32)   NOT NULL COMMENT '模块（文档/分类/标签/用户/角色/机构/检索…）',
+    `action`     VARCHAR(32)   NOT NULL COMMENT '动作（新增/修改/删除/发布/审核/重建索引…）',
+    `method`     VARCHAR(8)    NULL     COMMENT 'HTTP 方法（POST/PUT/DELETE）',
+    `uri`        VARCHAR(255)  NULL     COMMENT '请求路径',
+    `target_id`  VARCHAR(32)   NULL     COMMENT '目标对象ID（能从路径解析时记录）',
+    `summary`    VARCHAR(255)  NULL     COMMENT '中文摘要（一句话说明做了什么）',
+    `params`     VARCHAR(1000) NULL     COMMENT '入参摘要（已脱敏、已截断）',
+    `ip`         VARCHAR(45)   NULL     COMMENT '客户端IP',
+    `success`    TINYINT(1)    NOT NULL DEFAULT 1 COMMENT '是否成功（0否 1是）',
+    `error_msg`  VARCHAR(500)  NULL     COMMENT '失败原因',
+    `cost_ms`    INT           NULL     COMMENT '耗时（毫秒）',
+    `created_at` DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '记录时间',
+    `created_by` BIGINT        NULL     COMMENT '创建人',
+    `updated_at` DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    `updated_by` BIGINT        NULL     COMMENT '更新人',
+    `deleted`    TINYINT(1)    NOT NULL DEFAULT 0 COMMENT '逻辑删除（0否 1是）',
+    PRIMARY KEY (`id`),
+    INDEX `idx_oplog_created` (`created_at`),
+    INDEX `idx_oplog_user_created` (`user_id`, `created_at`),
+    INDEX `idx_oplog_module_created` (`module`, `created_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='操作日志表（AOP 自动记录重要写操作）';

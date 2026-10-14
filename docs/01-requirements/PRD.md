@@ -358,11 +358,13 @@ stateDiagram-v2
 
 ---
 
-## 9. 数据实体清单（14 张表）
+## 9. 数据实体清单（15 张表）
 
 详见 `GLOSSARY.md` §2 与 M1 产出的 `backend/sql/schema.sql`。
 
 **系统域（8 张）**：`sys_user`、`sys_dept`、`sys_role`、`sys_permission`、`sys_user_role`、`sys_user_permission`、`sys_role_permission`、`sys_dept_role`
+
+**运维域（1 张，M14 新增）**：`sys_operation_log`（操作日志；由 AOP 切面写入，权限 `sys:center` 可查）
 
 **文档域（6 张）**：`doc_document`、`doc_version`、`doc_category`、`doc_tag`、`doc_document_tag_rel`、`doc_favorite`
 

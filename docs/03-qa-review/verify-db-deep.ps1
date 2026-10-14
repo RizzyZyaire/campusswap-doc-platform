@@ -81,7 +81,8 @@ $fkChecks = @(
   @{ n='doc.derived_from'; sql="SELECT COUNT(*) FROM doc_document c LEFT JOIN doc_document p ON p.id=c.derived_from_id WHERE c.derived_from_id IS NOT NULL AND p.id IS NULL" },
   @{ n='version.document'; sql="SELECT COUNT(*) FROM doc_version r LEFT JOIN doc_document d ON d.id=r.document_id WHERE d.id IS NULL" },
   @{ n='tag_rel';          sql="SELECT COUNT(*) FROM doc_document_tag_rel r LEFT JOIN doc_document d ON d.id=r.document_id LEFT JOIN doc_tag t ON t.id=r.tag_id WHERE d.id IS NULL OR t.id IS NULL" },
-  @{ n='favorite';         sql="SELECT COUNT(*) FROM doc_favorite f LEFT JOIN sys_user u ON u.id=f.user_id LEFT JOIN doc_document d ON d.id=f.document_id WHERE u.id IS NULL OR d.id IS NULL" }
+  @{ n='favorite';         sql="SELECT COUNT(*) FROM doc_favorite f LEFT JOIN sys_user u ON u.id=f.user_id LEFT JOIN doc_document d ON d.id=f.document_id WHERE u.id IS NULL OR d.id IS NULL" },
+  @{ n='oplog.user';       sql="SELECT COUNT(*) FROM sys_operation_log l LEFT JOIN sys_user u ON u.id=l.user_id WHERE l.user_id IS NOT NULL AND u.id IS NULL" }
 )
 $fkBad = @()
 foreach ($c in $fkChecks) { $v = Scalar $c.sql; if ($v -ne '0') { $fkBad += "$($c.n)=$v" } }

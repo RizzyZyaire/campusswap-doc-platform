@@ -149,11 +149,11 @@ Check 'B11.frontend-inline-style' (Count-In $FeFiles 'style="') 0
 # ---------------------------------------------------------------- C. DDL
 Write-Host ''
 Write-Host 'C. MASTER-PLAN 2.2 DDL rules re-checked in schema.sql'
-Check 'C1.create-table' (Count-In $SqlFiles 'CREATE TABLE') 14
-Check 'C2.engine-innoDB' (Count-In $SqlFiles 'ENGINE=InnoDB') 14
-Check 'C3.collate-utf8mb4' (Count-In $SqlFiles 'utf8mb4_unicode_ci') 16
+Check 'C1.create-table' (Count-In $SqlFiles 'CREATE TABLE') 15
+Check 'C2.engine-innoDB' (Count-In $SqlFiles 'ENGINE=InnoDB') 15
+Check 'C3.collate-utf8mb4' (Count-In $SqlFiles 'utf8mb4_unicode_ci') 17
 Check 'C4.no-foreign-key' (Count-In $SqlFiles 'FOREIGN KEY|REFERENCES') 0
-Check 'C5.table-comments' (Count-In $SqlFiles "COMMENT='") 14
+Check 'C5.table-comments' (Count-In $SqlFiles "COMMENT='") 15
 
 # ---------------------------------------------------------------- D. documents
 Write-Host ''

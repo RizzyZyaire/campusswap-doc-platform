@@ -104,7 +104,7 @@ foreach ($ln in ($sec3 -split "`n")) {
     }
   }
 }
-Chk 'D-master-table-57-rows' ($rows.Count -eq 57) ("parsed {0} rows from section 3" -f $rows.Count)
+Chk 'D-master-table-64-rows' ($rows.Count -eq 64) ("parsed {0} rows from section 3" -f $rows.Count)
 
 $mismatch = @()
 for ($i = 0; $i -lt [Math]::Min($rows.Count, $expRows.Count); $i++) {
@@ -129,16 +129,16 @@ Chk 'F-no-empty-cells' ($emptyCells.Count -eq 0) ("rows with empty perm/dto/vo/e
 $i5 = $t.IndexOf('## 5. ')
 $sec4 = $t.Substring($i4, $i5 - $i4)
 $heads = ([regex]::Matches($sec4, '(?m)^#### 4\.\d+\.\d+ ')).Count
-Chk 'G-detail-blocks-57' ($heads -eq 57) ("found {0} interface headings in section 4" -f $heads)
+Chk 'G-detail-blocks-59' ($heads -eq 59) ("found {0} interface headings in section 4" -f $heads)
 foreach ($kw in @('**' + 'USE', '**' + 'PERM', '**' + 'ERR')) { }
 $cntPerm = ([regex]::Matches($sec4, [regex]::Escape('**' + (-join @([char]0x6743,[char]0x9650,[char]0x70B9)) + '**' + [char]0xFF1A))).Count
 $cntIn = ([regex]::Matches($sec4, [regex]::Escape('**' + (-join @([char]0x5165,[char]0x53C2)) + '**'))).Count
 $cntOut = ([regex]::Matches($sec4, [regex]::Escape('**' + (-join @([char]0x51FA,[char]0x53C2)) + '**'))).Count
 $cntUse = ([regex]::Matches($sec4, [regex]::Escape('**' + (-join @([char]0x7528,[char]0x9014,[char]0x4E0E,[char]0x4EF7,[char]0x503C)) + '**'))).Count
 $cntErr = ([regex]::Matches($sec4, [regex]::Escape(-join @([char]0x9519,[char]0x8BEF,[char]0x7801)))).Count
-Chk 'H-perm-points-57' ($cntPerm -eq 57) ("perm-point markers: {0}" -f $cntPerm)
-Chk 'I-purpose-57' ($cntUse -eq 57) ("purpose markers: {0}" -f $cntUse)
-Chk 'J-input-output-57' (($cntIn -eq 57) -and ($cntOut -eq 57)) ("input markers: {0}, output markers: {1}" -f $cntIn, $cntOut)
+Chk 'H-perm-points-59' ($cntPerm -eq 59) ("perm-point markers: {0}" -f $cntPerm)
+Chk 'I-purpose-59' ($cntUse -eq 59) ("purpose markers: {0}" -f $cntUse)
+Chk 'J-input-output-59' (($cntIn -eq 59) -and ($cntOut -eq 59)) ("input markers: {0}, output markers: {1}" -f $cntIn, $cntOut)
 Chk 'K-errorcode-mentions' ($cntErr -ge 110) ("error-code mentions in section 4: {0} (>=110 expected: table header + rows)" -f $cntErr)
 
 # --- 6. banned aliases: body vs appendix --------------------------------------

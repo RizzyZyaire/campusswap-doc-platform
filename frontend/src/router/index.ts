@@ -28,6 +28,7 @@ const routes: RouteRecordRaw[] = [
   { path: '/taxonomy', name: 'taxonomy', component: () => import('@/views/admin/TaxonomyView.vue'), meta: { perm: PERM.docCategory, title: '分类与标签' } },
   { path: '/admin/users', name: 'admin-users', component: () => import('@/views/admin/UserAdminView.vue'), meta: { perm: PERM.sysUser, title: '用户管理' } },
   { path: '/admin/roles', name: 'admin-roles', component: () => import('@/views/admin/RoleAdminView.vue'), meta: { perm: PERM.sysRole, title: '角色与权限' } },
+  { path: '/admin/logs', name: 'admin-logs', component: () => import('@/views/admin/OperationLogView.vue'), meta: { perm: PERM.sysCenter, title: '操作日志' } },
   { path: '/admin/org', name: 'admin-org', component: () => import('@/views/admin/OrgAdminView.vue'), meta: { perm: PERM.sysDept, title: '组织机构' } },
   { path: '/me', name: 'me', component: () => import('@/views/me/ProfileView.vue'), meta: { title: '我的资料' } },
 

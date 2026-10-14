@@ -1,7 +1,7 @@
 # =============================================================================
 #  reload-db.ps1 -- CampusSwap database reload helper (M6 evidence hygiene)
 #
-#  What it does: replays backend/sql/schema.sql (14 tables, 20 indexes) and then
+#  What it does: replays backend/sql/schema.sql (15 tables, 23 indexes) and then
 #  backend/sql/data.sql (45 documents / 20 tags / 99 versions / 39 favorites).
 #  Both files are idempotent: schema.sql drops+creates every table, data.sql
 #  truncates before inserting explicit ids.

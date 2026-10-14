@@ -16,6 +16,8 @@ import org.springframework.validation.BindException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.HttpRequestMethodNotSupportedException;
+import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.HandlerMethodValidationException;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
@@ -56,7 +58,24 @@ public class GlobalExceptionHandler {
      * @param ex 参数校验异常
      * @return 400 + 中文提示
      */
-    @ExceptionHandler(MethodArgumentNotValidException.class)
+    /**
+     * HTTP 方法不支持（例如把 PUT 接口当 POST 调）。
+     *
+     * <p>2026-10-14（M14 验证时发现）：这类请求原来落到兜底分支返回 500，把"客户端用错方法"
+     * 说成"服务端崩了"，既不诚实也不利于排障。现在返回 405 + 明确提示。</p>
+     *
+     * @param ex 方法不支持异常
+     * @return 405 + 中文提示（含该接口支持的方法）
+     */
+    @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
+    public ResponseEntity<ResponseResult<Void>> handleMethodNotSupported(HttpRequestMethodNotSupportedException ex) {
+        String supported = ex.getSupportedMethods() == null ? "" : String.join("/", ex.getSupportedMethods());
+        log.warn("HTTP 方法不支持: {} {}，支持: {}", ex.getMethod(), supported);
+        return ResponseEntity.status(HttpStatus.METHOD_NOT_ALLOWED).body(ResponseResult.fail(ErrorCode.BAD_REQUEST,
+                "请求方法 " + ex.getMethod() + " 不支持该接口" + (supported.isEmpty() ? "" : "，请改用 " + supported)));
+    }
+
+@ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ResponseResult<Void>> handleMethodArgumentNotValid(MethodArgumentNotValidException ex) {
         String message = null;
         for (FieldError error : ex.getBindingResult().getFieldErrors()) {

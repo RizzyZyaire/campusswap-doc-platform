@@ -176,7 +176,7 @@ $tables = @(); foreach ($m in $tblMatch) { $tables += $m.Groups[1].Value }
 $tablesU = ($tables | Sort-Object -Unique)
 $legacyHit = @()
 foreach ($l in @('`sys_login_log`', '`doc_document_tag`')) { if ($gloBody -like "*$l*") { $legacyHit += $l } }
-Check 'C13 glossary-14-tables' (($tablesU.Count -eq 14) -and ($legacyHit.Count -eq 0)) ("unique tables=" + $tablesU.Count + " legacy-names=" + $(if ($legacyHit.Count) { $legacyHit -join ',' } else { '0' }))
+Check 'C13 glossary-15-tables' (($tablesU.Count -eq 15) -and ($legacyHit.Count -eq 0)) ("unique tables=" + $tablesU.Count + " legacy-names=" + $(if ($legacyHit.Count) { $legacyHit -join ',' } else { '0' }))
 
 # --- C14: VO/DTO dictionary registered in GLOSSARY ----------------------------
 $voNeeds = @('LoginVo', 'UserInfoVo', 'UserVo', 'UserCreateDtoReq', 'UserStatusDtoReq', 'RoleVo', 'RoleDtoReq',

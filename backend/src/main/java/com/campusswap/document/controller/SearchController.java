@@ -1,6 +1,7 @@
 package com.campusswap.document.controller;
 
 import com.campusswap.common.api.ResponseResult;
+import com.campusswap.common.log.OperationLog;
 import com.campusswap.common.security.RequiresPermission;
 import com.campusswap.common.security.SecurityContext;
 import com.campusswap.document.dto.DocumentSearchEsDtoReq;
@@ -72,6 +73,7 @@ public class SearchController {
      */
     @PostMapping("/api/search/rebuild")
     @RequiresPermission("doc:manage")
+    @OperationLog(module = "检索", action = "提交索引重建任务", params = false)
     public ResponseResult<SearchRebuildTask> submitRebuild() {
         Long operator = SecurityContext.requireUserId();
         return ResponseResult.ok(documentSearchService.submitRebuildTask(operator));

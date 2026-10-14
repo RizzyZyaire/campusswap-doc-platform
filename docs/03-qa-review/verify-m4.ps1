@@ -57,9 +57,9 @@ foreach ($f in $ctrlFiles) {
         $endpoints += ($m.Groups[1].Value.ToUpper() + ' ' + $classPath + $m.Groups[2].Value)
     }
 }
-Check 'D1a 6 document controllers' ($ctrlFiles.Count -eq 6) ('count=' + $ctrlFiles.Count)
-Check 'D1b 31 document endpoints' ($endpoints.Count -eq 31) ('count=' + $endpoints.Count)
-Check 'D1c 31 guarded endpoints (@RequiresPermission)' ($permCount -eq 31) ('count=' + $permCount)
+Check 'D1a 7 document controllers' ($ctrlFiles.Count -eq 7) ('count=' + $ctrlFiles.Count)
+Check 'D1b 36 document endpoints' ($endpoints.Count -eq 36) ('count=' + $endpoints.Count)
+Check 'D1c 36 guarded endpoints (@RequiresPermission)' ($permCount -eq 36) ('count=' + $permCount)
 
 $spec = Read-All (Join-Path $docsDir '02-design\API_SPECIFICATION.md')
 $notInSpec = @()

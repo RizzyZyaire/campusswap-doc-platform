@@ -285,7 +285,7 @@ public record ResponseResult<T>(int code, String message, T data) { }
 
 ---
 
-## 3. 接口总表（62 条）
+## 3. 接口总表（64 条）
 
 > 「用途」列说明该接口**解决什么问题、为哪个页面/故事服务**。
 
@@ -393,7 +393,7 @@ public record ResponseResult<T>(int code, String message, T data) { }
 
 | 项 | 值 |
 |---|---|
-| 接口总数 | **62**（57 + M8 全文检索 3 条 + M13 异步重建 **2** 条；另有原 60 号接口语义变更，见表 3.12 / 3.13） |
+| 接口总数 | **64**（57 + M8 全文检索 3 条 + M13 异步重建 2 条 + M14 操作日志 2 条；另有原 60 号接口语义变更，见表 3.12 / 3.13 / 3.14） |
 | 按方法 | GET **19** / POST **18** / PUT **12** / DELETE **8** |
 | 按鉴权 | 公开 **1** / 登录即可 **3** / 权限点 **53** |
 | 按模块 | 认证 4 · 用户 6 · 角色 6 · 权限 4 · 部门 6 · 文档 15 · 审核与治理 6 · 分类与标签 8 · 文件与统计 2 |
@@ -430,6 +430,15 @@ public record ResponseResult<T>(int code, String message, T data) { }
 | 60（语义变更） | 检索 | POST | `/api/search/rebuild` | **改为提交异步重建任务**（RabbitMQ）：落任务 + 发消息 + **20ms 内**返回 `SUBMITTED` 与 `taskId`；broker 不可用时返回 `FAILED` 并带原因 | `doc:manage` | 无 | `SearchRebuildTask` | 401 / 403 |
 | 61 | 检索 | GET | `/api/search/rebuild/{taskId}` | 查询重建任务状态（`SUBMITTED`/`RUNNING`/`SUCCEEDED`/`FAILED`，含同步条数、索引总数、耗时） | `doc:manage` | 无 | `SearchRebuildTask` | 401 / 403 / 404 |
 | 62 | 检索 | GET | `/api/search/rebuild/recent` | 最近 20 次重建任务（新→旧），界面初始化显示"上次重建结果" | `doc:manage` | 无 | `List<SearchRebuildTask>` | 401 / 403 |
+### 3.14 操作日志（2026-10-14 M14 新增，2 条）
+
+> 老师《作业说明》功能模块"操作日志：AOP 记录重要写操作，提供日志查询"。设计见 `ARCHITECTURE §19`、`M14-CLOSURE.md`。
+> 权限沿用系统管理域 `sys:center`（仅 SYS_ADMIN），**不新增权限点**。
+
+| 序号 | 模块 | 方法 | 路径 | 用途 | 权限点 | 入参 DTO | 出参 VO | 主要错误码 |
+|---|---|---|---|---|---|---|---|---|
+| 63 | 系统 | GET | `/api/logs` | 分页查询操作日志（账号模糊 + 模块 + 动作 + 成败 + 时间范围组合筛选，时间倒序） | `sys:center` | `OperationLogPageDtoReq` | `PageVo<OperationLogVo>` | 400 / 401 / 403 |
+| 64 | 系统 | GET | `/api/logs/filters` | 筛选下拉：库里已出现过的模块与动作清单 | `sys:center` | 无 | `{modules, actions}` | 401 / 403 |
 ## 4. 逐模块详规
 
 > 阅读约定：入参 DTO 一律给完整字段表；出参 VO 给出字段清单，字段的类型与说明以 §2.7 字典为准（该字典即出参字段表）。
@@ -2456,6 +2465,36 @@ Content-Type: image/png
 
 ---
 
+### 4.10 模块 M-10：操作日志（2 条）
+
+> 数据来源：`OperationLogAspect` 切面（所有写接口自动记录）+ `@OperationLog` 注解（重点接口补中文模块/动作）。
+
+#### 4.10.1 `GET /api/logs` 分页查询操作日志
+
+**用途与价值**：审计"谁在什么时候对什么做了什么、成没成"。失败的操作同样留痕并给出原因（业务异常取中文消息），这是排查线上问题的第一手材料。
+
+**权限点**：`sys:center`
+
+**入参**（Query，组合条件 + 分页）
+
+| 字段 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `username` | string | 否 | 操作人账号，模糊匹配（≤64 字符） |
+| `module` | string | 否 | 模块，精确匹配（≤32 字符） |
+| `action` | string | 否 | 动作，精确匹配（≤32 字符） |
+| `success` | int | 否 | 1 成功 / 0 失败 / 不传为全部 |
+| `startTime` / `endTime` | string | 否 | 时间范围（闭区间，`yyyy-MM-dd HH:mm:ss`），起止颠倒返回 400 |
+| `pageNum` / `pageSize` | int | 否 | 继承 `PageDtoReq`：`pageNum` 1~100（深分页保护）、`pageSize` 1~100 |
+
+**出参**：`PageVo<OperationLogVo>`（字段字典见 GLOSSARY §3.10）
+
+**排序**：`createdAt DESC, id DESC`（日志是时序数据，同秒多条时 ID 才是稳定次序）
+
+#### 4.10.2 `GET /api/logs/filters` 筛选下拉
+
+**用途与价值**：模块/动作是切面推断出来的自由文本，前端不该硬编码枚举值；这个接口返回库里真实出现过的值。
+
+**权限点**：`sys:center` 　**入参**：无 　**出参**：`{"modules": [...], "actions": [...]}`
 ## 5. 故事覆盖矩阵
 
 | 故事 | 名称 | 覆盖接口（序号） | 对应验收标准 |

@@ -36,9 +36,6 @@ spring:
       database: 0
       timeout: 3000ms
 
-logging:
-  level:
-    com.campusswap: warn
   # 消息队列（课件 13.1）：RabbitMQ 4.0.9，异步索引重建。
   # broker 没启动时应用照常启动（监听容器后台重连），只是"提交重建任务"会返回 FAILED 并说明原因。
   rabbitmq:
@@ -53,3 +50,7 @@ logging:
         acknowledge-mode: manual
         missing-queues-fatal: false
         prefetch: 1
+
+logging:
+  level:
+    com.campusswap: warn

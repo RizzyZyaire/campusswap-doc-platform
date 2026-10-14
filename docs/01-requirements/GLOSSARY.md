@@ -71,7 +71,7 @@
 
 ---
 
-## 2. 核心领域实体（14 张表）
+## 2. 核心领域实体（15 张表）
 
 ### 2.1 系统域（8 张）
 
@@ -85,6 +85,7 @@
 | 用户-权限（直授） | UserPermission | `sys_user_permission` | `UserPermission` | 复合主键 `(user_id, permission_id)`，个别授权 |
 | 角色-权限 | RolePermission | `sys_role_permission` | `RolePermission` | 复合主键 `(role_id, permission_id)` |
 | 部门-角色 | DeptRole | `sys_dept_role` | `DeptRole` | 复合主键 `(dept_id, role_id)` |
+| 操作日志 | OperationLog | `sys_operation_log` | `SysOperationLog` | AOP 自动记录的写操作审计（M14 新增第 15 张表；运维域） |
 
 ### 2.2 文档域（6 张）
 
@@ -374,7 +375,34 @@
 | `attempts` | number | 投递尝试次数（排查重复投递） |
 | `submitCostMs` | number | 提交接口耗时（毫秒）——课件验收要求 20ms 内返回 |
 
+**`OperationLogFiltersVo`（筛选下拉，GET `/api/logs/filters`）**
+
+| 字段 | 类型 | 含义 |
+|---|---|---|
+| `modules` | string[] | 库里已出现过的模块清单（筛选下拉用） |
+| `actions` | string[] | 库里已出现过的动作清单 |
 **`RebuildTaskStatus`（M13 新增枚举）**：`SUBMITTED`（已提交）/ `RUNNING`（执行中）/ `SUCCEEDED`（已完成）/ `FAILED`（失败）。
+### 3.10 操作日志字段字典（M14，2026-10-14 增补；`/api/logs` 出参）
+
+> 登记口径：本表是 `frontend/src/types/log.ts` 中 `OperationLogVo` 的字段真源（机检 `verify-m5.ps1` D13 逐字段核对）。
+
+| 字段 | 类型 | 含义 |
+|---|---|---|
+| `id` | string | 日志 ID |
+| `userId` | string | 操作人 ID（未登录场景如登录接口为空） |
+| `username` | string | 操作人账号（切面写入；登录时从入参取） |
+| `module` | string | 模块（文档 / 分类 / 标签 / 用户 / 角色 / 机构 / 检索 / 认证 …） |
+| `action` | string | 动作（新增 / 修改 / 删除 / 发布 / 审核 / 重建索引 …） |
+| `method` | string | HTTP 方法（POST / PUT / DELETE） |
+| `uri` | string | 请求路径 |
+| `targetId` | string | 目标对象 ID（路径里的数字段） |
+| `summary` | string | 中文摘要（如"文档 · 发布（#12）"） |
+| `params` | string | 入参摘要（JSON，密码类字段已打码 `***`，截断 1000 字符） |
+| `ip` | string | 客户端 IP（优先 `X-Forwarded-For`） |
+| `success` | boolean | 是否成功（失败的操作同样留痕） |
+| `errorMsg` | string | 失败原因（业务异常取中文消息） |
+| `costMs` | number | 耗时（毫秒） |
+| `createdAt` | string | 记录时间（`yyyy-MM-dd HH:mm:ss`） |
 ## 4. 核心领域枚举（Enum）
 
 ### 4.1 `DocumentStatus` 文档生命周期
@@ -523,7 +551,7 @@ export interface PageVo<T> {
 
 | 自查项 | 结论 | 证据 |
 |---|---|---|
-| 14 张表全部有中文概念 + 英文标识符 + 表名 + Java 类 | ✅ | §2（8 系统域 + 6 文档域） |
+| 15 张表全部有中文概念 + 英文标识符 + 表名 + Java 类 | ✅ | §2（8 系统域 + 6 文档域 + 1 运维域） |
 | 审计列与老师 MySQL 示例逐字一致 | ✅ | §1.2 |
 | 中间表复合主键、无 `id` 列 | ✅ | §1.2 例外说明 |
 | 字段级字典齐备 | ✅ | §3.1–3.6 |
@@ -533,6 +561,7 @@ export interface PageVo<T> {
 | TS 类型与后端 VO 字段逐字对齐 | ✅ | §7 |
 | v2.3（2026-10-11，M8 全文检索）新增字段全部登记 | ✅ | §3.8（检索出参 24 字段）、§4.2（`SearchScope`） |
 | v2.4（2026-10-14，M13 异步重建）新增字段全部登记 | ✅ | §3.9（任务 11 字段）、§4.2（`RebuildTaskStatus`） |
+| v2.5（2026-10-14，M14 操作日志）新增字段全部登记 | ✅ | §3.10（日志 15 字段）、§2.1（`sys_operation_log`） |
 | v2.2 三项接口变更的新字段/新类型全部登记 | ✅ | §3.6（`keyword` 全文口径、`relevance`）、§3.7（`highlight` / `matchedIn` / `DocumentManageDtoReq` / `PasswordChangeDtoReq`）、§7（`MatchedIn`） |
 
 ---

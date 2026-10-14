@@ -60,7 +60,7 @@ Check 'C1 db-charset' ($cs -eq 'utf8mb4/utf8mb4_unicode_ci') "expected utf8mb4/u
 
 # --- C2: 14 tables ------------------------------------------------------------
 $tblCount = Scalar "SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA=$Q;"
-Check 'C2 table-count-14' ($tblCount -eq '14') "expected 14, got $tblCount"
+Check 'C2 table-count-15' ($tblCount -eq '15') "expected 15, got $tblCount"
 
 # --- C3: engine + collation for every table -----------------------------------
 $badEngine = Scalar "SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA=$Q AND (ENGINE<>'InnoDB' OR TABLE_COLLATION<>'utf8mb4_unicode_ci');"
@@ -76,7 +76,7 @@ $expectNoAuto = 'doc_document_tag_rel,doc_favorite,sys_dept_role,sys_role_permis
 Check 'C5 composite-key-tables' ($noAuto -eq $expectNoAuto) "expected [$expectNoAuto], got [$noAuto]"
 
 $autoCount = Scalar "SELECT COUNT(DISTINCT TABLE_NAME) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=$Q AND COLUMN_KEY='PRI' AND EXTRA LIKE '%auto_increment%';"
-Check 'C6 auto-increment-tables' ($autoCount -eq '8') "expected 8 tables with AUTO_INCREMENT PK, got $autoCount"
+Check 'C6 auto-increment-tables' ($autoCount -eq '9') "expected 9 tables with AUTO_INCREMENT PK, got $autoCount"
 
 # --- C7: every column and every table has a COMMENT ---------------------------
 $noColCmt = Scalar "SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=$Q AND (COLUMN_COMMENT IS NULL OR COLUMN_COMMENT='');"
@@ -89,9 +89,9 @@ Check 'C8 table-comments' ($noTblCmt -eq '0') "tables without COMMENT: $noTblCmt
 $pc = Scalar "SELECT COLUMN_TYPE FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=$Q AND COLUMN_NAME='price_cents';"
 Check 'C9 price-cents-unsigned' ($pc -eq 'int unsigned') "expected 'int unsigned', got '$pc'"
 
-# --- C10: audit columns on the 8 business tables ------------------------------
+# --- C10: audit columns on the 9 business tables ------------------------------
 $audit = Scalar "SELECT COUNT(*) FROM (SELECT TABLE_NAME FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=$Q AND COLUMN_NAME IN ('created_at','created_by','updated_at','updated_by','deleted') GROUP BY TABLE_NAME HAVING COUNT(DISTINCT COLUMN_NAME)=5) t;"
-Check 'C10 audit-columns' ($audit -eq '8') "tables carrying all 5 audit columns: $audit (expect 8)"
+Check 'C10 audit-columns' ($audit -eq '9') "tables carrying all 5 audit columns: $audit (expect 9)"
 
 # --- C11: no legacy column names ---------------------------------------------
 $legacy = Scalar "SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=$Q AND COLUMN_NAME IN ('is_deleted','is_enabled','create_at','create_by','update_at','update_by','author_id','operator_id','perm_code','perm_name','perm_type','role_code','role_name','dept_name','tag_name','category_name','sort_num','order_num');"

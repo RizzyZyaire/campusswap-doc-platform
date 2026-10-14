@@ -51,7 +51,7 @@ foreach ($f in $viewFiles) {
     # a stub is a file that still delegates to the scaffold component; small files (e.g. the 404 page) are fine
     if ($c -like '*PagePlaceholder*') { $stubs += $f.Name }
 }
-Check 'D1a 15 view files implemented' ($viewFiles.Count -eq 15) ('count=' + $viewFiles.Count)
+Check 'D1a 16 view files implemented' ($viewFiles.Count -eq 16) ('count=' + $viewFiles.Count)
 Check 'D1b no view left as a placeholder stub' ($stubs.Count -eq 0) ('stubs=' + ($stubs -join ','))
 $noSetup = @()
 foreach ($f in $viewFiles) {
@@ -66,7 +66,7 @@ $routes = @()
 foreach ($m in [regex]::Matches($router, "path:\s*'([^']+)'[^}]*?name:\s*'([^']+)'[^}]*?import\('@/([^']+)'\)")) {
     $routes += ($m.Groups[2].Value + '|' + $m.Groups[1].Value + '|' + $m.Groups[3].Value)
 }
-Check 'D2a 15 named routes in router (13 functional + 2 error)' ($routes.Count -eq 15) ('count=' + $routes.Count)
+Check 'D2a 16 named routes in router (14 functional + 2 error)' ($routes.Count -eq 16) ('count=' + $routes.Count)
 $wantRoutes = @(
     'login|/login|views/auth/LoginView.vue',
     'workbench|/workbench|views/workbench/WorkbenchView.vue',
@@ -247,7 +247,7 @@ $uncovered = @()
 foreach ($p in $bePaths) {
     if ($fePaths -notcontains $p) { $uncovered += $p }
 }
-Check 'D9a 62 backend endpoints inventoried (method+path)' ($beOps.Count -eq 62) ('count=' + $beOps.Count)
+Check 'D9a 64 backend endpoints inventoried (method+path)' ($beOps.Count -eq 64) ('count=' + $beOps.Count)
 Check 'D9b every backend endpoint path is called from src/api' ($uncovered.Count -eq 0) ('uncovered=' + ($uncovered -join ','))
 
 # --- D10: generated styles stay generated ----------------------------------

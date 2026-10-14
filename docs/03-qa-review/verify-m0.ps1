@@ -98,7 +98,7 @@ $tblMatch = [regex]::Matches($glo, '(?m)^\| [^|]+ \| [A-Za-z]+ \| `((?:sys|doc)_
 $tables = @()
 foreach ($m in $tblMatch) { $tables += $m.Groups[1].Value }
 $tablesU = ($tables | Sort-Object -Unique)
-Check 'C9 table-count-14' ($tablesU.Count -eq 14) "expected 14 unique, got $($tablesU.Count)"
+Check 'C9 table-count-15' ($tablesU.Count -eq 15) "expected 15 unique, got $($tablesU.Count)"
 
 $missingInPrd = @()
 foreach ($t in $tablesU) { if ($prd -notmatch [regex]::Escape($t)) { $missingInPrd += $t } }

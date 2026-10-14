@@ -59,6 +59,10 @@ const navGroups = computed<NavGroup[]>(() => {
         { id: 'org', label: '组织机构', to: '/admin/org', perm: PERM.sysDept }
       ]
     },
+    {
+      title: '系统运维',
+      items: [{ id: 'logs', label: '操作日志', to: '/admin/logs', perm: PERM.sysCenter }]
+    },
     { title: '个人', items: [{ id: 'me', label: '我的资料', to: '/me' }] }
   ]
   return groups

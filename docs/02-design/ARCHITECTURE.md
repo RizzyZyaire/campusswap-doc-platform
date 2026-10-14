@@ -58,7 +58,7 @@ graph TD
     B["Controller 层<br/>路由 + @Valid + 权限注解"] --> C
     C["Service 层（接口 + impl）<br/>业务规则 / 事务 / 归属校验 / VO 组装"] --> D
     D["Repository 层<br/>Spring Data JPA 派生查询 + @Query"] --> E
-    E["Entity / MySQL<br/>campusswap_db（14 张表）"]
+    E["Entity / MySQL<br/>campusswap_db（15 张表）"]
     C -.->|"token / 权限集合 / 阅读量去重"| F["Redis<br/>5.0.14"]
     B -.->|"当前用户上下文"| G["SecurityContext<br/>ThreadLocal"]
     H["common<br/>ResponseResult / ErrorCode / 异常 / 工具"] -.-> B
@@ -738,7 +738,31 @@ campusswap.search.dlx → campusswap.search.rebuild.dlq   （死信队列，保�
 - 任务状态存 **Redis**（JSON + 2h TTL + 最近 20 条），不新增库表；接口 `GET /api/search/rebuild/{taskId}` 供前端轮询；
 - 重建本身仍是 `DocumentSearchService#rebuildAll()`（清索引 → 游标分页读主库 → 批量写 → 显式 refresh），只是**调用者从 HTTP 线程换成了 MQ 消费者**；
 - RabbitMQ 没启动时：应用照常启动（`missing-queues-fatal: false`），检索照常可用，只有"提交重建任务"返回 `FAILED` + 中文原因——与 ES 的降级策略一致（教程环境友好）。
-## 19. 关键风险与对策
+## 19. 操作日志（AOP 审计，M14，2026-10-14）
+
+> 老师《作业说明》功能模块：操作日志（AOP 记录重要写操作，提供日志查询）。落地细节见 `docs/03-qa-review/M14-CLOSURE.md`。
+
+### 19.1 切点与记录范围
+
+| 项 | 做法 | 为什么 |
+|---|---|---|
+| 切点 | `execution(public * com.campusswap..controller..*(..))` 且方法带 `@PostMapping/@PutMapping/@DeleteMapping` | **不逐个接口加注解**：漏加一个注解就漏一条审计，这是审计最常见的失效方式 |
+| 中文模块/动作 | 优先取 `@OperationLog(module, action)`；否则按路径段 + 路径关键词 + HTTP 方法推断 | 注解给人读的准确性，推断保底不漏 |
+| 记录内容 | 操作人（ID + 账号）、模块、动作、HTTP 方法、URI、目标 ID、中文摘要、入参摘要、IP、成败、失败原因、耗时 | 出问题时要能回答"谁、什么时候、对什么、做了什么、成没成" |
+| 不记录 | 读接口（GET）、入参里的密码/token（打码 `***`）、超长正文（截断 1000 字符） | 日志表不是访问日志、不是数据仓库，更不能成为凭据泄露面 |
+
+### 19.2 三个"不影响业务"的设计
+
+1. **记日志在 `finally` + 整体 try/catch**：日志功能本身失败绝不能让业务请求失败；
+2. **落库异步**（`operationLogExecutor` 线程池，有界队列 1000 + `CallerRunsPolicy`）：不占请求线程；队列满时退化为同步执行，宁可慢一点也不丢审计；
+3. **审计列显式赋值**：异步线程里没有 `SecurityContext` 的 ThreadLocal，`createdBy/updatedBy` 由切面在请求线程里带过去，账号在异步线程里按 userId 补查。
+
+### 19.3 查询与权限
+
+- `GET /api/logs`：组合条件（账号模糊 / 模块 / 动作 / 成败 / 时间范围）+ 分页（复用 `PageDtoReq` 的深分页保护），时间倒序；
+- `GET /api/logs/filters`：已出现过的模块与动作（前端下拉）；
+- 权限沿用 `sys:center`（仅 SYS_ADMIN）——**不新增权限点**，保持 M0 冻结的 39 个权限点口径不变。
+## 20. 关键风险与对策
 
 | 风险 | 影响 | 对策 |
 |---|---|---|
@@ -751,7 +775,7 @@ campusswap.search.dlx → campusswap.search.rebuild.dlq   （死信队列，保�
 
 ---
 
-## 20. 冻结自检
+## 21. 冻结自检
 
 | 自查项 | 结论 | 证据 |
 |---|---|---|

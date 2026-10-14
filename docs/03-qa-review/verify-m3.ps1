@@ -88,8 +88,8 @@ foreach ($f in $entityFiles) {
 }
 $tableNames = @($tableNames | Sort-Object)
 $diff = @(Compare-Object $schemaTables $tableNames)
-Check 'C6a 14 @Table entities == 14 schema tables' `
-    (($tableNames.Count -eq 14) -and ($schemaTables.Count -eq 14) -and ($diff.Count -eq 0)) `
+Check 'C6a 15 @Table entities == 15 schema tables' `
+    (($tableNames.Count -eq 15) -and ($schemaTables.Count -eq 15) -and ($diff.Count -eq 0)) `
     ('entities=' + $tableNames.Count + ' schema=' + $schemaTables.Count + ' diff=' + $diff.Count)
 $baseEntity = Test-Path -LiteralPath (Join-Path $javaRoot 'entity\BaseEntity.java')
 Check 'C6b BaseEntity present' $baseEntity 'entity/BaseEntity.java'
@@ -106,8 +106,8 @@ Check 'C7b zero FetchType.EAGER' ($eagerCount -eq 0) ('count=' + $eagerCount)
 # NOTE: count annotation LINES, not raw text -- javadoc mentions "@SQLDelete" too.
 $sqlDelete = ([regex]::Matches($allJava, '(?m)^\s*@SQLDelete')).Count
 $sqlRestriction = ([regex]::Matches($allJava, '(?m)^\s*@SQLRestriction')).Count
-Check 'C8a 8 soft-delete entities carry @SQLDelete + @SQLRestriction' `
-    (($sqlDelete -eq 8) -and ($sqlRestriction -eq 8)) ('sqlDelete=' + $sqlDelete + ' sqlRestriction=' + $sqlRestriction)
+Check 'C8a 9 soft-delete entities carry @SQLDelete + @SQLRestriction' `
+    (($sqlDelete -eq 9) -and ($sqlRestriction -eq 9)) ('sqlDelete=' + $sqlDelete + ' sqlRestriction=' + $sqlRestriction)
 $ordinal = ([regex]::Matches($allJava, 'EnumType\.ORDINAL')).Count
 $stringEnum = ([regex]::Matches($allJava, '(?m)^\s*@Enumerated\(EnumType\.STRING\)')).Count
 Check 'C8b 4 enum columns use STRING, never ORDINAL' (($ordinal -eq 0) -and ($stringEnum -eq 4)) `
@@ -136,8 +136,8 @@ $allRepos = @($systemRepo + $docRepo)
 $repoFiles = @($allRepos | Where-Object { (Read-All $_.FullName) -like '*extends JpaRepository*' })
 $fragments = @($allRepos | Where-Object { (Read-All $_.FullName) -notlike '*extends JpaRepository*' })
 $notJpa = @($repoFiles | Where-Object { (Read-All $_.FullName) -notlike '*extends JpaRepository*' })
-Check 'C10 14 JPA repositories, all extend JpaRepository' `
-    (($repoFiles.Count -eq 14) -and ($notJpa.Count -eq 0)) `
+Check 'C10 15 JPA repositories, all extend JpaRepository' `
+    (($repoFiles.Count -eq 15) -and ($notJpa.Count -eq 0)) `
     ('count=' + $repoFiles.Count + ' fragments=' + (($fragments | ForEach-Object { $_.Name }) -join ','))
 $specRepo = @($repoFiles | Where-Object { (Read-All $_.FullName) -like '*JpaSpecificationExecutor*' })
 Check 'C10b dynamic query repos use JpaSpecificationExecutor' ($specRepo.Count -ge 4) ('count=' + $specRepo.Count)
@@ -155,9 +155,9 @@ foreach ($f in $ctrlFiles) {
         $endpoints += ($m.Groups[1].Value.ToUpper() + ' ' + $classPath + $m.Groups[2].Value)
     }
 }
-Check 'C11a 5 controllers' ($ctrlFiles.Count -eq 5) ('count=' + $ctrlFiles.Count)
-Check 'C11b 26 endpoints (auth4/user6/role6/perm4/dept6)' ($endpoints.Count -eq 26) ('count=' + $endpoints.Count)
-Check 'C11c 22 guarded endpoints (@RequiresPermission); auth login/logout/me/password unguarded' ($permCount -eq 22) ('count=' + $permCount)
+Check 'C11a 6 controllers' ($ctrlFiles.Count -eq 6) ('count=' + $ctrlFiles.Count)
+Check 'C11b 28 endpoints (auth4/user6/role6/perm4/dept6/logs2)' ($endpoints.Count -eq 28) ('count=' + $endpoints.Count)
+Check 'C11c 24 guarded endpoints (@RequiresPermission); auth login/logout/me/password unguarded' ($permCount -eq 24) ('count=' + $permCount)
 
 # --- C12: permission codes used by controllers exist in seed data -----------
 $data = Read-All (Join-Path $sqlDir 'data.sql')

@@ -894,6 +894,18 @@ grep -rn "password" backend/src/main/resources/ | grep -v '\${'   # 不应出现
 - [x] **T13.6** 测试与文档：`SearchRebuildMqTest`（6 例）+ `SearchRebuildTaskStoreTest`（4 例）→ `mvn test` **40/40**；`verify-m13.ps1`；ARCHITECTURE §18、API_SPECIFICATION §3.13/§4.9（60 → **63** 条）、GLOSSARY v2.4（§3.9）
 
 **M13 实测证据**：拓扑自动声明；提交 3~17ms；消费者 `RUNNING → SUCCEEDED`（28 篇 / 785ms）；停 ES 造错 → 任务 FAILED + **DLQ 收到 1 条**、主队列 0 条（无死循环）；停 broker 重启应用 → **启动正常**、检索可用、提交返回 FAILED+原因。
+### M14 操作日志（AOP 审计）（1 天）　✅ 已完成（2026-10-14；机检 `verify-m14.ps1` 31 项，收口 `docs/03-qa-review/M14-CLOSURE.md`）
+
+> 触发：老师《作业说明》功能模块「操作日志：AOP 记录重要写操作，提供日志查询」。
+
+- [x] **T14.1** 第 15 张表 `sys_operation_log`（19 列 + 3 索引 + 列注释），实体沿用 `@SQLDelete`/`@SQLRestriction` 口径
+- [x] **T14.2** AOP 切面：控制器包切点 + 只记 `POST/PUT/DELETE`；模块/动作按路径与 `@OperationLog` 推断；入参**脱敏**（`password/token/secret` → `***`）并截断 1000 字符；失败留痕（中文原因）
+- [x] **T14.3** 异步落库：独立 Bean `OperationLogWriter` + `operationLogExecutor`（有界队列 1000 + `CallerRunsPolicy`）；审计列在请求线程显式带过去
+- [x] **T14.4** 查询接口：`GET /api/logs`（账号/模块/动作/成败/时间范围组合筛选 + 分页）、`GET /api/logs/filters`；权限沿用 `sys:center`（**不新增权限点**，39 个口径不变）
+- [x] **T14.5** 管理页 `OperationLogView.vue`（`/admin/logs`，侧栏「系统运维」组），失败行显示原因、入参可展开看脱敏摘要
+- [x] **T14.6** 测试与文档：`Ac09OperationLogTest`（5 例）→ `mvn test` **45/45**；`verify-m14.ps1`；ARCHITECTURE §19（原 19/20 → 20/21）、API_SPECIFICATION §3.14/§4.10（62 → **64** 条）、GLOSSARY v2.5（§3.10 + 15 张表）、PRD §9、CODE-TOUR、data.sql 注释、机检基线（m0/m2 表数、m2 自增与审计列、m5 端点数、db-deep 逻辑外键 15 组）
+
+**M14 实测证据**：新增/编辑/删除分类与标签、提交索引重建、登录都会被记录（模块·动作、方法、URI、目标 ID、耗时、IP）；失败操作记下原因（重复标签 → 409 → 日志"标签已存在，请直接选择"）；登录日志账号 `admin` 且密码打码 `***`；staff 访问 `/api/logs` → **403**；顺带修掉"方法不支持返回 500"→ 现在 **405** + 中文提示。
 ## 附录 A　术语表（GLOSSARY 起始草案，P4 产出后替换）
 
 | 中文概念 | 英文标识符 | 数据库/代码命名 | 说明 |
@@ -954,6 +966,7 @@ grep -rn "password" backend/src/main/resources/ | grep -v '\${'   # 不应出现
 
 | 日期 | 变更 |
 |---|---|
+| 2026-10-14 | **v2.9（M14 收口）**：补上老师《作业说明》的另一项硬要求 —— **操作日志**。新增第 **15** 张表 `sys_operation_log`（19 列 + 3 索引 + 列注释）；AOP 切面覆盖**全部写接口**（控制器包切点 + 只记 POST/PUT/DELETE，模块/动作按路径与 `@OperationLog` 推断，入参脱敏 `***` 并截断 1000 字符，失败留痕中文原因）；异步落库（独立 Bean + 有界队列 1000 + CallerRunsPolicy）；新增 2 个端点（62 → **64** 条）`GET /api/logs`、`GET /api/logs/filters`，权限沿用 `sys:center`（**不新增权限点**，39 个口径不变）；前端新增「系统运维 → 操作日志」页；`mvn test` **45/45**（M14 新增 5 例）；新增 `verify-m14.ps1`（31 项）与 `M14-CLOSURE.md`；`ARCHITECTURE` 新增 §19、`GLOSSARY` 升 v2.5（§3.10 / 15 张表）、`PRD §9`、`CODE-TOUR`、机检基线（m0/m2 表数 15、m2 自增 9 与审计列 9、m5 端点 64、db-deep 逻辑外键 15 组）；顺带把"HTTP 方法不支持"从 500 修成 **405 + 中文提示** |
 | 2026-10-14 | **v2.8（M13 收口）**：课件 13.1 异步索引重建落地 —— RabbitMQ **4.0.9** + Erlang/OTP **27.3.4**（原生安装、D 盘、`RABBITMQ_BASE` 落 D 盘、management 控制台 15672）；`POST /api/search/rebuild` 改为**提交异步任务**（实测 3~17ms 返回 SUBMITTED + taskId），消费者手动 ack、失败进死信队列 `campusswap.search.rebuild.dlq`、任务幂等 + Redis 串行锁；任务状态存 Redis（2h TTL + 最近 20 条），新增 3 个端点（60 → **63** 条）与前端轮询展示；`mvn test` **40/40**（M13 新增 10 例）；新增 `verify-m13.ps1`（32 项）与 `M13-CLOSURE.md`；`ARCHITECTURE` 新增 §18（原 18/19 顺延为 19/20）、`GLOSSARY` 升 v2.4（§3.9 / `RebuildTaskStatus`） |
 | 2026-10-11 | **v2.7（M8 收口）**：课件 10.1 全文检索落地 —— Elasticsearch **9.4.5** + analysis-ik 9.4.5（**服务端版本必须与 Boot 4.1.1 管辖的 9.4.5 客户端同大版本**，8.x 服务端会因 `compatible-with=9` 版本头被 400 拒绝）；新增 3 个接口（57 → **60** 条）：范围检索 + 引擎状态 + 全量重建；**双引擎降级**（ES 优先、连不上自动回落 MySQL，接口结构与高亮不变）；索引实体/仓储 JSON DSL（`ik_max_word` 入库 + `ik_smart` 查询，`title^3/summary^2/content`）；增量镜像挂在 `writeVersion` 统一咽喉 + 删除两处钩子（事务提交后、失败不影响业务）；高亮统一在 Java 侧转义后插 `<mark>`；新增 `verify-m8.ps1`（38 项全绿）、`ES-SEARCH-DESIGN.md`、`M8-CLOSURE.md`；`GLOSSARY` 升 v2.3（§3.8 检索字段字典 + §4.2 `SearchScope`） |
 | 2026-09-20 | v1.0 初版：汇总三份课件（需求工程 SOP / JPA 实体规约 / 老师 AGENTS.md）与碎片要求 |
