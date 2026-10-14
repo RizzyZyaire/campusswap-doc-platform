@@ -29,7 +29,7 @@
    app\      Spring Boot 打包产物（一个 jar 里同时含后端接口和构建好的前端页面）
    runtime\  精简 Java 运行时（jlink 生成，约 44 MB，所以不用装 JDK）
    mysql\    便携 MySQL 8.0.46 + 已初始化的 data 目录
-             （14 张表 / 27 个索引 / 45 篇文档 / 3 个账号 / 99 条版本留痕都在里面）
+             （15 张表 / 24 个普通索引 + 5 个唯一键 + 1 个全文索引（另 15 个主键，库内合计 45 个索引对象） / 45 篇文档 / 3 个账号 / 99 条版本留痕都在里面）
    redis\    便携 Redis（登录令牌与权限缓存用）
    logs\     运行日志（网站日志 demo-app.log；MySQL 的报错在 mysql\launcher.err）
 
