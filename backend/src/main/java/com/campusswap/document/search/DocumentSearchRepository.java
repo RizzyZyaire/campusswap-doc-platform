@@ -3,8 +3,10 @@ package com.campusswap.document.search;
 import co.elastic.clients.elasticsearch._types.query_dsl.BoolQuery;
 import co.elastic.clients.elasticsearch._types.query_dsl.MatchQuery;
 import co.elastic.clients.elasticsearch._types.query_dsl.MultiMatchQuery;
+import co.elastic.clients.elasticsearch._types.query_dsl.RangeQuery;
 import co.elastic.clients.elasticsearch._types.query_dsl.Query;
 import co.elastic.clients.elasticsearch._types.query_dsl.TermQuery;
+import co.elastic.clients.json.JsonData;
 import co.elastic.clients.elasticsearch._types.query_dsl.TextQueryType;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -137,16 +139,40 @@ public class DocumentSearchRepository {
      * @param keyword    关键词
      * @param scope      检索范围：TITLE / CONTENT / ALL
      * @param categoryId 分类 ID（可空）
+     * @param startTime  起始时间（ISO/`yyyy-MM-dd`，可空；按 publishAt 过滤）
+     * @param endTime    结束时间（可空）
+     * @param tag        标签名（可空；tags 多值字段精确匹配）
      * @param pageable   分页（排序为空时按相关度 _score 倒序）
      * @return 命中结果（含分数与总数）
      */
-    public SearchHits<DocumentSearchIndex> search(String keyword, SearchScope scope, Long categoryId,
+    public SearchHits<DocumentSearchIndex> search(String keyword, SearchScope scope, Long categoryId, String startTime,
+                                                String endTime, String tag,
                                                  Pageable pageable) {
         BoolQuery.Builder bool = new BoolQuery.Builder().must(mustClause(keyword, scope));
         // 过滤放 filter 上下文：不参与打分、可利用 Bitset 缓存；索引里只有 PUBLISHED，这里是双保险
         bool.filter(TermQuery.of(t -> t.field("status").value("PUBLISHED"))._toQuery());
         if (categoryId != null) {
             bool.filter(TermQuery.of(t -> t.field("categoryId").value(categoryId))._toQuery());
+        }
+        boolean hasStart = startTime != null && !startTime.isBlank();
+        boolean hasEnd = endTime != null && !endTime.isBlank();
+        if (hasStart || hasEnd) {
+            // publishAt 以 ISO 字符串（keyword）存储：格式统一时字典序即时间序，用 term-range 变体即可
+            // （ES Java 客户端 9.x 的 RangeQuery 是联合类型，keyword 字段走 term(...) 分支）
+            bool.filter(RangeQuery.of(r -> r.term(t -> {
+                t.field("publishAt");
+                if (hasStart) {
+                    t.gte(startTime);
+                }
+                if (hasEnd) {
+                    t.lte(endTime);
+                }
+                return t;
+            }))._toQuery());
+        }
+        if (tag != null && !tag.isBlank()) {
+            // tags 是 keyword 多值字段：term 精确命中其中一个标签
+            bool.filter(TermQuery.of(t -> t.field("tags").value(tag))._toQuery());
         }
         NativeQuery query = NativeQuery.builder()
                 .withQuery(bool.build()._toQuery())

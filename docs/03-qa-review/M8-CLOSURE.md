@@ -155,3 +155,16 @@ scope=NOPE                       → HTTP 400（DTO @Pattern 拦截）
 | 检索仓储 | `interface ... extends ElasticsearchRepository` | 普通 `@Repository` 类 + `ElasticsearchOperations` | 仓储接口在启动期连集群 → 没装 ES 就起不来；且 6.1.1 无 `bootstrapMode` 可声明惰性 |
 | 查询定义 | 注解式 `@Query`（JSON DSL 字符串） | Java 侧 `MultiMatchQuery / MatchQuery / TermQuery` 动态拼装 | 静态 DSL 装不下"范围 × 可选分类过滤"；权重与 filter 语义与课件逐字一致 |
 | 索引创建 | Spring Data 自动 | 首次用到 ES 时 `createWithMapping()` 显式创建 | 自动创建绑定在仓储构造器上，同上 |
+---
+
+## 附录：M16 增补（2026-10-14）—— 组合查询条件
+
+老师《作业说明》要求"关键词搜索 + 组合查询条件筛选 + 结果高亮"，本次在原有"关键词 + 范围 + 分类"之上补齐：
+
+- **时间范围**（按 `publishAt`，支持 `yyyy-MM-dd` 与 `yyyy-MM-dd HH:mm:ss`）；
+- **标签**（`tags` keyword 多值字段精确匹配）；
+- 前端检索页新增三个输入框（起始 / 结束 / 标签），可与关键词、检索范围、分类任意组合；
+- 降级链路（ES 未启动走 MySQL）同样支持时间范围。
+
+**实测缺陷**：索引里 `publishAt` 是 ISO 字符串（带 `T`），查询边界带空格时字典序比较失效 → 过滤形同虚设（被"不可能区间必须 0 命中"的反证断言抓出）；已把查询边界统一规范化为 ISO。
+**证据**：`verify-m8.ps1` 增至 **44 项全绿**（新增 A24~A26 静态 + C6~C10 运行时）；人工实测 8 → 6 → 0 的逐级收敛。

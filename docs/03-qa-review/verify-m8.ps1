@@ -25,6 +25,8 @@ param(
 )
 
 $ErrorActionPreference = 'Continue'
+# Chinese keywords are built from code points so this file stays pure ASCII
+$LabelKeyword = [string]([char]0x652F) + [char]0x6559
 $Repo = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
 $Pass = 0
 $Fail = 0
@@ -240,6 +242,32 @@ if ($SkipLive) {
         Check 'C5 scope=TITLE and scope=CONTENT return different hits' `
             (($title.Code -eq 200) -and ($content.Code -eq 200) -and ($titleIds -ne $contentIds)) `
             ('titleIds=' + $titleIds + ' contentIds=' + $contentIds)
+
+        # --- M16 (2026-10-14): combined filters -- keyword + scope + category + time range + tag
+        $kwAll = 'keyword=' + [uri]::EscapeDataString($LabelKeyword) + '&scope=ALL&pageSize=50'
+        $baseTot = (Api 'GET' ('/api/search/documents?' + $kwAll) $null $token).Data.data.total
+        $impossible = (Api 'GET' ('/api/search/documents?' + $kwAll + '&startTime=2030-01-01&endTime=2030-12-31') $null $token).Data.data.total
+        $thisYear = (Api 'GET' ('/api/search/documents?' + $kwAll + '&startTime=2026-01-01&endTime=2026-12-31') $null $token).Data.data.total
+        $oneMonth = (Api 'GET' ('/api/search/documents?' + $kwAll + '&startTime=2026-09-01&endTime=2026-09-30') $null $token).Data.data.total
+        Check 'C11 combined time range narrows the result set' `
+            (($baseTot -ge 1) -and ($thisYear -ge 1) -and ($thisYear -le $baseTot)) `
+            ('base=' + $baseTot + ' year2026=' + $thisYear)
+        Check 'C12 an impossible time range returns zero hits' ($impossible -eq 0) ('impossible=' + $impossible)
+        Check 'C13 a single month narrows further than the whole year' ($oneMonth -lt $baseTot) `
+            ('month=' + $oneMonth + ' base=' + $baseTot)
+
+        $fakeTag = (Api 'GET' ('/api/search/documents?' + $kwAll + '&tag=' + [uri]::EscapeDataString('ZZZ-not-a-tag')) $null $token).Data.data.total
+        Check 'C14 an unknown tag returns zero hits' ($fakeTag -eq 0) ('fakeTag=' + $fakeTag)
+
+        $tagList = (Api 'GET' '/api/tags?pageSize=50' $null $token).Data.data
+        $positive = 0
+        if ($tagList -and $tagList.list) {
+            foreach ($tg in $tagList.list) {
+                $n = (Api 'GET' ('/api/search/documents?' + $kwAll + '&tag=' + [uri]::EscapeDataString($tg.name)) $null $token).Data.data.total
+                if ($n -gt 0) { $positive = $n; break }
+            }
+        }
+        Check 'C15 at least one real tag matches inside the result set' ($positive -ge 1) ('positiveTagHits=' + $positive)
 
         $bad = Api 'GET' '/api/search/documents?keyword=test&scope=NOPE' $null $token
         Check 'C6 invalid scope is rejected with 400' ($bad.Code -eq 400) ('code=' + $bad.Code)

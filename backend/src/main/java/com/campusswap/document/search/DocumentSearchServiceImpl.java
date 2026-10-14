@@ -152,7 +152,8 @@ public class DocumentSearchServiceImpl implements DocumentSearchService {
         if (esAvailable()) {
             try {
                 ensureIndex();
-                SearchHits<DocumentSearchIndex> hits = runEsQuery(scope, keyword, req.getCategoryId(), pageable);
+                SearchHits<DocumentSearchIndex> hits = runEsQuery(scope, keyword, req.getCategoryId(), req.getStartTime(),
+                req.getEndTime(), req.getTag(), pageable);
                 List<SearchHitVo> list = new ArrayList<>();
                 for (SearchHit<DocumentSearchIndex> hit : hits.getSearchHits()) {
                     list.add(toHitVo(hit, keyword));
@@ -310,10 +311,44 @@ public class DocumentSearchServiceImpl implements DocumentSearchService {
      * @param pageable   分页与排序
      * @return 命中结果
      */
-    private SearchHits<DocumentSearchIndex> runEsQuery(SearchScope scope, String keyword, String categoryId,
+    /**
+     * 起始时间规范化：只给日期时补 00:00:00（便于前端日期选择器直接传 yyyy-MM-dd）。
+     *
+     * @param value 原始值（可空）
+     * @return 规范化后的时间字符串
+     */
+    private String normalizeStart(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        String trimmed = value.trim();
+        String full = trimmed.length() == 10 ? trimmed + " 00:00:00" : trimmed;
+        // 关键：索引里 publishAt 存的是 ISO（2026-09-15T15:40:00，带 T）。
+        // keyword 字段的范围查询是**字典序**比较，查询边界必须与索引里的格式完全一致，
+        // 否则 "2026-…T…" 会大于 "2030-… …"（第 4 个字符 6 > 0），过滤形同虚设（实测踩到）。
+        return full.replace(' ', 'T');
+    }
+
+    /**
+     * 结束时间规范化：只给日期时补 23:59:59。
+     *
+     * @param value 原始值（可空）
+     * @return 规范化后的时间字符串
+     */
+    private String normalizeEnd(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        String trimmed = value.trim();
+        String full = trimmed.length() == 10 ? trimmed + " 23:59:59" : trimmed;
+        return full.replace(' ', 'T');
+    }
+    private SearchHits<DocumentSearchIndex> runEsQuery(SearchScope scope, String keyword, String categoryId, String startTime,
+                                                String endTime, String tag,
                                                        Pageable pageable) {
         // 范围决定 must 子句（标题 / 正文 / 联合），分类决定是否追加 filter——都在仓储里拼装
-        return searchRepository.search(keyword, scope, parseId(categoryId), pageable);
+        return searchRepository.search(keyword, scope, parseId(categoryId), normalizeStart(startTime),
+                normalizeEnd(endTime), tag, pageable);
     }
 
     /**
@@ -355,6 +390,8 @@ public class DocumentSearchServiceImpl implements DocumentSearchService {
         DocumentSearchDtoReq mysqlReq = new DocumentSearchDtoReq();
         mysqlReq.setKeyword(keyword);
         mysqlReq.setCategoryId(req.getCategoryId());
+        mysqlReq.setStartTime(req.getStartTime());
+        mysqlReq.setEndTime(req.getEndTime());
         mysqlReq.setSort(req.getSort());
         mysqlReq.setPageNum(pageNum);
         mysqlReq.setPageSize(pageSize);

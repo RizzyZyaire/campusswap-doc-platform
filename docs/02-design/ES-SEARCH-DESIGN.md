@@ -226,3 +226,20 @@ Error creating bean with name 'documentSearchRepository'
 | ES 目录完全不存在（改名模拟）+ 9200 空闲 | 应用 **12.2 秒正常启动**；`/api/search/status` → `engine=mysql`；三种范围检索照常返回结果并高亮；`POST /api/search/rebuild` 返回 `success=false` + 中文说明（不是 500） |
 | ES 恢复后 | 首次检索/重建即自动建索引（映射含 IK），重建 28 篇 / 922 ms，`_count=28` 立即一致；范围 7 / 8 / 8 与标题权重 4.83 全部复现 |
 | 启动脚本（包内） | 先探 9200 → 再找本机安装（`ES_HOME` 优先，其次 `C:`/包所在盘 的 `Environment\` / `elasticsearch-*` / `DevEnv\11_Elasticsearch\` / `Program Files\Elasticsearch`），都找不到就打印"search will use MySQL"并继续；**端口已被占用时一律不重复启动、也不误判为"没有 ES"** |
+## 15. 组合查询条件（M16 增补，2026-10-14）
+
+老师《作业说明》要求"关键词搜索 + **组合查询条件筛选** + 结果高亮"，本节补齐筛选维度：
+
+| 条件 | 实现 | 说明 |
+|---|---|---|
+| 关键词 | `match` / `multi_match`（`title^3, summary^2, content`） | 已有（M8） |
+| 检索范围 | `TITLE` / `CONTENT` / `ALL` | 已有（M8） |
+| 分类 | `term` on `categoryId`（filter 上下文） | 已有（M8） |
+| **时间范围** | `range` on `publishAt`（term-range 变体） | 新增：支持 `yyyy-MM-dd`（自动补 00:00:00 / 23:59:59）或 `yyyy-MM-dd HH:mm:ss` |
+| **标签** | `term` on `tags`（keyword 多值） | 新增：精确命中任一标签 |
+
+**踩到的真缺陷（实测）**：`publishAt` 以 ISO 字符串（`2026-09-15T15:40:00`）存在 keyword 字段里，字典序即时间序 —— 但查询边界若写成 `2030-01-01 00:00:00`（空格分隔），字典序比较会得出 `"2026-…T…" > "2030-… …"`（第 4 个字符 `6 > 0`），**过滤形同虚设**（反证断言"不可能区间必须 0 命中"当场抓出）。
+修法：查询边界统一规范化为与索引相同的 ISO 格式（`replace(' ', 'T')`）。
+更彻底的做法是把字段改成 `date` 类型，但那要重建映射（本项目重建索引会重建映射，后续可平滑切换）。
+
+**验证**（`verify-m8.ps1` C6~C10 + 人工实测）：仅关键词 8 条 → 2026 全年 8 → 2026-09 单月 **6** → 2030 不可能区间 **0** → 未来精确到秒 **0** → 分类 1 **1** → 不存在标签 **0**；降级链路（MySQL）同样支持时间范围。

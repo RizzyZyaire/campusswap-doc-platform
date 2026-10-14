@@ -23,6 +23,8 @@ export interface DocumentSearchEsDtoReq {
   startTime?: string
   /** 结束时间（闭区间，可空） */
   endTime?: string
+  /** 标签名（精确匹配，可空）——组合查询条件之一 */
+  tag?: string
   /** 排序：relevance（相关度，默认） / updatedAt_desc / publishAt_desc / viewCount_desc */
   sort?: string
   pageNum?: number

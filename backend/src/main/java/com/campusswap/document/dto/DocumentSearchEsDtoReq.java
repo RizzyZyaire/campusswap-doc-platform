@@ -31,6 +31,20 @@ public class DocumentSearchEsDtoReq extends PageDtoReq {
     @Pattern(regexp = "^\\d{1,19}$", message = "分类ID格式不正确")
     private String categoryId;
 
+    /** 起始时间（闭区间；支持 yyyy-MM-dd 或 yyyy-MM-dd HH:mm:ss，可空）——组合查询条件之一。 */
+    @Pattern(regexp = "^$|^\\d{4}-\\d{2}-\\d{2}( \\d{2}:\\d{2}:\\d{2})?$",
+            message = "起始时间格式应为 yyyy-MM-dd 或 yyyy-MM-dd HH:mm:ss")
+    private String startTime;
+
+    /** 结束时间（闭区间，格式同起始时间）。 */
+    @Pattern(regexp = "^$|^\\d{4}-\\d{2}-\\d{2}( \\d{2}:\\d{2}:\\d{2})?$",
+            message = "结束时间格式应为 yyyy-MM-dd 或 yyyy-MM-dd HH:mm:ss")
+    private String endTime;
+
+    /** 标签名（精确匹配，可空）——与关键词/分类/时间范围组合使用。 */
+    @Size(max = 32, message = "标签长度不能超过32个字符")
+    private String tag;
+
     /** 排序方式（DocumentSort，可选；不传时 ES 引擎按相关度 _score 倒序）。 */
     @Pattern(regexp = "^(updatedAt_desc|publishAt_desc|viewCount_desc|relevance)$",
             message = "排序方式只能是 updatedAt_desc / publishAt_desc / viewCount_desc / relevance")

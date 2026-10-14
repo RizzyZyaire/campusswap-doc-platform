@@ -35,6 +35,13 @@ const user = useUserStore()
 
 const keyword = ref<string>(typeof route.query.keyword === 'string' ? route.query.keyword : '')
 const categoryId = ref<string>(typeof route.query.categoryId === 'string' ? route.query.categoryId : '')
+/**
+ * 组合查询条件（课件 10.1 要求"关键词搜索 + 组合查询条件筛选 + 结果高亮"）：
+ * 时间范围（按发布时间）与标签名，可与关键词、检索范围、分类任意组合。
+ */
+const startTime = ref<string>(typeof route.query.startTime === 'string' ? route.query.startTime : '')
+const endTime = ref<string>(typeof route.query.endTime === 'string' ? route.query.endTime : '')
+const tag = ref<string>(typeof route.query.tag === 'string' ? route.query.tag : '')
 const scope = ref<SearchScope>('ALL')
 const selectedTags = ref<string[]>([])
 const sort = ref<DocumentSort>('updatedAt_desc')
@@ -129,6 +136,9 @@ async function load(): Promise<void> {
         keyword: keyword.value.trim(),
         scope: scope.value,
         categoryId: categoryId.value || undefined,
+        startTime: startTime.value.trim() || undefined,
+        endTime: endTime.value.trim() || undefined,
+        tag: tag.value.trim() || undefined,
         sort: sort.value,
         pageNum: pageNum.value,
         pageSize: pageSize.value
@@ -320,6 +330,10 @@ onMounted(async () => {
           <option value="">全部分类</option>
           <option v-for="c in flatCategories" :key="c.id" :value="c.id">{{ c.name }}</option>
         </select>
+        <!-- 组合查询条件（课件 10.1）：时间范围按发布时间过滤，可与关键词/范围/分类叠加 -->
+        <input v-model="startTime" class="input" placeholder="起始 yyyy-MM-dd" @keyup.enter="applyFilters" />
+        <input v-model="endTime" class="input" placeholder="结束 yyyy-MM-dd" @keyup.enter="applyFilters" />
+        <input v-model="tag" class="input" placeholder="标签（精确）" @keyup.enter="applyFilters" />
         <select v-model="sort" class="select select-compact">
           <option value="updatedAt_desc">最近更新 ↓</option>
           <option value="publishAt_desc">发布时间 ↓</option>
