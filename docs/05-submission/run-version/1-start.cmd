@@ -48,7 +48,7 @@ if not exist "%BASE%runtime\bin\java.exe" goto no_runtime
 if not exist "%BASE%mysql\bin\mysqld.exe" goto no_mysql
 if not exist "%BASE%mysql\data\campusswap_db" goto no_data
 
-echo [1/4] portable MySQL on port %MYSQLPORT% ...
+echo [1/5] portable MySQL on port %MYSQLPORT% ...
 echo       (the very first run after unzipping can take 1-2 minutes:
 echo        Windows Defender scans 200+ MB of freshly extracted files)
 netstat -ano | find ":%MYSQLPORT%" | find "LISTENING" >nul
@@ -84,7 +84,7 @@ goto fail
 
 :redis_step
 echo.
-echo [2/4] portable Redis on port %REDISPORT% ...
+echo [2/5] portable Redis on port %REDISPORT% ...
 netstat -ano | find ":%REDISPORT%" | find "LISTENING" >nul
 if not errorlevel 1 goto redis_up
 start "CampusSwap Redis %REDISPORT%" /min /D "%BASE%redis" redis-server.exe redis.conf
@@ -159,7 +159,7 @@ goto app_step
 :app_step
 
 echo.
-echo [3/4] website (Spring Boot + bundled frontend) on port %APPPORT% ...
+echo [4/5] website (Spring Boot + bundled frontend) on port %APPPORT% ...
 netstat -ano | find ":%APPPORT%" | find "LISTENING" >nul
 if errorlevel 1 goto app_start
 rem Port already taken. It is almost always a PREVIOUS launch of this demo that is
@@ -220,7 +220,7 @@ goto fail
 
 :open_it
 echo.
-echo [4/4] opening the website ...
+echo [5/5] opening the website ...
 echo       (if the browser was already open on this site, press Ctrl+F5 once:
 echo        page HTML is served no-store, but an old tab may still hold old JS)
 rem ?v= is a CACHE BUSTER, not decoration: a browser that still holds the OLD
@@ -236,6 +236,7 @@ echo             accounts: admin/Admin@123     (SYS_ADMIN, everything)
 echo                       docadmin/Doc@123456  (DOC_ADMIN, review)
 echo                       staff/Staff@123      (STAFF, author)
 echo.
+echo   full-text search engine: %ESMODE%
 echo   To stop everything run 2-stop.cmd (or close the two windows).
 echo   Logs: logs\demo-app.log  and  mysql\launcher.err
 echo ============================================================
