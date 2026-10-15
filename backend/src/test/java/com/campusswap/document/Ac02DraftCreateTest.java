@@ -11,6 +11,7 @@ import com.campusswap.common.api.ErrorCode;
 import com.campusswap.common.api.ResponseResult;
 import com.campusswap.common.exception.BusinessException;
 import com.campusswap.common.exception.GlobalExceptionHandler;
+import com.campusswap.common.security.JwtService;
 import com.campusswap.common.security.LoginInterceptor;
 import com.campusswap.common.security.RedisKeys;
 import com.campusswap.common.security.SecurityContext;
@@ -30,7 +31,9 @@ import com.campusswap.entity.enums.ChangeType;
 import com.campusswap.entity.enums.DocumentStatus;
 import com.campusswap.support.UnitTestSupport;
 import com.campusswap.system.service.PermissionCacheService;
+import com.campusswap.system.service.TokenService;
 import com.campusswap.system.service.UserService;
+import com.campusswap.system.service.impl.TokenServiceImpl;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.ConstraintViolation;
@@ -39,6 +42,8 @@ import jakarta.validation.Validator;
 import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.lang.reflect.Method;
+import java.nio.charset.StandardCharsets;
+import java.util.Base64;
 import java.util.List;
 import java.util.Set;
 import org.junit.jupiter.api.AfterEach;
@@ -69,7 +74,9 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
  *       "400 + 中文提示"；同时用反射断言生产端点上确实挂了 {@code @Valid}，
  *       以此证明"校验失败 ⇒ 请求根本进不了 Service ⇒ 库中无新增记录"；</li>
  *   <li><b>AC-02.3 → 认证关卡（拦截器）+ Service 兜底</b>：未认证时 {@link LoginInterceptor}
- *       写回 401 并拒绝放行（{@link SecurityContext} 不写入用户），
+ *       写回 401 并拒绝放行（{@link SecurityContext} 不写入用户）——三条分支都断言：
+ *       没带 token / 验签过了但会话已被撤销（{@code 登录状态已失效}）/ 篡改 payload 的假票
+ *       （{@code 登录凭证无效}，证明验签真的在请求路径上，而不是只查了 Redis），
  *       即便请求穿过拦截器直达 Service，{@code SecurityContext.requireUserId()} 也会抛
  *       {@code UNAUTHORIZED}（401），两条路径都断言"零仓储交互"。</li>
  * </ul>
@@ -95,6 +102,9 @@ class Ac02DraftCreateTest {
 
     /** 当前请求的 token（拦截器写入上下文用）。 */
     private static final String TOKEN = "8f14e45fceea167a5a36dedd4bea2543";
+
+    /** 单元测试用的 HS256 密钥（≥32 字节；与 {@code Ac10JwtTokenTest} 同一口径）。 */
+    private static final String JWT_SECRET = "CampusSwap-Test-HS256-Secret-Key-0123456789-abcdefghijklmn";
 
     @Mock
     private DocumentRepository documentRepository;
@@ -245,9 +255,12 @@ class Ac02DraftCreateTest {
      * AC-02.3（异常流）：未携带有效 token → 401，且不产生任何数据。
      */
     @Test
-    @DisplayName("AC-02.3 未携带有效 token：认证关卡返回 401 且不写登录上下文，Service 侧同样 401，全链路零写库")
+    @DisplayName("AC-02.3 无有效 token（没带 / 会话已撤销 / 篡改 payload）：认证关卡一律 401 且不写登录上下文，Service 侧同样 401，全链路零写库")
     void ac0203_missingOrUnknownTokenReturnsUnauthorizedWithoutSideEffect() throws Exception {
-        LoginInterceptor interceptor = new LoginInterceptor(stringRedisTemplate);
+        // 用生产实现组装认证关卡：TokenServiceImpl（先验签、再查 Redis、比对 userId）+ LoginInterceptor
+        JwtService jwtService = new JwtService(JWT_SECRET, "campusswap", 120);
+        TokenService tokenService = new TokenServiceImpl(stringRedisTemplate, jwtService);
+        LoginInterceptor interceptor = new LoginInterceptor(tokenService, jwtService);
         StringWriter body = new StringWriter();
         when(request.getMethod()).thenReturn("POST");
         when(response.getWriter()).thenReturn(new PrintWriter(body, true));
@@ -260,19 +273,37 @@ class Ac02DraftCreateTest {
                 .contains("登录状态已失效，请重新登录");
         assertThat(SecurityContext.currentUserId()).as("AC-02.3 认证失败不得写入登录上下文").isNull();
 
-        // ② 带了 token 但 Redis 中不存在（伪造 / 已失效）→ 同样 401
-        when(request.getHeader("Authorization")).thenReturn("Bearer not-a-real-token");
+        // ② 签名有效、但 Redis 里没有这张票（已登出 / 被踢）→ 401，文案是"会话失效"
+        String revokedToken = jwtService.sign(ME);
+        when(request.getHeader("Authorization")).thenReturn("Bearer " + revokedToken);
         when(stringRedisTemplate.opsForValue()).thenReturn(valueOperations);
-        when(valueOperations.get(RedisKeys.token("not-a-real-token"))).thenReturn(null);
+        when(valueOperations.get(RedisKeys.token(revokedToken))).thenReturn(null);
         body.getBuffer().setLength(0);
 
         assertThat(interceptor.preHandle(request, response, new Object()))
                 .as("AC-02.3 Redis 查不到的 token 一律按未登录处理").isFalse();
-        assertThat(body.toString()).contains("\"code\":401");
+        assertThat(body.toString()).as("AC-02.3 验签通过但会话已被撤销").contains("\"code\":401")
+                .contains("登录状态已失效，请重新登录");
         assertThat(SecurityContext.currentUserId()).isNull();
-        verify(response, times(2)).setStatus(HttpServletResponse.SC_UNAUTHORIZED);
 
-        // ③ 没有登录上下文时即便"绕过"拦截器直接调 Service，也只能 401，且不落任何库
+        // ③ 篡改 payload（签名原样保留）→ 401，且文案必须落在"验签失败"而不是"Redis 未命中"：
+        //    这条断言就是"验签真的跑在请求路径上"的证明（老实现只查 Redis，假票查得到就放行）
+        String[] signedParts = jwtService.sign(ME).split("\\.");
+        String forgedPayload = Base64.getUrlEncoder().withoutPadding()
+                .encodeToString("{\"iss\":\"campusswap\",\"sub\":\"1\",\"exp\":9999999999}"
+                        .getBytes(StandardCharsets.UTF_8));
+        when(request.getHeader("Authorization"))
+                .thenReturn("Bearer " + signedParts[0] + "." + forgedPayload + "." + signedParts[2]);
+        body.getBuffer().setLength(0);
+
+        assertThat(interceptor.preHandle(request, response, new Object()))
+                .as("AC-02.3 篡改 payload 的假票必须被验签拦下").isFalse();
+        assertThat(body.toString()).as("AC-02.3 假票的 401 原因是验签失败，不是 Redis 未命中")
+                .contains("\"code\":401").contains("登录凭证无效，请重新登录");
+        assertThat(SecurityContext.currentUserId()).isNull();
+        verify(response, times(3)).setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+
+        // ④ 没有登录上下文时即便"绕过"拦截器直接调 Service，也只能 401，且不落任何库
         DocumentCreateDtoReq req = new DocumentCreateDtoReq("越权草稿", null, "正文", "0", List.of(), null);
         BusinessException failure = UnitTestSupport.businessFailure(() -> documentService.create(req));
         assertThat(failure.getErrorCode()).isEqualTo(ErrorCode.UNAUTHORIZED);

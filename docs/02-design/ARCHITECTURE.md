@@ -144,8 +144,8 @@ sequenceDiagram
     else status != ACTIVE
         S-->>FE: 403 USER_DISABLED「账号已停用，请联系管理员」
     else 校验通过
-        S->>S: 生成 token = UUID（32 位）
-        S->>R: SET login:token:{token} = userId, TTL 2h
+        S->>S: 签发 token = HS256 JWT（iss/sub/jti/iat/exp，2026-10-14 M15 改造；此前是 UUID 随机串）
+        S->>R: SET login:token:{token} = userId, TTL 2h（写入的是 JWT 原文）
         S->>S: 合并权限 → Set<权限码 code>
         S->>R: SET perm:user:{userId} = 权限集合, TTL 30min
         S->>DB: 更新 last_login_at
@@ -164,7 +164,7 @@ sequenceDiagram
     participant S as DocumentServiceImpl
     participant DB as MySQL
     FE->>I: PUT /api/documents/{id}（Authorization: Bearer token）
-    I->>I: 关卡① token 有效？（查 Redis）→ 无效 401
+    I->>I: 关卡① 先本地验签（签名/过期/issuer）→ 再查 Redis 会话是否有效 → 无效 401 / Redis 故障 500
     I->>I: 关塞② 写入 SecurityContext（userId / token）
     I->>A: 放行至 Controller
     A->>A: 关卡③ @RequiresPermission("doc:edit") ← 读 Redis 权限集合 → 缺失 403
@@ -198,7 +198,7 @@ sequenceDiagram
 
 | 关卡 | 位置 | 检查内容 | 失败返回 |
 |---|---|---|---|
-| ① 认证 | `LoginInterceptor`（`WebMvcConfig` 注册，排除 `/api/auth/login`、`/api/auth/logout`、`/uploads/**`） | `Authorization: Bearer <token>` 是否在 Redis 中存在且未过期 | 401 `UNAUTHORIZED` |
+| ① 认证 | `LoginInterceptor`（`WebMvcConfig` 注册，排除 `/api/auth/login`、`/api/auth/logout`、`/uploads/**`） | `Authorization: Bearer <token>`：**先本地 JWT 验签**（签名/过期/issuer/格式），**再查 Redis 会话是否存在**（两步都在 `TokenService#resolve` 里，2026-10-15 接入拦截器） | 401 `UNAUTHORIZED`（验签不过 / 会话已撤销）；Redis 不可用 → 500 |
 | ② 上下文 | 同上 | 把 `userId` / `token` 放入 `SecurityContext`（`ThreadLocal`），请求结束 `finally` 清理 | — |
 | ③ 功能权限 | `PermissionAspect`（`@Before` 切 `@RequiresPermission`） | 权限集合是否包含注解声明的权限码 `code` | 403 `NO_PERMISSION` |
 | ④ 数据归属 | Service 方法内 | 资源存在性 + 归属（属主/管理员）+ 状态合法性 | 404 / 403 / 409 |
@@ -220,7 +220,7 @@ sequenceDiagram
 | 形态 | **HS256 JWT**（`header.payload.signature`，实测 205 字符） | claims：`iss=campusswap`、`sub=用户ID`、`jti`=一次性随机 ID、`iat`、`exp`（2 小时，`BR-19`） |
 | 密钥 | `campusswap.security.jwt.secret`（≥32 字节，HS256 硬要求） | dev/demo/test 走 yml 默认值；**prod 只读环境变量 `JWT_SECRET` 且不给默认值**（缺了就启动失败，好过弱密钥裸奔） |
 | 登录状态 | **Redis `login:token:{jwt 原文} → userId`**（TTL 与 JWT 有效期一致） | 老师要求的"登录状态保存在 Redis"字面可见：`redis-cli keys "login:token:*"` 能数出在线会话 |
-| 校验顺序 | ① 本地**验签 + 过期**（伪造/篡改/过期在这一步就拒，不查 Redis）→ ② Redis 存在性检查（撤销判定） | 绝大多数无效请求挡在本地计算里，不给 Redis 添无谓压力（实测：篡改 payload → 401） |
+| 校验顺序 | ① 本地**验签 + 过期**（伪造/篡改/过期在这一步就拒，不查 Redis）→ ② Redis 存在性检查（撤销判定）→ ③ userId 比对 | 绝大多数无效请求挡在本地计算里，不给 Redis 添无谓压力。**三步都在 `TokenServiceImpl#resolve` 一个方法里，调用点是 `LoginInterceptor`（2026-10-15 接入）** —— 接入前 `resolve` 没有调用点，等于接口层并不验签；实测：篡改 payload 的假票即使被写进 Redis，现在也是 401「登录凭证无效」（接入前同样一张票是 200） |
 | 主动失效 | 登出、停用用户、重置密码 → `DEL` 对应 Redis 键 | **签名依然有效的 JWT 也会立即失效**（实测：登出后同一 token → 401）——纯 JWT 做不到 |
 | 一键踢人 | `user:tokens:{userId}` 集合记录该用户全部 token | 停用/改密时整集合清理 |
 | 取权限 | 仍从 `perm:user:{userId}` 读权限集合（权限**不塞进 JWT**） | 塞进去会导致"改权限后 token 内权限过期不一致"；权限缓存 30 分钟 + 事务提交后失效 |

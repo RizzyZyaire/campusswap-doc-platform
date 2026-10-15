@@ -14,10 +14,13 @@ package com.campusswap.system.service;
 public interface TokenService {
 
     /**
-     * 签发 token（UUID 去横线，32 位）。
+     * 签发 token：HS256 JWT（{@code header.payload.signature} 三段；claims 见 {@link com.campusswap.common.security.JwtService}），
+     * 同时把 JWT 原文写进 Redis（{@code login:token:{token}} → userId，TTL 2 小时）。
+     *
+     * <p>2026-10-14（M15）由"UUID 去横线 32 位随机串"改造为 JWT；接口签名与调用方不变。</p>
      *
      * @param userId 用户 ID
-     * @return token 字符串
+     * @return token 字符串（JWT）
      */
     String issue(Long userId);
 

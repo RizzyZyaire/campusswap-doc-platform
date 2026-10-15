@@ -63,7 +63,7 @@
                                                                     "认证"
                                                                 ],
                                                        "summary":  "登录",
-                                                       "description":  "公开接口。用户名不存在与密码错误返回完全一致的 401 文案（防用户名枚举）。成功时签发 token（UUID 32 位，Redis 存 2 小时）并预写权限缓存。",
+                                                       "description":  "公开接口。用户名不存在与密码错误返回完全一致的 401 文案（防用户名枚举）。成功时签发 token（HS256 JWT 三段式，原文同时存 Redis，有效期 2 小时）并预写权限缓存。",
                                                        "security":  [
 
                                                                     ],
@@ -3572,7 +3572,7 @@
                                                        "properties":  {
                                                                           "token":  {
                                                                                         "type":  "string",
-                                                                                        "description":  "32 位随机串，有效期 2 小时"
+                                                                                        "description":  "HS256 JWT（header.payload.signature），有效期 2 小时"
                                                                                     },
                                                                           "userInfo":  {
                                                                                            "$ref":  "#/components/schemas/UserInfoVo"

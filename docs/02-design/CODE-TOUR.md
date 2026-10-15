@@ -162,7 +162,7 @@
 以 `GET /api/documents?keyword=xx&pageNum=1` 为例：
 
 1. **CORS**（`config/CorsConfig`）放行 Vite 5173。
-2. **关卡①`LoginInterceptor`**：取 `Authorization` 头 → 查 Redis `login:token:{token}` → 得到 userId。查不到 → 401；**Redis 本身异常 → 500**（不能把抖动当"token 失效"，这是 M4 实测缺陷⑥）。
+2. **关卡①`LoginInterceptor`**：取 `Authorization` 头 → **先本地 JWT 验签**（签名/过期/issuer，见 `JwtService.verify`）→ **再查 Redis** `login:token:{token}` 拿 userId（两步都在 `TokenService#resolve` 里，2026-10-15 接入拦截器）。验签不过 → 401「登录凭证无效」；验签过了但查不到 → 401「登录状态已失效」；**Redis 本身异常 → 500**（不能把抖动当"token 失效"，这是 M4 实测缺陷⑥）。
 3. **关卡②`SecurityContext`**：userId 写入 ThreadLocal，业务层随处可读。
 4. **关卡③`PermissionAspect`**：读 `@RequiresPermission("doc:search")` → 查 `perm:user:{id}` 缓存（30 分钟）→ 未命中用那条 UNION SQL 现算 → 缺权限 403。
 5. **Controller**：`@Valid` 校验 + 分页 DTO。
