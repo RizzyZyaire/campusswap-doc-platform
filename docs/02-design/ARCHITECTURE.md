@@ -608,10 +608,14 @@ public interface DocumentRepository extends JpaRepository<Document, Long>,
 |---|---|
 | 框架 | Logback（Boot 默认），输出到控制台 + `backend/logs/campusswap.log`（`logs/` 已 gitignore） |
 | 级别 | 根 `INFO`；`com.campusswap` `DEBUG`（dev）；SQL 打印 `spring.jpa.show-sql: true` 仅 dev |
-| 必打日志 | 登录成功/失败（含 username、IP，**不打密码**）、鉴权拒绝（userId + perm_code + 路径）、状态流转（docId + from → to + operatorId）、异常兜底 |
-| 禁打日志 | 密码、token 全文、`password_hash`、数据库连接串密码 |
-| 接口耗时 | `LoginInterceptor#afterCompletion` 记录 `method path status cost(ms)` 一行 |
-| 审计留痕 | 业务写入靠 `created_by/updated_by`；文档变更靠 `doc_version`（谁、何时、改了什么） |
+| 必打日志 | 登录成功（`AuthServiceImpl`：userId + username + roles）、登录失败（密码错，DEBUG：username）、**token 被拒**（`LoginInterceptor` 两条 WARN，均带 `uri` + token 前 8 位：验签不过 / 验签过但 Redis 无此会话）、状态流转（文档新增/发布/派生/回收站/恢复/彻底删除、审核通过/驳回/归档，含文档 id + 操作人）、异常兜底（`GlobalExceptionHandler` 统一 WARN/ERROR）。**「鉴权拒绝」当前没有专门日志**（见下表注）**（2026-10-15 按代码实测更正）** |
+| 禁打日志 | 密码、token 全文、`password_hash`、数据库连接串密码（`LoginInterceptor` 只记 token 前 8 位） |
+| 接口耗时 | **由 AOP 操作日志记录，与拦截器无关**：`OperationLogAspect` 环绕 `com.campusswap..controller..*`，且**只对带 `@PostMapping`/`@PutMapping`/`@DeleteMapping` 的方法计时**；毫秒数写 `sys_operation_log.cost_ms`，经 `OperationLogWriter#write`（`@Async("operationLogExecutor")`）**异步落库**；**失败也记**（`success=0` + `error_msg` 截断 500 字符）；入参**脱敏**（`password`/`token`/`secret` → `***`）后截断 1000 字符。**GET 读接口既不记日志也不计时**；`LoginInterceptor#afterCompletion` **只做 `SecurityContext.clear()`**（详见 §19）**（2026-10-15 按代码实测更正）** |
+| 审计留痕 | 业务写入靠 `created_by/updated_by`；文档变更靠 `doc_version`（谁、何时、改了什么）；写接口另有 §19 的 `sys_operation_log`（操作人、模块、动作、成败、耗时、IP —— M14 新增的第 15 张表） |
+
+> **§13 两处更正说明（2026-10-15 按代码实测更正）** —— 本节原有两处"文档说法 ≠ 代码事实"，已按源码改正；口径与 §5.1（四道关卡）、§9.1（全局异常表）、§19（操作日志）一致：
+> 1. **接口耗时不是拦截器记的**。原文写"`LoginInterceptor#afterCompletion` 记录 `method path status cost(ms)` 一行"：实测 `LoginInterceptor#afterCompletion`（`LoginInterceptor.java:112-116`）**只有 `SecurityContext.clear()` 一句**，全类没有任何耗时统计或日志调用；真实来源是 §19 的 `OperationLogAspect`（`OperationLogAspect.java:107-129`），而且**只覆盖 POST/PUT/DELETE** —— GET 读接口、以及不带 `@PostMapping`/`@PutMapping`/`@DeleteMapping` 的控制器方法都不计时、不落表。
+> 2. **"鉴权拒绝（userId + perm_code + 路径）"这条日志不存在**。`PermissionAspect#check`（`PermissionAspect.java:33-39`）在权限码缺失时**直接 `throw new BusinessException(ErrorCode.NO_PERMISSION)`，不落任何日志**；403 由 `GlobalExceptionHandler#handleBusiness` 统一翻成响应体，同时只打一行**通用** WARN `业务异常 code=403 message=...` —— **不含 userId、不含 perm_code、不含路径**，`sys_operation_log` 表也没有 `perm_code` 列。故此处据实记作"**当前无「鉴权拒绝」专门日志（403 由统一异常处理器返回）**"，若要补，落点应在 `PermissionAspect#check` 里（记 userId + 权限码 + uri）。
 
 ---
 

@@ -1,9 +1,27 @@
 # DIFF-VS-TEACHER — 与老师安全框架的对账、迁移选项与工作量
 
+> ## ⚠️ 历史快照 —— 本文记录的是 **2026-09-2x 时点**的口径，**其中部分已随 M13~M16 变化**
+>
+> - **性质**：本文是 **2026-09-23**（M5 前置之前）与老师课件/示例工程的对账留档。它记录的"**当时的差异**"与当时的判断**一律保留、不改写** —— 要看的正是"当时差在哪、为什么这么定"。
+> - **当前权威口径**：以 **`docs/03-qa-review/M*-CLOSURE.md`**（`M13-CLOSURE.md` / `M14-CLOSURE.md` / `M15-CLOSURE.md` / `M8-CLOSURE.md` 附录 M16 等收口记录）与 **`docs/05-submission/源码阅读说明.md`** 为准。**本文与它们冲突时，一律以那两份为准。**
+> - **正文处理**：下面已过期的具体条目**就地标注 `（2026-10-15 更新）`**，原话保留以便对照。
+>
+> **已过期的具体条目（2026-10-15 逐条核对；正文对应处已就地标注）**
+>
+> - **JWT（§1.1 依赖行、§3 JWT 行）**：当时写"**无任何 JWT 库**"（`jjwt` 未缓存）、"不透明 token" —— **现已引入 `io.jsonwebtoken:jjwt-{api,impl,jackson}:0.12.6`**（`backend/pom.xml`），令牌改为 **HS256 JWT + Redis 撤销名单**（M15），且**验签已接入 `LoginInterceptor`**（2026-10-15 接线，补 M15 遗留项）。**仍成立**：不引入 Spring Security 过滤器链。
+> - **表数（§1.1）**：当时 **14 张**，无 `sys_login_log` —— **现 15 张**（M14 新增第 15 张表 `sys_operation_log`；`backend/sql/schema.sql` 内 15 个 `CREATE TABLE`）。
+> - **行号（§1.1）**：`LoginInterceptor(104)` 等旧行数 —— 现为 `BearerToken(35)` `JwtService(117)`【新增类】`LoginInterceptor(170)` `PermissionAspect(40)` `RedisKeys(96)` `RequiresPermission(30)` `SecurityContext(77)`；`common/security/` 由 6 类增至 **7 类**。
+> - **其它计数（§1.1）**：Java 文件 150 → **208**；`SecurityContext` 引用 10 → **24** 文件；`LoginInterceptor` 引用 5 → **7** 文件；`@RequiresPermission` 53 处 / 11 文件 → **68 处 / 18 文件**（`src/main` 61 + `src/test` 7）。
+> - **机检规模与本地仓库（§1.1）**：m3-http 142 / m4-http 218 → 检查器已增至 **12 个**（新增 m5 / m6 / m6-http / m8 / m13 / m14 / m15 等）；**m3-http 仍为 142**，m4-http 的计数在现有文档里本身就漂移（205/218/221/222，**本次未复跑**，以 `TEST_CHECKLIST.md` 为准）；`jjwt` **现已缓存**（`D:\DevEnv\05_Maven\repository\io\jsonwebtoken\`）。
+> - **`sys_user` 列（§1.1）**：记 16 列 → `backend/sql/schema.sql` 里是 **15 列**（含 5 个审计列）；当时那个"16 列"的实库计数**本次未复核**。
+> - **结案结论（§9 表、§10 末段）**："认证层保留 `HandlerInterceptor` + Redis **不透明 token**" —— 这半句**已被 M15 推翻**（改为 JWT 自证 + Redis 撤销）；"**不迁 Spring Security**"仍然有效。
+>
+> **引用物核对（2026-10-15，glob / Test-Path）**：`docs/02-design/CODE-TOUR.md`、`docs/03-qa-review/DIFF-VS-COURSEWARE-4-7.md`、`backend/sql/schema.sql`、`verify-m3-http.ps1`、`verify-m4-http.ps1`、老师工程 `D:\DevEnv\projects\backend(2)` **均仍存在**；§1.1 列的 6 个 `common/security` 类**无一被改名或删除**（只新增了 `JwtService`）。无失效引用需改指。
+
 > 生成时间：2026-09-23 ｜ 对账对象：`D:\DevEnv\projects\backend(2)`（老师示例工程） vs `D:\DevEnv\projects\campusswap`
 > **状态：已结案（2026-09-23）。老师答复：底层原理一致，Spring Security 那套只是更规范 → 结论：架构不改，§4 的路线 A/B/C 均不执行。本文件转为决策留档。**
 > 结案说明：老师同时提醒"用 AI 生成的代码要好好理解"，故新增 `docs/02-design/CODE-TOUR.md`（代码导读 + 术语翻译 + 10 个必答问题）承接这项要求。
-> 机检口径：所有数字均为本轮实测（命令写在 §1 里，可复跑）。
+> 机检口径：所有数字均为本轮实测（命令写在 §1 里，可复跑）。**（2026-10-15 更新）本行只对 2026-09-23 那一轮有效** —— 本轮复核后的新数字见顶部横幅与 §1.1 里带 `（2026-10-15 更新）` 的标注。
 
 ---
 
@@ -21,19 +39,19 @@
 
 | 项 | 实测值 | 来源 |
 |---|---|---|
-| Java 文件总数 | **150** | `Get-ChildItem -Recurse -Filter *.java` |
-| 鉴权相关类 | `common/security/` 6 个：`BearerToken(31)` `LoginInterceptor(104)` `PermissionAspect(38)` `RedisKeys(69)` `RequiresPermission(27)` `SecurityContext(69)` | 同上 |
-| 引用 `SecurityContext` 的文件 | **10** | 全文匹配 |
-| 引用 `LoginInterceptor` 的文件 | **5**（`BearerToken` `LoginInterceptor` `PermissionAspect` `SecurityContext` `WebMvcConfig`） | 全文匹配 |
-| `@RequiresPermission` 用量 | **53 处 / 11 个文件**，形如 `@RequiresPermission("doc:search")` | 全文匹配 |
-| 拦截器注册 | `WebMvcConfig.addInterceptors`：`/api/**` 全拦，仅放行 `/api/auth/login`、`/api/auth/logout` | 读源码 |
-| 依赖 | `webmvc` / `data-jpa` / `validation` / `data-redis` / `mysql-connector-j` / `hutool-all` / `lombok`；**无 security、无任何 JWT 库** | `pom.xml` |
+| Java 文件总数 | **150**（2026-09-23 当时）｜**（2026-10-15 更新）现 208** | `Get-ChildItem -Recurse -Filter *.java` |
+| 鉴权相关类 | 当时 `common/security/` 6 个：`BearerToken(31)` `LoginInterceptor(104)` `PermissionAspect(38)` `RedisKeys(69)` `RequiresPermission(27)` `SecurityContext(69)`；**（2026-10-15 更新）现 7 个：`BearerToken(35)` `JwtService(117)`（M15 新增）`LoginInterceptor(170)` `PermissionAspect(40)` `RedisKeys(96)` `RequiresPermission(30)` `SecurityContext(77)`**（行数按此刻源码实测，随代码变动） | 同上 |
+| 引用 `SecurityContext` 的文件 | **10**（2026-09-23 当时）｜**（2026-10-15 更新）现 24** | 全文匹配 |
+| 引用 `LoginInterceptor` 的文件 | 当时 **5**（`BearerToken` `LoginInterceptor` `PermissionAspect` `SecurityContext` `WebMvcConfig`）；**（2026-10-15 更新）现 7**（多出 `PasswordEncoderConfig`、`Ac02DraftCreateTest`，前者仅是注释里引用） | 全文匹配 |
+| `@RequiresPermission` 用量 | 当时 **53 处 / 11 个文件**，形如 `@RequiresPermission("doc:search")`；**（2026-10-15 更新）现 68 处 / 18 个文件**（`src/main` 61 处 + `src/test` 7 处） | 全文匹配 |
+| 拦截器注册 | `WebMvcConfig.addInterceptors`：`/api/**` 全拦，仅放行 `/api/auth/login`、`/api/auth/logout`（**2026-10-15 更新）放行名单未变**；另：2026-10-11 起同方法内多注册了一个"HTML 禁缓存"拦截器（`/**`，排除 `/api/**`、`/uploads/**`） | 读源码 |
+| 依赖 | `webmvc` / `data-jpa` / `validation` / `data-redis` / `mysql-connector-j` / `hutool-all` / `lombok`；**无 Spring Security、无任何 JWT 库**（2026-09-23 当时事实）｜**（2026-10-15 更新）现已引入 `io.jsonwebtoken:jjwt-{api,impl,jackson}:0.12.6`**（`backend/pom.xml`，`<jjwt.version>0.12.6</jjwt.version>`；另有 `spring-security-crypto` 用于 BCrypt），**JWT 验签已接入 `LoginInterceptor`**；**仍然不用 Spring Security 框架**（无 `spring-boot-starter-security`） | `pom.xml` |
 | 错误码 | `ErrorCode`：401 `UNAUTHORIZED`、403 `NO_PERMISSION`、403 `USER_DISABLED`、400/404/409/500 | 读源码 |
-| 表 | **14 张，无 `sys_login_log`**（老师有登录记录表，我们 M1 把它换成了 `sys_user_permission`） | `SHOW TABLES` |
-| `sys_user` 列 | 16 列；`phone varchar(20) NULL`、**非唯一**；**无** `login_failure_count` / `lock_time` / `token_version`；有 `status`(默认 ACTIVE)、`last_login_at` | `information_schema.COLUMNS` |
-| 种子账号手机号 | admin `13800000001`、docadmin `13800000002`、staff `13800000003` —— **短信登录有现成测试数据** | `SELECT id,username,phone` |
-| 本地 Maven 仓库 | `spring-boot-starter-security` **已缓存**、`jose4j` **已缓存**（`jjwt` 未缓存） | 扫 `D:\DevEnv\05_Maven\repository` |
-| 机检规模 | m3-http **142** 项 / m4-http **218** 项（2026-09-23 M5 前置增补后）；两个脚本中 **与 401/403 直接相关的取值点各 11 处** | 正则统计 |
+| 表 | 当时 **14 张**，无 `sys_login_log`（老师有登录记录表，我们 M1 把它换成了 `sys_user_permission`）；**（2026-10-15 更新）现 15 张** —— M14 新增第 15 张表 `sys_operation_log`（操作日志，`backend/sql/schema.sql` 内 15 个 `CREATE TABLE`） | `SHOW TABLES` / `schema.sql` |
+| `sys_user` 列 | 当时记 **16 列**（实库 `information_schema`）；`phone varchar(20) NULL`、**非唯一**；**无** `login_failure_count` / `lock_time` / `token_version`；有 `status`(默认 ACTIVE)、`last_login_at`。**（2026-10-15 更新）`backend/sql/schema.sql` 里 `sys_user` 为 15 列**（`id`…`deleted`，含 5 个审计列），当时"16 列"这个实库计数**本次未复核**；`phone` 仍可空且非唯一，`login_failure_count`/`lock_time`/`token_version` **仍未引入** | `information_schema.COLUMNS` / `schema.sql` |
+| 种子账号手机号 | admin `13800000001`、docadmin `13800000002`、staff `13800000003` —— **短信登录有现成测试数据**（**2026-10-15 更新）未变**（`backend/sql/data.sql`） | `SELECT id,username,phone` |
+| 本地 Maven 仓库 | `spring-boot-starter-security` **已缓存**、`jose4j` **已缓存**（当时 `jjwt` 未缓存）；**（2026-10-15 更新）`jjwt` 现已缓存**（`D:\DevEnv\05_Maven\repository\io\jsonwebtoken\jjwt-{api,impl,jackson}`，M15 引入 0.12.6） | 扫 `D:\DevEnv\05_Maven\repository` |
+| 机检规模 | 当时 m3-http **142** 项 / m4-http **218** 项（2026-09-23 M5 前置增补后）；两个脚本中 **与 401/403 直接相关的取值点各 11 处**；**（2026-10-15 更新）检查器已增至 12 个**（新增 `verify-m5/m6/m6-http/m8/m13/m14/m15.ps1` 等），m3-http **仍为 142**，m4-http 的计数在现有文档里本身就漂移（205/218/221/222 —— **本次未复跑**），以 `TEST_CHECKLIST.md` 与各 `M*-CLOSURE.md` 为准 | 正则统计 |
 
 ### 1.2 老师那边（读源码得到的事实，**含其工程自身的缺陷**）
 
@@ -58,8 +76,8 @@
 |---|---|---|---|---|
 | 1 | 认证入口 | `RSAUsernamePasswordAuthenticationFilter`（`POST /user/login`，phone+password，RSA 解密） | `AuthController` + `LoginInterceptor`（username+password，明文 HTTPS 语义） | **形态不同**（可对齐） |
 | 2 | 认证框架 | Spring Security 过滤器链 + `ProviderManager`（Dao / Sms / WeChat 三 Provider） | 无框架：拦截器 + ThreadLocal | **核心差距** |
-| 3 | 令牌 | jose4j JWT，access **2h** / refresh **7d**；claims `id`/`token_version`/`user_agent`；subject `aries_token`，issuer `com.starrysky` | 不透明 UUID token，存 Redis `login:token:{token}`→userId，TTL **2h** | **核心差距** |
-| 4 | 令牌撤销 | JWT 本身不可撤销 → 靠 Redis 存 `token_version` 比对 + UA 的 sha256 绑定 + 滑动续期 7d | 直接 `DEL` 键即失效（这是 ARCHITECTURE §5.2 当初选不透明 token 的理由） | 老师的方案**并没有更简单**，只是把撤销逻辑挪进了 Redis |
+| 3 | 令牌 | jose4j JWT，access **2h** / refresh **7d**；claims `id`/`token_version`/`user_agent`；subject `aries_token`，issuer `com.starrysky` | 当时：不透明 UUID token，存 Redis `login:token:{token}`→userId，TTL **2h**；**（2026-10-15 更新）现已改为 HS256 JWT**（claims `iss=campusswap`/`sub`/`jti`/`iat`/`exp`，TTL 仍 2h，M15）+ Redis 撤销名单，验签在 `LoginInterceptor` | **核心差距**（部分收窄：已用 JWT；refresh 双令牌与 `token_version` 仍未做） |
+| 4 | 令牌撤销 | JWT 本身不可撤销 → 靠 Redis 存 `token_version` 比对 + UA 的 sha256 绑定 + 滑动续期 7d | 当时：直接 `DEL` 键即失效（这是 ARCHITECTURE §5.2 当初选不透明 token 的理由）；**（2026-10-15 更新）现为「JWT 自证 + Redis 撤销」**：登出/停用/改密 `DEL` 键，签名仍有效的 JWT 也立即 401（未采用老师的 `token_version` + UA 绑定方案） | 老师的方案**并没有更简单**，只是把撤销逻辑挪进了 Redis（结论仍成立） |
 | 5 | 会话存储 | Redis **Hash** `starrysky:aries:authen:{id}`（principal + token_version） | Redis String 单键 + `user:tokens:{userId}` 集合（支持"改密后踢全部"） | 不同实现，能力等价 |
 | 6 | 白名单 | `SecurityConstant.WHITE_LIST` **常量数组 8 项**，配 `requestMatchers(...).permitAll()` | 硬编码在 `WebMvcConfig` 的 2 个 `excludePathPatterns` | **易对齐**（10 分钟） |
 | 7 | 兜底策略 | `anyRequest().authenticated()`（默认全拦，白名单例外） | 拦截器 `/api/**` 全拦 + 放行 2 条（同思路，写法不同） | 同思路 |
@@ -72,8 +90,8 @@
 | 14 | 微信登录 | 白名单有 `/user/login/wechat`，Provider 缺类 | 无 | 超出作业范围（PRD O4/O5 精神） |
 | 15 | 账号注销清理 | 齐全（注销时清 Redis 会话等） | 无（US 里没有注销） | 非目标 |
 | 16 | 授权（RBAC） | `AriesUserDetailsService` 的 `authorities = new HashSet<>()`（**空的**）→ 框架只区分"登录/未登录" | **39 权限点 / 3 角色 / 部门继承角色 / 用户直授权 / 30 分钟缓存 / 授权即时生效** | **我们强得多，迁移中绝不能缩水** |
-| 17 | 权限校验写法 | 无（框架没做） | `@RequiresPermission("doc:search")` AOP，53 处 | 见 §4 选项 |
-| 18 | 数据访问身份 | `SecurityContextHolder.getContext().getAuthentication()` | `SecurityContext.currentUserId()` ThreadLocal，10 个文件引用 | 迁移要统一 |
+| 17 | 权限校验写法 | 无（框架没做） | `@RequiresPermission("doc:search")` AOP，当时 53 处（**2026-10-15 更新）现 68 处 / 18 个文件** | 见 §4 选项 |
+| 18 | 数据访问身份 | `SecurityContextHolder.getContext().getAuthentication()` | `SecurityContext.currentUserId()` ThreadLocal，当时 10 个文件引用（**2026-10-15 更新）现 24 个** | 迁移要统一 |
 | 19 | 密码存储 | RSA 传输 + 库里 bcrypt | bcrypt（同） | 无差距（RSA 属加分项，非必需） |
 | 20 | 配置外置 | JWT 密钥/有效期散在 `JwtUtil` 常量 | `RedisKeys` 集中 + `application.yml` | 我们更好，保留 |
 
@@ -83,7 +101,7 @@
 
 | 你提到的 | 老师怎么做 | 我们现在有什么 | 要补的 |
 |---|---|---|---|
-| **JWT** | jose4j 双令牌 + Redis `token_version` | 不透明 token（能撤销） | 换成 JWT：`JwtUtil`/`JwtFilter` + refresh 接口 + token_version |
+| **JWT** | jose4j 双令牌 + Redis `token_version` | 不透明 token（能撤销） | 换成 JWT：`JwtUtil`/`JwtFilter` + refresh 接口 + token_version —— **（2026-10-15 更新）此项已落地一半：M15 把令牌换成 HS256 JWT + Redis 撤销名单（`JwtService` + 拦截器验签），但没走 `JwtFilter`、也没做 refresh 与 `token_version`，见 `M15-CLOSURE.md §1`** |
 | **Spring Security** | `SecurityConfig` 过滤器链 + `ProviderManager` | 拦截器 + AOP | 新增 `SecurityConfig`；把拦截器职责迁进过滤器 |
 | **success + failureHandler** | 成功写 Redis 会话 + 发双令牌；失败计数锁定 | `AuthController` 里一把梭返回 `LoginVo` | **拆成成功/失败处理器是纯重构，能力不增不减** |
 | **`SecurityConstant.WHITE_LIST`** | 常量数组 8 项 | `WebMvcConfig` 里 2 条字符串 | 抽成常量类（10 分钟） |
@@ -93,6 +111,8 @@
 ---
 
 ## 4 三条路线（含真实工作量）
+
+> **（2026-10-15 更新）** 本节三条路线当时**一条都没执行**（见 §9 结案）；但其中"换 JWT"这一项后来以折中方式落地：**不迁 Spring Security，只把令牌换成 HS256 JWT + Redis 撤销名单**（M15），验签于 2026-10-15 接进 `LoginInterceptor`。下面的人天估算、文件清单与风险清单**保留原样，仅供回顾**（当时的分阶段计划 S0~S5 未启动）。
 
 > 工作量口径：① "文件数"= 预计新增/改动/停用 的 Java 文件数；② "人天"= 一个熟悉这套代码的人写+验的时间；③ "我这边"= 实际对话回合数（含编译、起服务、跑机检）。
 
@@ -191,10 +211,10 @@ Spring Security 过滤链 + jose4j 双令牌（access 2h / refresh 7d）+ UA 绑
 | 项 | 结论 |
 |---|---|
 | 路线 A（只做增量） | **不执行** |
-| 路线 B（全对齐 Spring Security + JWT） | **不执行** —— 认证层保留 HandlerInterceptor + Redis 不透明 token |
+| 路线 B（全对齐 Spring Security + JWT） | **不执行**（当时的结论）—— 认证层保留 HandlerInterceptor + Redis 不透明 token。**（2026-10-15 更新）该结论已部分失效**：令牌一项在 M15 被改为 **HS256 JWT + Redis 撤销名单**（老师《作业说明》把"JWT 登录 + 状态存 Redis + 退出立即失效"三条并列写死），验签 2026-10-15 接进 `LoginInterceptor`；**"不迁 Spring Security"仍然有效**。见 `M15-CLOSURE.md §1`、`ARCHITECTURE §5.2` |
 | 路线 C（照搬老师全量） | **不执行** |
 | 短信验证码登录 | **不做**（PRD §8 O5 维持现状，不构成范围变更） |
-| 冻结文档 `ARCHITECTURE §5.2` | **不改**，原决策继续有效 |
+| 冻结文档 `ARCHITECTURE §5.2` | 当时结论：**不改**，原决策继续有效；**（2026-10-15 更新）该节已于 M15 重写为「HS256 JWT + Redis 撤销名单」，旧口径与理由作为变更说明保留在该节内** |
 | 老师那句"要好好理解" | 落到 `docs/02-design/CODE-TOUR.md`：四条铁律 + 里程碑复盘 + 代码地图 + 一次请求的旅程 + **术语翻译表** + 10 个必答问题 |
 | §1.2 提到的老师工程缺陷（缺两个 Provider 类、pom 无依赖、登录是桩） | 不再需要老师补发；本文件保留该记录，供以后引用时避免把它当可运行基线 |
 
@@ -207,7 +227,7 @@ Spring Security 过滤链 + jose4j 双令牌（access 2h / refresh 7d）+ UA 绑
 `7.3 工业级双级缓存体系：JetCache (Caffeine + Redis) 大厂实战` —— 与我们的实现的对账，见同目录
 **`DIFF-VS-COURSEWARE-4-7.md`**（DoD 逐条打勾 + 值得改什么 + 真实难度 + 待拍板的 6 个决策）。
 
-本文件 §9 的结案结论在该文件中**继续有效**：认证层保持 `HandlerInterceptor` + Redis 不透明 token，不迁 Spring Security。
+本文件 §9 的结案结论在该文件中**继续有效**：认证层保持 `HandlerInterceptor` + Redis 不透明 token，不迁 Spring Security。**（2026-10-15 更新）其中"Redis 不透明 token"这半句已过期** —— M15 起改为 **HS256 JWT + Redis 撤销名单**；"**不迁 Spring Security**"仍有效。
 其中 5.1 剔除 JWT 后只剩两条与"要不要改"有关：① `PasswordEncoder` 抽象建议补（算法本就一致，且已实测兼容库里既有的 `$2b$` 哈希）；
 ② 401/403 结构化 JSON 出口我们已等价实现。其余差异见新文件的 §2.2。
 
