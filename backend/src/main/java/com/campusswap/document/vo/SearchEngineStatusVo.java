@@ -27,6 +27,6 @@ public class SearchEngineStatusVo {
     /** ES 地址（回显，便于排障）。 */
     private String endpoint;
 
-    /** IK 分词器是否就位（ES 可用时探测；不可用时为 false）。 */
+    /** IK 分词器是否就位（当前实现随 ES 可用性置位，未单独探测分词器；ES 不可用时为 false）。 */
     private boolean ikAnalyzerReady;
 }

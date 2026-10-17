@@ -22,7 +22,7 @@ import org.springframework.transaction.annotation.Transactional;
 /**
  * 标签服务实现。
  *
- * <p>删除标签是<b>物理意义</b>的：{@code @SQLDelete} 会置 {@code deleted = 1} 并改写 name 释放唯一键，
+ * <p>删除标签是<b>逻辑删除</b>（软删除）：{@code @SQLDelete} 会置 {@code deleted = 1} 并改写 name 释放唯一键，
  * 同时同一事务里清掉 {@code doc_document_tag_rel} 的关联，保证「标签列表」与文档标签展示一致
  * （API_SPECIFICATION §4.8.8）。</p>
  *

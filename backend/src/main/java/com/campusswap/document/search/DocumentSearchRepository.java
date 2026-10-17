@@ -6,7 +6,6 @@ import co.elastic.clients.elasticsearch._types.query_dsl.MultiMatchQuery;
 import co.elastic.clients.elasticsearch._types.query_dsl.RangeQuery;
 import co.elastic.clients.elasticsearch._types.query_dsl.Query;
 import co.elastic.clients.elasticsearch._types.query_dsl.TermQuery;
-import co.elastic.clients.json.JsonData;
 import co.elastic.clients.elasticsearch._types.query_dsl.TextQueryType;
 import java.util.List;
 import lombok.RequiredArgsConstructor;

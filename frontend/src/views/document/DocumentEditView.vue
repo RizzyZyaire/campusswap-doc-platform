@@ -122,6 +122,23 @@ async function load(): Promise<void> {
   loading.value = true
   loadError.value = ''
   noperm.value = false
+  // 同一路由记录内切换文档（编辑→编辑、编辑→新建）不会重新挂载组件：
+  // 先彻底复位上一篇的只读标志、表单与上传队列，再由当前 id 重新计算，避免串内容。
+  readOnly.value = false
+  readOnlyReason.value = ''
+  clearErrors()
+  uploads.value = []
+  versionNum.value = 0
+  status.value = ''
+  Object.assign(form, {
+    title: '',
+    summary: '',
+    contentMd: '',
+    categoryId: '',
+    tagIds: [],
+    priceCents: 0
+  })
+  baseline.value = JSON.stringify(form)
   try {
     const [tree, tagPage] = await Promise.all([taxApi.categoryTree(), taxApi.tagList({ pageNum: 1, pageSize: 100 })])
     categories.value = tree

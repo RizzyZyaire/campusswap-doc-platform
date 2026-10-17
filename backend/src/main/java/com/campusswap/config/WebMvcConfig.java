@@ -17,7 +17,7 @@ import org.springframework.web.servlet.resource.PathResourceResolver;
 /**
  * Web MVC 配置：注册登录拦截器 + 映射上传目录为静态资源 + 托管打包进 jar 的前端。
  *
- * <p>拦截范围 {@code /api/**}，只有登录接口放行（其余接口一律要求 token）。
+ * <p>拦截范围 {@code /api/**}，只有登录与登出接口放行（其余接口一律要求 token）。
  * 上传文件按 {@code uploads/yyyy/MM/xxx.png} 落盘，通过 {@code /uploads/**} 对外访问（见 ARCHITECTURE §11）。</p>
  *
  * <p><b>单 jar 模式（2026-10-09 新增）</b>：{@code mvnw package} 会把 {@code frontend/dist} 拷进

@@ -114,7 +114,8 @@ const statusOf = (tab: TabId): DocumentStatus | undefined => {
   return undefined
 }
 
-async function load(): Promise<void> {  loading.value = true
+async function load(): Promise<void> {
+  loading.value = true
   errorText.value = ''
   try {
     const kw = keyword.value.trim() || undefined

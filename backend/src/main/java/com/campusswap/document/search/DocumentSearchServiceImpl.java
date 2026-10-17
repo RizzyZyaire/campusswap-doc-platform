@@ -62,9 +62,6 @@ public class DocumentSearchServiceImpl implements DocumentSearchService {
     /** 写进 ES 的时间格式（ISO-8601，字典序 = 时间序，可直接排序）。 */
     private static final DateTimeFormatter ISO = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss");
 
-    /** 返回给前端的时间格式（与全站一致）。 */
-    private static final DateTimeFormatter HUMAN = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
-
     /**
      * ES 侧仓储（检索 + 索引写入）。
      *
@@ -92,11 +89,6 @@ public class DocumentSearchServiceImpl implements DocumentSearchService {
     @Value("${spring.elasticsearch.uris:http://127.0.0.1:9200}")
     private String endpoint;
 
-    /**
-     * 取 ES 仓储（延迟实例化；ES 不可用时抛异常，由调用处的 try/catch 接住并降级）。
-     *
-     * @return ES 仓储
-     */
     /**
      * 确保索引存在（带注解里声明的 IK 分词映射）。
      *
@@ -305,15 +297,6 @@ public class DocumentSearchServiceImpl implements DocumentSearchService {
     private static final String ENGINE_MYSQL = "mysql";
 
     /**
-     * 按范围执行 ES 查询。
-     *
-     * @param scope      检索范围
-     * @param keyword    关键词
-     * @param categoryId 分类 ID（可空）
-     * @param pageable   分页与排序
-     * @return 命中结果
-     */
-    /**
      * 起始时间规范化：只给日期时补 00:00:00（便于前端日期选择器直接传 yyyy-MM-dd）。
      *
      * @param value 原始值（可空）
@@ -345,6 +328,19 @@ public class DocumentSearchServiceImpl implements DocumentSearchService {
         String full = trimmed.length() == 10 ? trimmed + " 23:59:59" : trimmed;
         return full.replace(' ', 'T');
     }
+
+    /**
+     * 按范围执行 ES 查询。
+     *
+     * @param scope      检索范围
+     * @param keyword    关键词
+     * @param categoryId 分类 ID（可空）
+     * @param startTime  起始时间（可空）
+     * @param endTime    结束时间（可空）
+     * @param tag        标签名（可空）
+     * @param pageable   分页与排序
+     * @return 命中结果
+     */
     private SearchHits<DocumentSearchIndex> runEsQuery(SearchScope scope, String keyword, String categoryId, String startTime,
                                                 String endTime, String tag,
                                                        Pageable pageable) {
@@ -620,14 +616,5 @@ public class DocumentSearchServiceImpl implements DocumentSearchService {
         cachedIndexCount = -1L;
         indexReady = false;
         probedAt = System.currentTimeMillis();
-    }
-
-    /**
-     * 时间格式（供状态接口与测试复用）。
-     *
-     * @return 人类可读的时间格式
-     */
-    static DateTimeFormatter humanFormatter() {
-        return HUMAN;
     }
 }

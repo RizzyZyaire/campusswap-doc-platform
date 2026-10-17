@@ -11,8 +11,8 @@
 > - **JWT（§1.1 依赖行、§3 JWT 行）**：当时写"**无任何 JWT 库**"（`jjwt` 未缓存）、"不透明 token" —— **现已引入 `io.jsonwebtoken:jjwt-{api,impl,jackson}:0.12.6`**（`backend/pom.xml`），令牌改为 **HS256 JWT + Redis 撤销名单**（M15），且**验签已接入 `LoginInterceptor`**（2026-10-15 接线，补 M15 遗留项）。**仍成立**：不引入 Spring Security 过滤器链。
 > - **表数（§1.1）**：当时 **14 张**，无 `sys_login_log` —— **现 15 张**（M14 新增第 15 张表 `sys_operation_log`；`backend/sql/schema.sql` 内 15 个 `CREATE TABLE`）。
 > - **行号（§1.1）**：`LoginInterceptor(104)` 等旧行数 —— 现为 `BearerToken(35)` `JwtService(117)`【新增类】`LoginInterceptor(170)` `PermissionAspect(40)` `RedisKeys(96)` `RequiresPermission(30)` `SecurityContext(77)`；`common/security/` 由 6 类增至 **7 类**。
-> - **其它计数（§1.1）**：Java 文件 150 → **208**；`SecurityContext` 引用 10 → **24** 文件；`LoginInterceptor` 引用 5 → **7** 文件；`@RequiresPermission` 53 处 / 11 文件 → **68 处 / 18 文件**（`src/main` 61 + `src/test` 7）。
-> - **机检规模与本地仓库（§1.1）**：m3-http 142 / m4-http 218 → 检查器已增至 **12 个**（新增 m5 / m6 / m6-http / m8 / m13 / m14 / m15 等）；**m3-http 仍为 142**，m4-http 的计数在现有文档里本身就漂移（205/218/221/222，**本次未复跑**，以 `TEST_CHECKLIST.md` 为准）；`jjwt` **现已缓存**（`D:\DevEnv\05_Maven\repository\io\jsonwebtoken\`）。
+> - **其它计数（§1.1）**：Java 文件 150 → **208**；`SecurityContext` 引用 10 → **24** 文件；`LoginInterceptor` 引用 5 → **7** 文件；`@RequiresPermission` 53 处 / 11 文件 → **真实注解 60 处 / 13 文件**（若按文本匹配、把 Javadoc 也计入，则为 68 处 / 18 文件：`src/main` 61 + `src/test` 7）。
+> - **机检规模与本地仓库（§1.1）**：m3-http 142 / m4-http 218 → 检查器已增至 **16 个 `verify-*.ps1`**（另 2 个工具脚本，新增 m5 / m6 / m6-http / m8 / m13 / m14 / m15 等）；**m3-http 仍为 142**，m4-http 的计数在现有文档里本身就漂移（205/218/221/222，**本次未复跑**，以 `TEST_CHECKLIST.md` 为准）；`jjwt` **现已缓存**（`D:\DevEnv\05_Maven\repository\io\jsonwebtoken\`）。
 > - **`sys_user` 列（§1.1）**：记 16 列 → `backend/sql/schema.sql` 里是 **15 列**（含 5 个审计列）；当时那个"16 列"的实库计数**本次未复核**。
 > - **结案结论（§9 表、§10 末段）**："认证层保留 `HandlerInterceptor` + Redis **不透明 token**" —— 这半句**已被 M15 推翻**（改为 JWT 自证 + Redis 撤销）；"**不迁 Spring Security**"仍然有效。
 >
@@ -43,7 +43,7 @@
 | 鉴权相关类 | 当时 `common/security/` 6 个：`BearerToken(31)` `LoginInterceptor(104)` `PermissionAspect(38)` `RedisKeys(69)` `RequiresPermission(27)` `SecurityContext(69)`；**（2026-10-15 更新）现 7 个：`BearerToken(35)` `JwtService(117)`（M15 新增）`LoginInterceptor(170)` `PermissionAspect(40)` `RedisKeys(96)` `RequiresPermission(30)` `SecurityContext(77)`**（行数按此刻源码实测，随代码变动） | 同上 |
 | 引用 `SecurityContext` 的文件 | **10**（2026-09-23 当时）｜**（2026-10-15 更新）现 24** | 全文匹配 |
 | 引用 `LoginInterceptor` 的文件 | 当时 **5**（`BearerToken` `LoginInterceptor` `PermissionAspect` `SecurityContext` `WebMvcConfig`）；**（2026-10-15 更新）现 7**（多出 `PasswordEncoderConfig`、`Ac02DraftCreateTest`，前者仅是注释里引用） | 全文匹配 |
-| `@RequiresPermission` 用量 | 当时 **53 处 / 11 个文件**，形如 `@RequiresPermission("doc:search")`；**（2026-10-15 更新）现 68 处 / 18 个文件**（`src/main` 61 处 + `src/test` 7 处） | 全文匹配 |
+| `@RequiresPermission` 用量 | 当时 **53 处 / 11 个文件**，形如 `@RequiresPermission("doc:search")`；**（2026-10-15 更新）现真实注解 60 处 / 13 个文件**（按文本匹配含 Javadoc 为 68 处 / 18 个文件：`src/main` 61 处 + `src/test` 7 处） | 全文匹配 |
 | 拦截器注册 | `WebMvcConfig.addInterceptors`：`/api/**` 全拦，仅放行 `/api/auth/login`、`/api/auth/logout`（**2026-10-15 更新）放行名单未变**；另：2026-10-11 起同方法内多注册了一个"HTML 禁缓存"拦截器（`/**`，排除 `/api/**`、`/uploads/**`） | 读源码 |
 | 依赖 | `webmvc` / `data-jpa` / `validation` / `data-redis` / `mysql-connector-j` / `hutool-all` / `lombok`；**无 Spring Security、无任何 JWT 库**（2026-09-23 当时事实）｜**（2026-10-15 更新）现已引入 `io.jsonwebtoken:jjwt-{api,impl,jackson}:0.12.6`**（`backend/pom.xml`，`<jjwt.version>0.12.6</jjwt.version>`；另有 `spring-security-crypto` 用于 BCrypt），**JWT 验签已接入 `LoginInterceptor`**；**仍然不用 Spring Security 框架**（无 `spring-boot-starter-security`） | `pom.xml` |
 | 错误码 | `ErrorCode`：401 `UNAUTHORIZED`、403 `NO_PERMISSION`、403 `USER_DISABLED`、400/404/409/500 | 读源码 |
@@ -90,7 +90,7 @@
 | 14 | 微信登录 | 白名单有 `/user/login/wechat`，Provider 缺类 | 无 | 超出作业范围（PRD O4/O5 精神） |
 | 15 | 账号注销清理 | 齐全（注销时清 Redis 会话等） | 无（US 里没有注销） | 非目标 |
 | 16 | 授权（RBAC） | `AriesUserDetailsService` 的 `authorities = new HashSet<>()`（**空的**）→ 框架只区分"登录/未登录" | **39 权限点 / 3 角色 / 部门继承角色 / 用户直授权 / 30 分钟缓存 / 授权即时生效** | **我们强得多，迁移中绝不能缩水** |
-| 17 | 权限校验写法 | 无（框架没做） | `@RequiresPermission("doc:search")` AOP，当时 53 处（**2026-10-15 更新）现 68 处 / 18 个文件** | 见 §4 选项 |
+| 17 | 权限校验写法 | 无（框架没做） | `@RequiresPermission("doc:search")` AOP，当时 53 处（**2026-10-15 更新）现真实注解 60 处 / 13 个文件（文本匹配 68 处 / 18 个文件）** | 见 §4 选项 |
 | 18 | 数据访问身份 | `SecurityContextHolder.getContext().getAuthentication()` | `SecurityContext.currentUserId()` ThreadLocal，当时 10 个文件引用（**2026-10-15 更新）现 24 个** | 迁移要统一 |
 | 19 | 密码存储 | RSA 传输 + 库里 bcrypt | bcrypt（同） | 无差距（RSA 属加分项，非必需） |
 | 20 | 配置外置 | JWT 密钥/有效期散在 `JwtUtil` 常量 | `RedisKeys` 集中 + `application.yml` | 我们更好，保留 |

@@ -15,13 +15,15 @@ import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.validation.BindException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.HttpMediaTypeNotSupportedException;
+import org.springframework.web.HttpRequestMethodNotSupportedException;
+import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
-import org.springframework.web.HttpRequestMethodNotSupportedException;
-import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.HandlerMethodValidationException;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
+import org.springframework.web.multipart.support.MissingServletRequestPartException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 import tools.jackson.databind.exc.MismatchedInputException;
 import tools.jackson.databind.exc.UnrecognizedPropertyException;
@@ -53,12 +55,6 @@ public class GlobalExceptionHandler {
     }
 
     /**
-     * {@code @Valid} 校验失败：取第一条字段提示（注解里写的就是中文，可直接回显）。
-     *
-     * @param ex 参数校验异常
-     * @return 400 + 中文提示
-     */
-    /**
      * HTTP 方法不支持（例如把 PUT 接口当 POST 调）。
      *
      * <p>2026-10-14（M14 验证时发现）：这类请求原来落到兜底分支返回 500，把"客户端用错方法"
@@ -71,11 +67,43 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ResponseResult<Void>> handleMethodNotSupported(HttpRequestMethodNotSupportedException ex) {
         String supported = ex.getSupportedMethods() == null ? "" : String.join("/", ex.getSupportedMethods());
         log.warn("HTTP 方法不支持: {} {}，支持: {}", ex.getMethod(), supported);
-        return ResponseEntity.status(HttpStatus.METHOD_NOT_ALLOWED).body(ResponseResult.fail(ErrorCode.BAD_REQUEST,
+        return ResponseEntity.status(HttpStatus.METHOD_NOT_ALLOWED).body(ResponseResult.fail(ErrorCode.METHOD_NOT_ALLOWED,
                 "请求方法 " + ex.getMethod() + " 不支持该接口" + (supported.isEmpty() ? "" : "，请改用 " + supported)));
     }
 
-@ExceptionHandler(MethodArgumentNotValidException.class)
+    /**
+     * 缺少必要的请求参数（{@code @RequestParam} / multipart part）。
+     *
+     * @param ex 缺参异常
+     * @return 400 + 中文提示
+     */
+    @ExceptionHandler({MissingServletRequestParameterException.class, MissingServletRequestPartException.class})
+    public ResponseEntity<ResponseResult<Void>> handleMissingParameter(Exception ex) {
+        log.warn("缺少必要的请求参数: {}", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(ResponseResult.fail(ErrorCode.BAD_REQUEST, "缺少必要的请求参数"));
+    }
+
+    /**
+     * 请求的 Content-Type 不被接口支持（例如接口只收 JSON，却发了 text/plain）。
+     *
+     * @param ex 媒体类型不支持异常
+     * @return 415 + 中文提示
+     */
+    @ExceptionHandler(HttpMediaTypeNotSupportedException.class)
+    public ResponseEntity<ResponseResult<Void>> handleMediaTypeNotSupported(HttpMediaTypeNotSupportedException ex) {
+        log.warn("请求内容类型不支持: {}", ex.getContentType());
+        return ResponseEntity.status(HttpStatus.UNSUPPORTED_MEDIA_TYPE)
+                .body(ResponseResult.fail(ErrorCode.UNSUPPORTED_MEDIA_TYPE, "请求内容类型不支持"));
+    }
+
+    /**
+     * {@code @Valid} 校验失败：取第一条字段提示（注解里写的就是中文，可直接回显）。
+     *
+     * @param ex 参数校验异常
+     * @return 400 + 中文提示
+     */
+    @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ResponseResult<Void>> handleMethodArgumentNotValid(MethodArgumentNotValidException ex) {
         String message = null;
         for (FieldError error : ex.getBindingResult().getFieldErrors()) {
@@ -142,7 +170,8 @@ public class GlobalExceptionHandler {
         String message = java.util.stream.Stream.concat(
                         ex.getParameterValidationResults().stream()
                                 .flatMap(result -> result.getResolvableErrors().stream()),
-                        ex.getCrossParameterValidationResults().stream())                .map(MessageSourceResolvable::getDefaultMessage)
+                        ex.getCrossParameterValidationResults().stream())
+                .map(MessageSourceResolvable::getDefaultMessage)
                 .filter(Objects::nonNull)
                 .findFirst()
                 .orElse(ErrorCode.BAD_REQUEST.getMessage());

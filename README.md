@@ -5,8 +5,8 @@
 
 单位内部 **Markdown 文档管理平台**（课程大作业）。核心闭环：撰写文档 → 分类与标签 → 快速检索 → **基于已有文档派生新文档** → 版本管理 → 文档管理员审核/归档 → 全程 RBAC 控权。
 
-> 📘 **先读这份**：**[docs/MASTER-PLAN.md](docs/MASTER-PLAN.md)** —— 大作业执行手册（已冻结）：技术栈、硬约束、14 张表数据模型、M0~M7 执行计划（**61 个可勾选任务**）、Prompt 库、交付与 Git 规范。
-> 🔍 **质量证据**：`docs/03-qa-review/` 下有 **13 个可重跑的 `.ps1` 机检脚本 + 1 个 Node 逐接口 SQL 点数器**（`verify-m0/m1/m2/m3/m4/m5/m6.ps1`、`verify-api-spec.ps1`、`verify-db-deep.ps1`、`verify-m3-http/m4-http/m6-http.ps1`、`reload-db.ps1`、`probe-sql-counts.mjs`）+ `EXPLAIN-NOTES.md`（执行计划实测：M2 首测 + M6 在 20 045 篇数据量下的索引回归）+ `CODE_REVIEW.md`（对照执行手册 §2 的 33 项逐条自查）+ `AUDIT-M0-M2.md`（复核与变异测试记录）+ 各里程碑收口记录（`M3/M4/M5/M6-CLOSURE.md`、`COURSEWARE-CLOSURE.md`）。前端另有三件套：`pnpm run check-classes`（类名体检）、`scripts/shot.mjs`（带登录态截图）、`scripts/verify-edit-conflict.mjs`（409 端到端复现）。
+> 📘 **先读这份**：**[docs/MASTER-PLAN.md](docs/MASTER-PLAN.md)** —— 大作业执行手册（已冻结）：技术栈、硬约束、15 张表数据模型、M0~M16 执行计划（**61 个可勾选任务**）、Prompt 库、交付与 Git 规范。
+> 🔍 **质量证据**：`docs/03-qa-review/` 下有 **16 个可重跑的 `verify-*.ps1` 机检脚本（另 `run-all-checks.ps1` / `reload-db.ps1` 两个工具脚本）+ 1 个 Node 逐接口 SQL 点数器**（`verify-m0/m1/m2/m3/m4/m5/m6.ps1`、`verify-m8/m13/m14/m15.ps1`、`verify-api-spec.ps1`、`verify-db-deep.ps1`、`verify-m3-http/m4-http/m6-http.ps1`、`reload-db.ps1`、`probe-sql-counts.mjs`）+ `EXPLAIN-NOTES.md`（执行计划实测：M2 首测 + M6 在 20 045 篇数据量下的索引回归）+ `CODE_REVIEW.md`（对照执行手册 §2 的 33 项逐条自查）+ `AUDIT-M0-M2.md`（复核与变异测试记录）+ 各里程碑收口记录（`M3/M4/M5/M6-CLOSURE.md`、`COURSEWARE-CLOSURE.md`）。前端另有三件套：`pnpm run check-classes`（类名体检）、`scripts/shot.mjs`（带登录态截图）、`scripts/verify-edit-conflict.mjs`（409 端到端复现）。
 
 ## 技术栈
 
@@ -27,11 +27,11 @@ campusswap/
 │   ├── 03-qa-review/              # 机检脚本 · EXPLAIN-NOTES.md · AUDIT-M0-M2.md · GIT-CHEATSHEET.md
 │   └── 04-prompts/                # 阶段指令卡片（留档）
 ├── backend/                       # Spring Boot 工程（com.campusswap）
-│   ├── sql/                       # schema.sql（14 张表）· data.sql（种子）· perf-fixture.sql（压测夹具）
+│   ├── sql/                       # schema.sql（15 张表）· data.sql（种子）· perf-fixture.sql（压测夹具）
 │   └── src/main/java/com/campusswap/
 │       ├── common/                # api（ResponseResult/PageVo/ErrorCode）· exception · security · util
 │       ├── config/                # JpaAuditConfig · WebMvcConfig · RedisConfig · CorsConfig
-│       ├── entity/                # BaseEntity + 14 个实体 + enums/（顶层集中，对齐课件）
+│       ├── entity/                # BaseEntity + 15 个实体 + enums/（顶层集中，对齐课件）
 │       ├── system/                # 模块一：系统与权限（controller/service/repository/dto/vo）
 │       └── document/              # 模块二：文档业务（controller/service/repository/dto/vo）
 └── frontend/                      # Vue 3 工程
@@ -41,14 +41,14 @@ campusswap/
 ## 项目进度
 
 - [x] 项目初始化：目录骨架、`.gitignore`、执行手册
-- [x] **M0** 需求冻结：`docs/01-requirements/` 三剑客（8 故事 / 24 条 BDD / 39 权限点 / 14 表 / 24 条业务规则）
-- [x] **M1** 设计定稿：架构、接口规格（55 条接口）、UI/UX 规范（8 页 + 四态）
-- [x] **M2** 数据库：`backend/sql/schema.sql`（14 张表 + 20 索引）+ `data.sql` 种子数据
+- [x] **M0** 需求冻结：`docs/01-requirements/` 三剑客（8 故事 / 24 条 BDD / 39 权限点 / 15 表 / 24 条业务规则）
+- [x] **M1** 设计定稿：架构、接口规格（64 条接口）、UI/UX 规范（8 页 + 四态）
+- [x] **M2** 数据库：`backend/sql/schema.sql`（15 张表 + 45 个索引对象）+ `data.sql` 种子数据
 - [x] **M3** 后端骨架 + RBAC（用户/角色/权限/部门；25 端点，静态 36 项 + 接口 142 项全绿）
 - [x] **M4** 文档业务（CRUD/版本/检索/派生/审核/回收站；30 端点，静态 30 项 + 接口 222 项全绿）
 - [x] **M5** 前端（Vue3 + TS，13 条功能路由 + 2 条异常路由，四态与权限逐页落地；静态机检 62 项全绿）
 - [x] **M6** 测试与代码审查（24 条 BDD 断言的纯单测 30/30、例外路径 44 项、代码审查 33 项、20 045 篇下的索引回归、18 个读接口零 N+1；审查修掉 3 个真实缺陷）
-- [ ] **M7** 交付与上传
+- [x] **M7** 交付与上传
 
 ## 本地开发环境
 
@@ -63,7 +63,7 @@ campusswap/
 
 ```bash
 # 数据库初始化（本机已执行完毕；换机器时按序执行）
-mysql -uroot -p < backend/sql/schema.sql      # 建库 + 14 张表 + 20 个索引
+mysql -uroot -p < backend/sql/schema.sql      # 建库 + 15 张表 + 45 个索引对象
 mysql -uroot -p < backend/sql/data.sql        # 种子数据（39 权限点 / 3 角色 / 3 账号 / 4 分类 / 20 标签 / 45 篇文档 / 99 条版本留痕）
 
 # 后端（M3/M4 已完成）

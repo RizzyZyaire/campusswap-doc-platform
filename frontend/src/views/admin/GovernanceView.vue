@@ -109,10 +109,10 @@ async function loadCounts(): Promise<void> {
   counts.TRASH = pages[4]
 }
 
-/** 拟稿人候选：拉一页大页的全量文档，按 `authorId` 去重。 */
+/** 拟稿人候选：拉一页（后端 `pageSize` 上限 100）全量文档，按 `authorId` 去重。 */
 async function loadAuthors(): Promise<void> {
   try {
-    const page = await docApi.manageDocuments({ pageNum: 1, pageSize: 200 })
+    const page = await docApi.manageDocuments({ pageNum: 1, pageSize: 100 })
     const seen = new Map<string, string>()
     for (const d of page.list) {
       if (d.authorId && d.authorName) seen.set(d.authorId, d.authorName)

@@ -21,7 +21,7 @@ import org.springframework.data.elasticsearch.annotations.FieldType;
  *
  * <p><b>为什么日期字段用 Keyword 存 ISO 字符串</b>：ISO-8601 字符串（{@code 2026-10-11T09:30:00}）
  * 的字典序与时间序一致，可以直接排序，同时避开 ES 日期格式转换在客户端/服务端版本不一致时的坑
- * （本项目 Spring Data ES 6.1.1 + Java 客户端 9.4.5，而服务端是 8.18.0）。</p>
+ * （本项目 Spring Data ES 6.1.1 + Java 客户端 9.4.5，而服务端是 9.4.5）。</p>
  *
  * <p>本类不使用 {@code @Data}（项目红线：实体类禁 {@code @Data}），只开 Getter/Setter + Builder。</p>
  *

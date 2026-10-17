@@ -19,7 +19,7 @@ import lombok.Setter;
 @Setter
 public class DocumentSearchEsDtoReq extends PageDtoReq {
 
-    /** 关键词：必填（空关键词不检索，前端也不会发请求）。 */
+    /** 关键词：可空；为空时接口返回空结果并提示，前端通常不会发请求。 */
     @Size(max = 64, message = "关键词长度不能超过64个字符")
     private String keyword;
 

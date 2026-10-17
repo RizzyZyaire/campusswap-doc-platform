@@ -8,12 +8,6 @@ export function formatDateTime(value: string | null | undefined): string {
   return value.length >= 16 ? value.slice(0, 16) : value
 }
 
-/** `2026-09-23 21:10:05` → `2026-09-23`。 */
-export function formatDate(value: string | null | undefined): string {
-  if (!value) return '—'
-  return value.slice(0, 10)
-}
-
 /**
  * 相对时间（通知与列表用）：今天 → `今天 HH:mm`；昨天 → `昨天 HH:mm`；更早 → `MM-dd HH:mm`。
  *
@@ -76,10 +70,4 @@ export const CHANGE_TYPE_TEXT: Record<string, string> = {
   REPUBLISH: '恢复上架',
   DELETE: '移入回收站',
   RESTORE: '恢复'
-}
-
-/** 空值归一（表格里 null 显示为 —）。 */
-export function orDash(value: string | number | null | undefined): string {
-  if (value === null || value === undefined || value === '') return '—'
-  return String(value)
 }

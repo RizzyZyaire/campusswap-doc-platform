@@ -67,13 +67,8 @@ public final class RedisKeys {
     }
 
     /**
-     * 拼阅读量去重键。
-     *
-     * @param docId  文档 ID
-     * @param userId 用户 ID
-     * @return Redis 键
+     * 异步重建任务状态前缀（M13：RabbitMQ 异步重建，值是该任务的 JSON）。
      */
-    /** 异步重建任务状态前缀（M13：RabbitMQ 异步重建，值是该任务的 JSON）。 */
     public static final String SEARCH_REBUILD_TASK_PREFIX = "search:rebuild:task:";
 
     /** 最近重建任务 ID 列表（List，新→旧，界面显示"上次重建结果"）。 */
@@ -81,9 +76,18 @@ public final class RedisKeys {
 
     /** 重建任务串行锁（同一时刻只允许一个重建真正在跑）。 */
     public static final String SEARCH_REBUILD_LOCK = "search:rebuild:lock";
+
+    /**
+     * 拼阅读量去重键。
+     *
+     * @param docId  文档 ID
+     * @param userId 用户 ID
+     * @return Redis 键
+     */
     public static String viewDedup(Long docId, Long userId) {
         return VIEW_DEDUP_PREFIX + docId + ":" + userId;
     }
+
     /**
      * 异步重建任务状态键。
      *

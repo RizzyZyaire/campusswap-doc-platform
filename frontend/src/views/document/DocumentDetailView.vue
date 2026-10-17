@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import StateBlock from '@/components/StateBlock.vue'
 import StatusBadge from '@/components/StatusBadge.vue'
@@ -180,6 +180,15 @@ async function moveToTrash(): Promise<void> {
     ui.err(e instanceof ApiError ? e.message : '删除失败')
   }
 }
+
+// 同一路由记录内切换文档（如点右侧「相关文档」）不会重新挂载组件，必须监听参数重载；
+// 先清空旧文档，避免 loading 期间模板仍持有上一篇的数据。
+watch(id, () => {
+  doc.value = null
+  versions.value = []
+  related.value = []
+  void load()
+})
 
 onMounted(load)
 </script>

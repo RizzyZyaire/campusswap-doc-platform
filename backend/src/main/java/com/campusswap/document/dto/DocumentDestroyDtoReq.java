@@ -1,6 +1,7 @@
 package com.campusswap.document.dto;
 
 import jakarta.validation.constraints.AssertTrue;
+import jakarta.validation.constraints.NotNull;
 
 /**
  * 彻底删除入参（API_SPECIFICATION §4.6.11，GLOSSARY §3.7 的 {@code DocumentDestroyDtoReq}）。
@@ -12,6 +13,7 @@ import jakarta.validation.constraints.AssertTrue;
  */
 public record DocumentDestroyDtoReq(
 
+        @NotNull(message = "彻底删除需要二次确认")
         @AssertTrue(message = "彻底删除需要二次确认")
         Boolean confirm) {
 }

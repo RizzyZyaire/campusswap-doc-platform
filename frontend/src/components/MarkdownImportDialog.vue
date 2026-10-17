@@ -23,7 +23,6 @@ const props = defineProps<{
   categories: { id: string; label: string }[]
   /** 可选标签（最多选 5 个）。 */
   tags: TagVo[]
-  /** 分类原始树（用于展示层级名）——这里只需 id 与 label，故不收。 */
 }>()
 
 const emit = defineEmits<{
@@ -137,8 +136,6 @@ function checkAll(): void {
 function labelOfTag(t: TagVo): string {
   return t.name
 }
-
-defineExpose({})
 </script>
 
 <template>

@@ -41,7 +41,6 @@ import com.campusswap.entity.Document;
 import com.campusswap.entity.DocumentTagRel;
 import com.campusswap.entity.DocumentVersion;
 import com.campusswap.entity.Favorite;
-import com.campusswap.entity.Tag;
 import com.campusswap.entity.enums.ChangeType;
 import com.campusswap.entity.enums.DocumentStatus;
 import com.campusswap.system.service.PermissionCacheService;
@@ -504,6 +503,9 @@ public class DocumentServiceImpl implements DocumentService {
     @Transactional
     public void destroy(Long id, DocumentDestroyDtoReq req) {
         Long me = SecurityContext.requireUserId();
+        if (req == null || !Boolean.TRUE.equals(req.confirm())) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "彻底删除需要二次确认");
+        }
         Object[] row = requireTrashRow(id, "仅回收站中的文档可以彻底删除");
         Long authorId = DocumentColumns.longVal(row, DocumentColumns.CREATED_BY);
         if (!java.util.Objects.equals(authorId, me) && !hasPermission(me, "doc:manage")) {

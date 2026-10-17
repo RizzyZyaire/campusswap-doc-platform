@@ -42,7 +42,7 @@ spring:
   # 全文检索：演示包里**不带** ES（解压后 750 MB），地址可配置；
   # 没有 ES 时检索自动降级到 MySQL 引擎（接口照常返回，engine=mysql），
   # 界面会提示"Elasticsearch 未连接，已降级"。装了 ES 的机器自动启用 ES 引擎。
-  # 消息队列（课件 13.1）：RabbitMQ 4.0.9，异步索引重建。
+  # 消息队列（课件 13.1）：RabbitMQ 4.0.5，异步索引重建。
   # broker 没启动时应用照常启动（监听容器后台重连），只是"提交重建任务"会返回 FAILED 并说明原因。
   rabbitmq:
     host: ${RABBITMQ_HOST:127.0.0.1}

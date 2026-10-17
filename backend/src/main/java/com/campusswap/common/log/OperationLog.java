@@ -9,9 +9,8 @@ import java.lang.annotation.Target;
 /**
  * 操作日志注解（M14）：标在控制器方法上，补充"人读"的模块名与动作名。
  *
- * <p>不标也能被记录 —— {@link OperationLogAspect} 会兜住所有写接口并按路径推断模块与动作；
- * 标注的收益是中文更准（例如 {@code /api/documents/{id}/publish} 不标只能推出"文档 · POST"，
- * 标了就是"文档 · 发布"）。</p>
+ * <p>不标也能被记录 —— {@link OperationLogAspect} 会兜住所有写接口，并先按路径关键词推断模块与动作
+ * （例如 {@code /publish} → 「文档 · 发布」）；标注用于覆盖推断结果或补充更精确的中文动作名。</p>
  *
  * @author Zyaire
  */

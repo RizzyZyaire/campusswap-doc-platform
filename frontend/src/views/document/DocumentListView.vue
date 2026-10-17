@@ -104,10 +104,26 @@ const flatCategories = computed(() => {
   return out
 })
 
-/** 把后端给的 <em> 命中标记换成界面统一使用的 <mark>（两条链路渲染同一套样式）。 */
-function toMark(html: string | null | undefined): string {
-  if (!html) return ''
-  return html.replace(/<em>/g, '<mark>').replace(/<\/em>/g, '</mark>')
+/** HTML 实体转义（`<em>` 是唯一的命中标记，其余内容一律当纯文本）。 */
+function escapeHtml(text: string): string {
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+}
+
+/**
+ * 把后端给的 `<em>` 命中标记换成界面统一使用的 `<mark>`（两条链路渲染同一套样式）。
+ *
+ * <p>**必须先转义再插标记**：`GET /api/documents` 返回的 `title` / `summary` / `highlight`
+ * 是数据库原文（后端只对全文检索分支的 `titleHighlight` / `snippet` 做了转义），
+ * 标题里若带 HTML 会经 `v-html` 直接执行。转义后再换 `<em>`，普通文本的显示结果不变。</p>
+ */
+function toMark(raw: string | null | undefined): string {
+  if (!raw) return ''
+  return escapeHtml(raw).replace(/&lt;em&gt;/g, '<mark>').replace(/&lt;\/em&gt;/g, '</mark>')
 }
 
 /** 既有 DocumentVo → 统一行结构。 */
@@ -425,11 +441,11 @@ onMounted(async () => {
           <tbody>
             <tr v-for="d in rows" :key="d.id">
               <td>
-                <!-- 高亮标题：后端已转义，只插 <mark> -->
+                <!-- 高亮标题：toMark 已转义原文，只放行 <mark> -->
                 <RouterLink class="title" :to="`/docs/${d.id}`">
                   <span v-html="d.titleHtml"></span>
                 </RouterLink>
-                <!-- 命中片段：关键词在正文/摘要里的上下文，命中词已高亮 -->
+                <!-- 命中片段：关键词在正文/摘要里的上下文，命中词已高亮（同样经 toMark 转义） -->
                 <span v-if="d.snippetHtml" class="hl" v-html="d.snippetHtml"></span>
                 <span v-if="d.matched.length" class="hit-note">
                   命中位置：{{ d.matched.map((m) => MATCHED_TEXT[m] ?? m).join('、') }}

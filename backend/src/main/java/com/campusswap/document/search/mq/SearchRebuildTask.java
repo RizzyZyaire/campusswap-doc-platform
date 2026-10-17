@@ -29,13 +29,13 @@ public class SearchRebuildTask {
     @JsonSerialize(using = ToStringSerializer.class)
     private Long operatorId;
 
-    /** 提交时间（ISO-8601）。 */
+    /** 提交时间（{@code yyyy-MM-dd HH:mm:ss}）。 */
     private String submittedAt;
 
-    /** 开始执行时间（ISO-8601）。 */
+    /** 开始执行时间（{@code yyyy-MM-dd HH:mm:ss}）。 */
     private String startedAt;
 
-    /** 结束时间（ISO-8601）。 */
+    /** 结束时间（{@code yyyy-MM-dd HH:mm:ss}）。 */
     private String finishedAt;
 
     /** 本次从主库同步进索引的文档数。 */

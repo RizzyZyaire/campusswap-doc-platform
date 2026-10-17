@@ -88,7 +88,7 @@
             <artifactId>spring-boot-starter-amqp</artifactId>
         </dependency>
 
-        <!-- 全文检索（课件 10.1）：ES 8.18 + IK 分词器；连不上时由服务层自动降级到 MySQL 引擎 -->
+        <!-- 全文检索（课件 10.1）：ES 9.4.5 + IK 分词器；连不上时由服务层自动降级到 MySQL 引擎 -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-data-elasticsearch</artifactId>

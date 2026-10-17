@@ -28,8 +28,14 @@ public enum ErrorCode {
     /** 资源不存在。 */
     NOT_FOUND(404, "请求的资源不存在"),
 
+    /** 请求方法不被该接口支持。 */
+    METHOD_NOT_ALLOWED(405, "请求方法不支持"),
+
     /** 当前状态不允许该操作（状态机冲突、唯一约束冲突）。 */
     CONFLICT_STATUS(409, "当前状态不允许该操作"),
+
+    /** 请求的 Content-Type 不被接口支持。 */
+    UNSUPPORTED_MEDIA_TYPE(415, "不支持的媒体类型"),
 
     /** 服务器内部错误（对外不暴露堆栈）。 */
     SERVER_ERROR(500, "服务器开小差了，请稍后重试");

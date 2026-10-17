@@ -178,12 +178,6 @@ export interface DeptRoleVo {
   roleIds: string[]
 }
 
-/** 用户角色回显用（列表批量补名）。 */
-export interface UserRoleCodesVo {
-  userId: string
-  roles: string[]
-}
-
 /** 治理列表入参（全状态，权限 `doc:manage`）。 */
 export interface DocumentManageDtoReq extends PageDtoReq {
   status?: DocumentStatus
